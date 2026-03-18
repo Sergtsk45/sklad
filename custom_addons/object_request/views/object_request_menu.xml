@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Корневое меню модуля -->
+    <menuitem id="menu_object_request_root" name="Комплектация объектов" sequence="50" web_icon="object_request,static/description/icon.png" groups="object_request.group_foreman,object_request.group_supply_manager,object_request.group_storekeeper"/>
+
+    <!-- Подменю: Требования -->
+    <menuitem id="menu_object_request_list" name="Требования на комплектацию" parent="menu_object_request_root" action="action_object_request" sequence="10" groups="object_request.group_foreman,object_request.group_supply_manager,object_request.group_storekeeper"/>
+
+    <!-- Подменю: Импорт из Excel -->
+    <menuitem
+        id="menu_object_request_import"
+        name="Импорт из Excel"
+        parent="menu_object_request_root"
+        action="object_request.action_object_request_import_wizard"
+        sequence="15"
+        groups="object_request.group_foreman,object_request.group_supply_manager"
+    />
+
+    <!-- Подменю: Объекты (справочник) -->
+    <menuitem id="menu_object_request_project" name="Объекты" parent="menu_object_request_root" action="action_object_request_project" sequence="20" groups="object_request.group_supply_manager"/>
+
+</odoo>

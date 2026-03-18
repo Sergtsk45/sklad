@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================================================================
+         FORM VIEW — Import Excel Wizard
+         ================================================================ -->
+    <record id="view_object_request_import_wizard_form" model="ir.ui.view">
+        <field name="name">object.request.import.wizard.form</field>
+        <field name="model">object.request.import.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Импорт Excel — Требование на комплектацию">
+                <sheet>
+
+                    <!-- Файл -->
+                    <group string="Файл">
+                        <field name="file" widget="binary" filename="file_name"/>
+                        <field name="file_name"/>
+                    </group>
+
+                    <!-- Параметры документа -->
+                    <group string="Параметры документа">
+                        <group>
+                            <field name="project_id"/>
+                            <field name="foreman_user_id"/>
+                            <field name="need_date"/>
+                        </group>
+                        <group>
+                            <field name="priority"/>
+                            <field name="comment"/>
+                        </group>
+                    </group>
+
+                    <!-- Результат проверки -->
+                    <group string="Результат проверки"
+                        invisible="validation_state == 'not_checked'">
+                        <field
+                            name="validation_state"
+                            widget="badge"
+                            decoration-success="validation_state == 'valid'"
+                            decoration-danger="validation_state == 'invalid'"
+                        />
+                        <field
+                            name="line_preview_count"
+                            invisible="validation_state == 'not_checked'"
+                        />
+                        <field
+                            name="problem_line_count"
+                            invisible="problem_line_count == 0"
+                            decoration-warning="problem_line_count &gt; 0"
+                        />
+                        <field
+                            name="validation_messages"
+                            invisible="not validation_messages"
+                        />
+                    </group>
+
+                    <!-- Предпросмотр строк -->
+                    <notebook invisible="validation_state == 'not_checked'">
+                        <page string="Предпросмотр строк" name="page_preview">
+                            <field name="preview_line_ids" readonly="1">
+                                <list
+                                    decoration-danger="has_error == True"
+                                    string="Строки из файла"
+                                >
+                                    <field name="sequence" string="№"/>
+                                    <field name="source_row_no" string="Стр. Excel"/>
+                                    <field name="supplier_article" string="Артикул"/>
+                                    <field name="name_raw" string="Наименование"/>
+                                    <field name="uom_raw" string="Ед. изм."/>
+                                    <field name="qty" string="Кол-во"/>
+                                    <field name="price" string="Цена"/>
+                                    <field name="supplier_raw" string="Поставщик"/>
+                                    <field
+                                        name="error_message"
+                                        string="Ошибка"
+                                        optional="show"
+                                    />
+                                    <field name="has_error" column_invisible="1"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+
+                </sheet>
+
+                <footer>
+                    <button
+                        string="Загрузить и проверить"
+                        name="action_validate"
+                        type="object"
+                        class="btn-primary"
+                    />
+                    <button
+                        string="Импортировать"
+                        name="action_import"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="validation_state != 'valid'"
+                    />
+                    <button
+                        string="Отмена"
+                        class="btn-secondary"
+                        special="cancel"
+                    />
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         ACTION
+         ================================================================ -->
+    <record id="action_object_request_import_wizard" model="ir.actions.act_window">
+        <field name="name">Импорт из Excel</field>
+        <field name="res_model">object.request.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

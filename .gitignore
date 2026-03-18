@@ -1,0 +1,40 @@
+## @file: .gitignore
+## @description: Игнор временных и секретных файлов для Odoo docker workflow
+## @dependencies: .env.example, config/odoo.local.conf, docs/deploy.md
+## @created: 2026-03-15
+
+# Cursor workspace (временные файлы)
+.cursor/workspace/
+.vscode/
+.idea/
+
+# Local env (секреты)
+.env
+
+# Odoo исходники (вендор) — не храним в нашем репо
+odoo/
+
+# Odoo local/prod конфиги с секретами
+config/*.conf
+!config/*.example
+
+# Traefik ACME storage (сертификаты)
+docker/traefik/acme/
+
+# Backups
+backup_*.sql
+filestore_*.tar.gz
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Claude Code workspace
+.claude/
+!.claude/commands/
+!.claude/settings.json
+

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================================================================
+         WIZARD FORM VIEW: Массовое назначение поставщика / товара
+         ================================================================ -->
+    <record id="view_assign_lines_wizard_form" model="ir.ui.view">
+        <field name="name">object.request.line.assign.wizard.form</field>
+        <field name="model">object.request.line.assign.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Массовое назначение">
+                <group>
+                    <field name="assign_type" readonly="1"/>
+                    <field name="line_count" string="Строк выбрано" readonly="1"/>
+                    <field
+                        name="vendor_id"
+                        invisible="assign_type != 'vendor'"
+                        required="assign_type == 'vendor'"
+                    />
+                    <field
+                        name="product_id"
+                        invisible="assign_type != 'product'"
+                        required="assign_type == 'product'"
+                        context="{'display_default_code': True}"
+                    />
+                </group>
+                <footer>
+                    <button
+                        name="action_assign"
+                        string="Применить"
+                        type="object"
+                        class="btn-primary"
+                    />
+                    <button string="Отмена" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         SERVER ACTION: Назначить поставщика (массовое действие для строк)
+         ================================================================ -->
+    <record id="action_assign_vendor_to_lines" model="ir.actions.server">
+        <field name="name">Назначить поставщика</field>
+        <field name="model_id" ref="model_object_request_line"/>
+        <field name="binding_model_id" ref="model_object_request_line"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Назначить поставщика',
+    'res_model': 'object.request.line.assign.wizard',
+    'view_mode': 'form',
+    'target': 'new',
+    'context': dict(env.context, default_assign_type='vendor'),
+}</field>
+    </record>
+
+    <!-- ================================================================
+         SERVER ACTION: Назначить товар (массовое действие для строк)
+         ================================================================ -->
+    <record id="action_assign_product_to_lines" model="ir.actions.server">
+        <field name="name">Назначить товар</field>
+        <field name="model_id" ref="model_object_request_line"/>
+        <field name="binding_model_id" ref="model_object_request_line"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Назначить товар',
+    'res_model': 'object.request.line.assign.wizard',
+    'view_mode': 'form',
+    'target': 'new',
+    'context': dict(env.context, default_assign_type='product'),
+}</field>
+    </record>
+
+</odoo>

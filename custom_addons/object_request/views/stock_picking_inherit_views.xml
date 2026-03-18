@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_stock_picking_inherit_object_request" model="ir.ui.view">
+        <field name="name">stock.picking.inherit.object.request</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button
+                    class="oe_stat_button"
+                    icon="fa-file-text-o"
+                    type="object"
+                    name="action_open_object_requests"
+                    invisible="not is_object_request_issue or object_request_count == 0"
+                >
+                    <field
+                        name="object_request_count"
+                        widget="statinfo"
+                        string="Требования"
+                    />
+                </button>
+                <field name="is_object_request_issue" invisible="1"/>
+            </xpath>
+            <xpath expr="//header" position="inside">
+                <button
+                    name="%(object_request.action_report_issue_picking)d"
+                    string="Расходная накладная"
+                    type="action"
+                    class="btn-secondary"
+                    invisible="not is_object_request_issue"
+                />
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

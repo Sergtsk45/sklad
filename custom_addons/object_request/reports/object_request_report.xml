@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================================================================
+         ACTION REPORT
+         ================================================================ -->
+    <record id="action_report_object_request" model="ir.actions.report">
+        <field name="name">Требование на комплектацию</field>
+        <field name="model">object.request</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">object_request.report_object_request</field>
+        <field name="report_file">object_request.report_object_request</field>
+        <field name="binding_model_id" ref="model_object_request"/>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="base.paperformat_euro"/>
+    </record>
+
+    <!-- ================================================================
+         QWEB TEMPLATE
+         ================================================================ -->
+    <template id="report_object_request">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-call="web.external_layout">
+                    <div class="page">
+
+                        <!-- Заголовок документа -->
+                        <div class="row mb-4">
+                            <div class="col-12 text-center">
+                                <h3>Требование на комплектацию объекта</h3>
+                            </div>
+                        </div>
+
+                        <!-- Шапка документа -->
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <table class="table table-borderless table-sm">
+                                    <tr>
+                                        <td class="fw-bold" style="width: 40%;">Номер документа:</td>
+                                        <td><span t-field="doc.name"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Объект:</td>
+                                        <td><span t-field="doc.project_id"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Прораб:</td>
+                                        <td><span t-field="doc.foreman_user_id"/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-borderless table-sm">
+                                    <tr>
+                                        <td class="fw-bold" style="width: 45%;">Дата потребности:</td>
+                                        <td><span t-field="doc.need_date"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Приоритет:</td>
+                                        <td>
+                                            <t t-if="doc.priority == '0'">Низкий</t>
+                                            <t t-elif="doc.priority == '1'">Обычный</t>
+                                            <t t-elif="doc.priority == '2'">Высокий</t>
+                                            <t t-elif="doc.priority == '3'">Критический</t>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Дата создания:</td>
+                                        <td><span t-field="doc.create_date" t-options='{"widget": "date"}'/></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Комментарий -->
+                        <t t-if="doc.comment">
+                            <div class="row mb-3">
+                                <div class="col-12">
+                                    <strong>Комментарий:</strong>
+                                    <span t-field="doc.comment"/>
+                                </div>
+                            </div>
+                        </t>
+
+                        <!-- Таблица строк -->
+                        <table class="table table-bordered table-sm" style="font-size: 11px;">
+                            <thead>
+                                <tr class="bg-light">
+                                    <th style="width: 4%; text-align: center;">№</th>
+                                    <th style="width: 8%;">Зона</th>
+                                    <th style="width: 8%;">Этаж</th>
+                                    <th style="width: 8%;">Участок</th>
+                                    <th style="width: 30%;">Наименование</th>
+                                    <th style="width: 8%; text-align: center;">Ед. изм.</th>
+                                    <th style="width: 9%; text-align: right;">Кол-во</th>
+                                    <th style="width: 9%; text-align: right;">Выдано</th>
+                                    <th style="width: 16%;">Примечание</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="doc.line_ids" t-as="line">
+                                    <tr>
+                                        <td style="text-align: center;">
+                                            <span t-esc="line_index + 1"/>
+                                        </td>
+                                        <td><span t-field="line.zone"/></td>
+                                        <td><span t-field="line.floor"/></td>
+                                        <td><span t-field="line.section"/></td>
+                                        <td>
+                                            <t t-if="line.product_id">
+                                                <span t-field="line.product_id"/>
+                                            </t>
+                                            <t t-else="">
+                                                <span t-field="line.name_raw"/>
+                                                <t t-if="line.matching_required">
+                                                    <small class="text-danger"> (не сопоставлено)</small>
+                                                </t>
+                                            </t>
+                                        </td>
+                                        <td style="text-align: center;">
+                                            <t t-if="line.uom_id">
+                                                <span t-field="line.uom_id"/>
+                                            </t>
+                                            <t t-else="">
+                                                <span t-field="line.uom_raw"/>
+                                            </t>
+                                        </td>
+                                        <td style="text-align: right;">
+                                            <span t-esc="'%.2f' % line.qty_requested"/>
+                                        </td>
+                                        <td style="text-align: right;">
+                                            <t t-if="line.qty_issued">
+                                                <span t-esc="'%.2f' % line.qty_issued"/>
+                                            </t>
+                                            <t t-else="">—</t>
+                                        </td>
+                                        <td>
+                                            <span t-field="line.comment"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-light fw-bold">
+                                    <td colspan="6" style="text-align: right;">Итого:</td>
+                                    <td style="text-align: right;">
+                                        <span t-esc="'%.2f' % doc.qty_total_requested"/>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <span t-esc="'%.2f' % doc.qty_total_issued"/>
+                                    </td>
+                                    <td/>
+                                </tr>
+                            </tfoot>
+                        </table>
+
+                        <!-- Блок подписей -->
+                        <div class="row mt-5">
+                            <div class="col-4 text-center">
+                                <div style="border-top: 1px solid black; margin-top: 30px; padding-top: 5px;">
+                                    <strong>Прораб</strong>
+                                </div>
+                                <div class="text-muted" style="font-size: 11px;">
+                                    <span t-field="doc.foreman_user_id"/>
+                                </div>
+                                <div class="text-muted" style="font-size: 10px;">Подпись / Дата</div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div style="border-top: 1px solid black; margin-top: 30px; padding-top: 5px;">
+                                    <strong>Снабженец</strong>
+                                </div>
+                                <div class="text-muted" style="font-size: 11px;">
+                                    <t t-if="doc.buyer_user_id">
+                                        <span t-field="doc.buyer_user_id"/>
+                                    </t>
+                                    <t t-else="">___________________</t>
+                                </div>
+                                <div class="text-muted" style="font-size: 10px;">Подпись / Дата</div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div style="border-top: 1px solid black; margin-top: 30px; padding-top: 5px;">
+                                    <strong>Согласующий</strong>
+                                </div>
+                                <div class="text-muted" style="font-size: 11px;">___________________</div>
+                                <div class="text-muted" style="font-size: 10px;">Подпись / Дата</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

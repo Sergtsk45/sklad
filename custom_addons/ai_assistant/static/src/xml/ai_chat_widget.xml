@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+    <t t-name="ai_assistant.AiChatWidget">
+        <div t-if="state.hasAccess" class="o_ai_assistant_root">
+
+            <!-- Chat panel -->
+            <div t-if="state.isOpen" class="o_ai_assistant_panel">
+
+                <!-- Header -->
+                <div class="o_ai_assistant_header">
+                    <div class="o_ai_assistant_header_left">
+                        <span
+                            t-attf-class="o_ai_status_dot o_ai_status_{{ state.status }}"
+                            t-attf-title="{{ state.status === 'online' ? 'Онлайн' : 'Ошибка подключения' }}"
+                        />
+                        <span class="o_ai_assistant_title">AI-консультант</span>
+                    </div>
+                    <div class="o_ai_assistant_header_actions">
+                        <button
+                            class="o_ai_header_btn"
+                            t-on-click="clearSession"
+                            title="Очистить диалог"
+                        >
+                            <i class="fa fa-trash-o"/>
+                        </button>
+                        <button
+                            class="o_ai_header_btn"
+                            t-on-click="toggleChat"
+                            title="Закрыть"
+                        >
+                            <i class="fa fa-times"/>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Body: messages -->
+                <div class="o_ai_assistant_body">
+
+                    <!-- Suggested prompts (shown when no messages) -->
+                    <div t-if="showSuggested" class="o_ai_suggested_prompts">
+                        <p class="o_ai_suggested_label">Попробуйте спросить:</p>
+                        <t t-foreach="suggestedPrompts" t-as="prompt" t-key="prompt">
+                            <button
+                                class="o_ai_suggested_chip"
+                                t-on-click="() => onSuggestedPrompt(prompt)"
+                            >
+                                <t t-esc="prompt"/>
+                            </button>
+                        </t>
+                    </div>
+
+                    <!-- Messages list -->
+                    <t t-foreach="state.messages" t-as="msg" t-key="msg.timestamp">
+                        <div t-attf-class="o_ai_message o_ai_message_{{ msg.role }}">
+                            <div class="o_ai_message_bubble">
+                                <t t-esc="msg.content"/>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- Loading indicator -->
+                    <div t-if="state.isLoading" class="o_ai_message o_ai_message_assistant">
+                        <div class="o_ai_message_bubble o_ai_typing">
+                            <span/><span/><span/>
+                        </div>
+                    </div>
+
+                    <!-- Scroll anchor -->
+                    <div t-ref="messagesEnd"/>
+                </div>
+
+                <!-- Footer -->
+                <div class="o_ai_assistant_footer">
+                    <textarea
+                        t-ref="textarea"
+                        class="o_ai_input"
+                        placeholder="Напишите вопрос…"
+                        rows="1"
+                        t-att-value="state.inputText"
+                        t-on-input="onInput"
+                        t-on-keydown="onInputKeydown"
+                        t-att-disabled="state.isLoading"
+                    />
+                    <button
+                        class="o_ai_send_btn"
+                        t-on-click="sendMessage"
+                        t-att-disabled="!state.inputText.trim() or state.isLoading"
+                        title="Отправить"
+                    >
+                        <i class="fa fa-paper-plane"/>
+                    </button>
+                </div>
+                <div class="o_ai_footer_hint">
+                    Ассистент отвечает только по функциям Odoo
+                </div>
+
+            </div>
+
+            <!-- FAB button -->
+            <button
+                t-attf-class="o_ai_assistant_fab {{ state.isOpen ? 'o_ai_fab_active' : '' }}"
+                t-on-click="toggleChat"
+                title="AI-консультант"
+            >
+                <i t-attf-class="fa {{ state.isOpen ? 'fa-times' : 'fa-comments' }}"/>
+            </button>
+
+        </div>
+    </t>
+</templates>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_ai_assistant" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.ai.assistant</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <block title="AI-консультант" name="ai_assistant_block"
+                       groups="ai_assistant.group_ai_assistant_admin">
+                    <setting string="Подключение" title="Подключение к OpenRouter API">
+                        <div class="col-lg-6">
+                            <label for="ai_assistant_api_key"/>
+                            <field name="ai_assistant_api_key" widget="password"/>
+                            <label for="ai_assistant_base_url"/>
+                            <field name="ai_assistant_base_url"/>
+                            <label for="ai_assistant_model"/>
+                            <field name="ai_assistant_model"/>
+                            <label for="ai_assistant_timeout"/>
+                            <field name="ai_assistant_timeout"/>
+                        </div>
+                    </setting>
+                    <setting string="Поведение" title="Поведение AI-ассистента">
+                        <div class="col-lg-6">
+                            <label for="ai_assistant_enabled"/>
+                            <field name="ai_assistant_enabled"/>
+                            <label for="ai_assistant_max_history"/>
+                            <field name="ai_assistant_max_history"/>
+                        </div>
+                    </setting>
+                    <setting string="Дополнительно" title="Дополнительные настройки">
+                        <div class="col-lg-6">
+                            <label for="ai_assistant_system_prompt_override"/>
+                            <field name="ai_assistant_system_prompt_override"/>
+                            <label for="ai_assistant_debug_logging"/>
+                            <field name="ai_assistant_debug_logging"/>
+                        </div>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

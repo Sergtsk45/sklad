@@ -1,0 +1,669 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+<data noupdate="1">
+
+    <!-- ========== 1. Категория товаров ========== -->
+
+    <record id="product_category_construction" model="product.category">
+        <field name="name">Строительные материалы</field>
+        <field name="parent_id" ref="product.product_category_all"/>
+    </record>
+
+    <!-- ========== 2. Поставщики ========== -->
+
+    <record id="partner_stroy_materials" model="res.partner">
+        <field name="name">ООО СтройМатериалы</field>
+        <field name="is_company" eval="True"/>
+        <field name="supplier_rank">1</field>
+        <field name="country_id" ref="base.ru"/>
+        <field name="email">info@stroymaterials.ru</field>
+        <field name="phone">+7 (495) 111-11-11</field>
+    </record>
+
+    <record id="partner_metall_trade" model="res.partner">
+        <field name="name">ООО МеталлТрейд</field>
+        <field name="is_company" eval="True"/>
+        <field name="supplier_rank">1</field>
+        <field name="country_id" ref="base.ru"/>
+        <field name="email">info@metalltrade.ru</field>
+        <field name="phone">+7 (495) 222-22-22</field>
+    </record>
+
+    <record id="partner_electro_snab" model="res.partner">
+        <field name="name">ООО ЭлектроСнаб</field>
+        <field name="is_company" eval="True"/>
+        <field name="supplier_rank">1</field>
+        <field name="country_id" ref="base.ru"/>
+        <field name="email">info@electrosnab.ru</field>
+        <field name="phone">+7 (495) 333-33-33</field>
+    </record>
+
+    <record id="partner_techno_stroy" model="res.partner">
+        <field name="name">ООО ТехноСтрой</field>
+        <field name="is_company" eval="True"/>
+        <field name="supplier_rank">1</field>
+        <field name="country_id" ref="base.ru"/>
+        <field name="email">info@technostroy.ru</field>
+        <field name="phone">+7 (495) 444-44-44</field>
+    </record>
+
+    <!-- ========== 3. Товары (product.template) ========== -->
+
+    <record id="product_tmpl_kirpich_m150" model="product.template">
+        <field name="name">Кирпич рядовой полнотелый М150</field>
+        <field name="default_code">KIRP-M150</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_unit"/>
+        <field name="uom_po_id" ref="uom.product_uom_unit"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_cement_m400" model="product.template">
+        <field name="name">Цемент портландцемент М400 50кг</field>
+        <field name="default_code">CEM-M400-50</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_kgm"/>
+        <field name="uom_po_id" ref="uom.product_uom_kgm"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_armatura_d12" model="product.template">
+        <field name="name">Арматура A500С d12 мм</field>
+        <field name="default_code">ARM-A500-D12</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_meter"/>
+        <field name="uom_po_id" ref="uom.product_uom_meter"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_armatura_d16" model="product.template">
+        <field name="name">Арматура A500С d16 мм</field>
+        <field name="default_code">ARM-A500-D16</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_meter"/>
+        <field name="uom_po_id" ref="uom.product_uom_meter"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_ugolok_50x50" model="product.template">
+        <field name="name">Уголок стальной равнополочный 50x50x5</field>
+        <field name="default_code">UGL-5005</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_meter"/>
+        <field name="uom_po_id" ref="uom.product_uom_meter"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_truba_stalnaya_25" model="product.template">
+        <field name="name">Труба стальная электросварная 25x2.5</field>
+        <field name="default_code">TRST-25-25</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_meter"/>
+        <field name="uom_po_id" ref="uom.product_uom_meter"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_profnastil_s8" model="product.template">
+        <field name="name">Профнастил С8 оцинкованный 0.5мм</field>
+        <field name="default_code">PROF-S8-050</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_square_meter"/>
+        <field name="uom_po_id" ref="uom.product_uom_square_meter"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_ruberoid_rkp" model="product.template">
+        <field name="name">Рубероид РКП-350 гидроизоляционный</field>
+        <field name="default_code">RUB-RKP-350</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_square_meter"/>
+        <field name="uom_po_id" ref="uom.product_uom_square_meter"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_gipsokarton" model="product.template">
+        <field name="name">Гипсокартон ГКЛ 12.5мм KNAUF</field>
+        <field name="default_code">GKL-125</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_unit"/>
+        <field name="uom_po_id" ref="uom.product_uom_unit"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_shpaklevka_rotband" model="product.template">
+        <field name="name">Шпаклёвка гипсовая Ротбанд 25кг</field>
+        <field name="default_code">SHP-ROT-25</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_kgm"/>
+        <field name="uom_po_id" ref="uom.product_uom_kgm"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_gruntovka_ct17" model="product.template">
+        <field name="name">Грунтовка глубокого проникновения Ceresit CT17 10л</field>
+        <field name="default_code">GR-CT17-10</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_litre"/>
+        <field name="uom_po_id" ref="uom.product_uom_litre"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_kraska_fasad" model="product.template">
+        <field name="name">Краска фасадная белая влагостойкая 14кг</field>
+        <field name="default_code">KR-FAS-14</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_kgm"/>
+        <field name="uom_po_id" ref="uom.product_uom_kgm"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_uteplitel_50mm" model="product.template">
+        <field name="name">Утеплитель минеральная вата КНАУФ 50мм</field>
+        <field name="default_code">UTL-MW-50</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_square_meter"/>
+        <field name="uom_po_id" ref="uom.product_uom_square_meter"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_mastika_bitum" model="product.template">
+        <field name="name">Мастика битумная кровельная холодная 18кг</field>
+        <field name="default_code">MAS-BIT-18</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_kgm"/>
+        <field name="uom_po_id" ref="uom.product_uom_kgm"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_pena_montazh" model="product.template">
+        <field name="name">Пена монтажная профессиональная 750мл</field>
+        <field name="default_code">PENA-750</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_unit"/>
+        <field name="uom_po_id" ref="uom.product_uom_unit"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_osb_9mm" model="product.template">
+        <field name="name">OSB-3 плита 2500x1250x9мм</field>
+        <field name="default_code">OSB-9-2500</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_unit"/>
+        <field name="uom_po_id" ref="uom.product_uom_unit"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_setka_shtuk" model="product.template">
+        <field name="name">Сетка штукатурная стекловолоконная 5x5мм</field>
+        <field name="default_code">SET-STK-5</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_square_meter"/>
+        <field name="uom_po_id" ref="uom.product_uom_square_meter"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_profil_ps_50" model="product.template">
+        <field name="name">Профиль стоечный ПС 50/50 3000мм КНАУФ</field>
+        <field name="default_code">PR-PS-50-3M</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_unit"/>
+        <field name="uom_po_id" ref="uom.product_uom_unit"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_profil_pn_50" model="product.template">
+        <field name="name">Профиль направляющий ПН 50/40 3000мм КНАУФ</field>
+        <field name="default_code">PR-PN-50-3M</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_unit"/>
+        <field name="uom_po_id" ref="uom.product_uom_unit"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_truba_pvh_110" model="product.template">
+        <field name="name">Труба канализационная ПВХ серая 110мм x 2м</field>
+        <field name="default_code">TR-PVH-110-2M</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_unit"/>
+        <field name="uom_po_id" ref="uom.product_uom_unit"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_samorez_42x13" model="product.template">
+        <field name="name">Саморез по металлу 4.2x13мм упак. 1000шт</field>
+        <field name="default_code">SAM-42-13-1000</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_unit"/>
+        <field name="uom_po_id" ref="uom.product_uom_unit"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_dubel_6x40" model="product.template">
+        <field name="name">Дюбель-гвоздь 6x40мм упак. 200шт</field>
+        <field name="default_code">DUB-6-40-200</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_unit"/>
+        <field name="uom_po_id" ref="uom.product_uom_unit"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_anker_m10x80" model="product.template">
+        <field name="name">Анкер-болт распорный М10x80мм</field>
+        <field name="default_code">ANK-M10-80</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_unit"/>
+        <field name="uom_po_id" ref="uom.product_uom_unit"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_provod_vvgng" model="product.template">
+        <field name="name">Провод ВВГнг-LS 3x2.5мм бухта 100м</field>
+        <field name="default_code">PR-VVGNG-325-100</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_meter"/>
+        <field name="uom_po_id" ref="uom.product_uom_meter"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_kabel_kanal_25x16" model="product.template">
+        <field name="name">Кабель-канал пластиковый 25x16мм 2м</field>
+        <field name="default_code">KK-25-16-2M</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_unit"/>
+        <field name="uom_po_id" ref="uom.product_uom_unit"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <record id="product_tmpl_plenka_paroizol" model="product.template">
+        <field name="name">Плёнка пароизоляционная Изоспан В 70м2</field>
+        <field name="default_code">PL-PAROIZOL-70</field>
+        <field name="detailed_type">product</field>
+        <field name="categ_id" ref="product_category_construction"/>
+        <field name="uom_id" ref="uom.product_uom_square_meter"/>
+        <field name="uom_po_id" ref="uom.product_uom_square_meter"/>
+        <field name="purchase_ok" eval="True"/>
+        <field name="sale_ok" eval="False"/>
+    </record>
+
+    <!-- ========== 4. Информация о поставщиках (product.supplierinfo) ========== -->
+
+    <!-- ООО СтройМатериалы -->
+
+    <record id="si_stroy_kirpich" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_stroy_materials"/>
+        <field name="product_tmpl_id" ref="product_tmpl_kirpich_m150"/>
+        <field name="product_name">Кирпич М150 полнотелый</field>
+        <field name="product_code">SM-KIRP-001</field>
+        <field name="price">12.50</field>
+        <field name="min_qty">1000.0</field>
+        <field name="delay">3</field>
+    </record>
+
+    <record id="si_stroy_cement" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_stroy_materials"/>
+        <field name="product_tmpl_id" ref="product_tmpl_cement_m400"/>
+        <field name="product_name">Цемент М400 50кг</field>
+        <field name="product_code">SM-CEM-400</field>
+        <field name="price">280.0</field>
+        <field name="min_qty">50.0</field>
+        <field name="delay">2</field>
+    </record>
+
+    <record id="si_stroy_shpaklevka" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_stroy_materials"/>
+        <field name="product_tmpl_id" ref="product_tmpl_shpaklevka_rotband"/>
+        <field name="product_name">Шпаклёвка Ротбанд 25кг</field>
+        <field name="product_code">SM-SHP-ROT</field>
+        <field name="price">550.0</field>
+        <field name="min_qty">10.0</field>
+        <field name="delay">2</field>
+    </record>
+
+    <record id="si_stroy_kraska" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_stroy_materials"/>
+        <field name="product_tmpl_id" ref="product_tmpl_kraska_fasad"/>
+        <field name="product_name">Краска фасадная 14кг</field>
+        <field name="product_code">SM-KR-FAS-14</field>
+        <field name="price">1200.0</field>
+        <field name="min_qty">5.0</field>
+        <field name="delay">2</field>
+    </record>
+
+    <record id="si_stroy_gruntovka" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_stroy_materials"/>
+        <field name="product_tmpl_id" ref="product_tmpl_gruntovka_ct17"/>
+        <field name="product_name">Грунтовка CT17 10л</field>
+        <field name="product_code">SM-GR-CT17</field>
+        <field name="price">480.0</field>
+        <field name="min_qty">5.0</field>
+        <field name="delay">2</field>
+    </record>
+
+    <record id="si_stroy_uteplitel" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_stroy_materials"/>
+        <field name="product_tmpl_id" ref="product_tmpl_uteplitel_50mm"/>
+        <field name="product_name">Утеплитель КНАУФ 50мм</field>
+        <field name="product_code">SM-UTL-50</field>
+        <field name="price">350.0</field>
+        <field name="min_qty">10.0</field>
+        <field name="delay">3</field>
+    </record>
+
+    <record id="si_stroy_pena" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_stroy_materials"/>
+        <field name="product_tmpl_id" ref="product_tmpl_pena_montazh"/>
+        <field name="product_name">Пена монтажная 750мл</field>
+        <field name="product_code">SM-PENA-750</field>
+        <field name="price">320.0</field>
+        <field name="min_qty">12.0</field>
+        <field name="delay">2</field>
+    </record>
+
+    <record id="si_stroy_gkl" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_stroy_materials"/>
+        <field name="product_tmpl_id" ref="product_tmpl_gipsokarton"/>
+        <field name="product_name">ГКЛ 12.5мм КНАУФ</field>
+        <field name="product_code">SM-GKL-125</field>
+        <field name="price">295.0</field>
+        <field name="min_qty">20.0</field>
+        <field name="delay">2</field>
+    </record>
+
+    <record id="si_stroy_osb" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_stroy_materials"/>
+        <field name="product_tmpl_id" ref="product_tmpl_osb_9mm"/>
+        <field name="product_name">OSB-3 9мм 2500x1250</field>
+        <field name="product_code">SM-OSB-9</field>
+        <field name="price">870.0</field>
+        <field name="min_qty">10.0</field>
+        <field name="delay">3</field>
+    </record>
+
+    <record id="si_stroy_setka" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_stroy_materials"/>
+        <field name="product_tmpl_id" ref="product_tmpl_setka_shtuk"/>
+        <field name="product_name">Сетка штукатурная 5x5мм</field>
+        <field name="product_code">SM-SET-5</field>
+        <field name="price">45.0</field>
+        <field name="min_qty">50.0</field>
+        <field name="delay">2</field>
+    </record>
+
+    <!-- ООО МеталлТрейд -->
+
+    <record id="si_metall_armatura_d12" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_metall_trade"/>
+        <field name="product_tmpl_id" ref="product_tmpl_armatura_d12"/>
+        <field name="product_name">Арматура А500С Ф12</field>
+        <field name="product_code">MT-ARM-D12</field>
+        <field name="price">68.0</field>
+        <field name="min_qty">100.0</field>
+        <field name="delay">5</field>
+    </record>
+
+    <record id="si_metall_armatura_d16" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_metall_trade"/>
+        <field name="product_tmpl_id" ref="product_tmpl_armatura_d16"/>
+        <field name="product_name">Арматура А500С Ф16</field>
+        <field name="product_code">MT-ARM-D16</field>
+        <field name="price">72.0</field>
+        <field name="min_qty">100.0</field>
+        <field name="delay">5</field>
+    </record>
+
+    <record id="si_metall_ugolok" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_metall_trade"/>
+        <field name="product_tmpl_id" ref="product_tmpl_ugolok_50x50"/>
+        <field name="product_name">Уголок 50x50x5</field>
+        <field name="product_code">MT-UGL-50</field>
+        <field name="price">185.0</field>
+        <field name="min_qty">20.0</field>
+        <field name="delay">5</field>
+    </record>
+
+    <record id="si_metall_profnastil" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_metall_trade"/>
+        <field name="product_tmpl_id" ref="product_tmpl_profnastil_s8"/>
+        <field name="product_name">Профнастил С8 0.5мм</field>
+        <field name="product_code">MT-PROF-S8</field>
+        <field name="price">420.0</field>
+        <field name="min_qty">10.0</field>
+        <field name="delay">4</field>
+    </record>
+
+    <record id="si_metall_truba_stalnaya" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_metall_trade"/>
+        <field name="product_tmpl_id" ref="product_tmpl_truba_stalnaya_25"/>
+        <field name="product_name">Труба ст. 25x2.5</field>
+        <field name="product_code">MT-TRST-25</field>
+        <field name="price">290.0</field>
+        <field name="min_qty">20.0</field>
+        <field name="delay">5</field>
+    </record>
+
+    <record id="si_metall_profil_ps" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_metall_trade"/>
+        <field name="product_tmpl_id" ref="product_tmpl_profil_ps_50"/>
+        <field name="product_name">Профиль ПС 50/50 3м</field>
+        <field name="product_code">MT-PS-50-3</field>
+        <field name="price">145.0</field>
+        <field name="min_qty">50.0</field>
+        <field name="delay">3</field>
+    </record>
+
+    <record id="si_metall_profil_pn" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_metall_trade"/>
+        <field name="product_tmpl_id" ref="product_tmpl_profil_pn_50"/>
+        <field name="product_name">Профиль ПН 50/40 3м</field>
+        <field name="product_code">MT-PN-50-3</field>
+        <field name="price">110.0</field>
+        <field name="min_qty">50.0</field>
+        <field name="delay">3</field>
+    </record>
+
+    <record id="si_metall_samorez" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_metall_trade"/>
+        <field name="product_tmpl_id" ref="product_tmpl_samorez_42x13"/>
+        <field name="product_name">Саморез 4.2x13 1000шт</field>
+        <field name="product_code">MT-SAM-42-13</field>
+        <field name="price">380.0</field>
+        <field name="min_qty">5.0</field>
+        <field name="delay">2</field>
+    </record>
+
+    <record id="si_metall_dubel" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_metall_trade"/>
+        <field name="product_tmpl_id" ref="product_tmpl_dubel_6x40"/>
+        <field name="product_name">Дюбель-гвоздь 6x40 200шт</field>
+        <field name="product_code">MT-DUB-640</field>
+        <field name="price">290.0</field>
+        <field name="min_qty">5.0</field>
+        <field name="delay">2</field>
+    </record>
+
+    <record id="si_metall_anker" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_metall_trade"/>
+        <field name="product_tmpl_id" ref="product_tmpl_anker_m10x80"/>
+        <field name="product_name">Анкер М10x80</field>
+        <field name="product_code">MT-ANK-M10</field>
+        <field name="price">45.0</field>
+        <field name="min_qty">50.0</field>
+        <field name="delay">3</field>
+    </record>
+
+    <!-- ООО ЭлектроСнаб -->
+
+    <record id="si_electro_provod" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_electro_snab"/>
+        <field name="product_tmpl_id" ref="product_tmpl_provod_vvgng"/>
+        <field name="product_name">ВВГнг-LS 3x2.5 100м</field>
+        <field name="product_code">ES-VVGNG-325</field>
+        <field name="price">7800.0</field>
+        <field name="min_qty">1.0</field>
+        <field name="delay">5</field>
+    </record>
+
+    <record id="si_electro_kabel_kanal" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_electro_snab"/>
+        <field name="product_tmpl_id" ref="product_tmpl_kabel_kanal_25x16"/>
+        <field name="product_name">Кабель-канал 25x16 2м</field>
+        <field name="product_code">ES-KK-25-16</field>
+        <field name="price">58.0</field>
+        <field name="min_qty">20.0</field>
+        <field name="delay">3</field>
+    </record>
+
+    <!-- ООО ТехноСтрой -->
+
+    <record id="si_techno_ruberoid" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_techno_stroy"/>
+        <field name="product_tmpl_id" ref="product_tmpl_ruberoid_rkp"/>
+        <field name="product_name">Рубероид РКП-350</field>
+        <field name="product_code">TS-RUB-350</field>
+        <field name="price">85.0</field>
+        <field name="min_qty">50.0</field>
+        <field name="delay">3</field>
+    </record>
+
+    <record id="si_techno_mastika" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_techno_stroy"/>
+        <field name="product_tmpl_id" ref="product_tmpl_mastika_bitum"/>
+        <field name="product_name">Мастика битумная 18кг</field>
+        <field name="product_code">TS-MAS-BIT</field>
+        <field name="price">890.0</field>
+        <field name="min_qty">5.0</field>
+        <field name="delay">3</field>
+    </record>
+
+    <record id="si_techno_plenka" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_techno_stroy"/>
+        <field name="product_tmpl_id" ref="product_tmpl_plenka_paroizol"/>
+        <field name="product_name">Изоспан В 70м2</field>
+        <field name="product_code">TS-IZOSB-70</field>
+        <field name="price">1650.0</field>
+        <field name="min_qty">1.0</field>
+        <field name="delay">3</field>
+    </record>
+
+    <record id="si_techno_truba_pvh" model="product.supplierinfo">
+        <field name="partner_id" ref="partner_techno_stroy"/>
+        <field name="product_tmpl_id" ref="product_tmpl_truba_pvh_110"/>
+        <field name="product_name">Труба ПВХ 110мм 2м</field>
+        <field name="product_code">TS-TR-110-2M</field>
+        <field name="price">485.0</field>
+        <field name="min_qty">5.0</field>
+        <field name="delay">3</field>
+    </record>
+
+    <!-- ========== 5. Пользователи-прорабы ========== -->
+
+    <record id="user_foreman_ivanov" model="res.users">
+        <field name="name">Иванов Иван Иванович</field>
+        <field name="login">foreman.ivanov</field>
+        <field name="password">foreman1</field>
+        <field name="lang">ru_RU</field>
+        <field name="tz">Europe/Moscow</field>
+        <field name="groups_id" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="user_foreman_petrov" model="res.users">
+        <field name="name">Петров Пётр Петрович</field>
+        <field name="login">foreman.petrov</field>
+        <field name="password">foreman2</field>
+        <field name="lang">ru_RU</field>
+        <field name="tz">Europe/Moscow</field>
+        <field name="groups_id" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="user_foreman_sidorov" model="res.users">
+        <field name="name">Сидоров Алексей Николаевич</field>
+        <field name="login">foreman.sidorov</field>
+        <field name="password">foreman3</field>
+        <field name="lang">ru_RU</field>
+        <field name="tz">Europe/Moscow</field>
+        <field name="groups_id" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <!-- ========== 6. Объекты строительства ========== -->
+
+    <record id="project_jk_001" model="object.request.project">
+        <field name="name">Жилой комплекс Северный</field>
+        <field name="code">JK-001</field>
+        <field name="address">г. Москва, ул. Северная, 15</field>
+        <field name="partner_id" ref="partner_stroy_materials"/>
+        <field name="comment">Многоэтажный жилой комплекс. Ввод в эксплуатацию 2027 г.</field>
+    </record>
+
+    <record id="project_oc_002" model="object.request.project">
+        <field name="name">Офисный центр Бизнес Парк</field>
+        <field name="code">OC-002</field>
+        <field name="address">г. Москва, Ленинградский пр-т, 80</field>
+        <field name="comment">Офисный центр класса А. 12 этажей.</field>
+    </record>
+
+    <record id="project_tc_003" model="object.request.project">
+        <field name="name">Торговый центр Меридиан</field>
+        <field name="code">TC-003</field>
+        <field name="address">г. Москва, ул. Мира, 45</field>
+        <field name="comment">Торговый центр с якорными арендаторами.</field>
+    </record>
+
+    <record id="project_pz_004" model="object.request.project">
+        <field name="name">Производственный цех №3</field>
+        <field name="code">PZ-004</field>
+        <field name="address">МО, г. Люберцы, ул. Промышленная, 12</field>
+        <field name="comment">Расширение производственной площадки.</field>
+    </record>
+
+</data>
+</odoo>

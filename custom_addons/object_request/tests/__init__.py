@@ -1,0 +1,15 @@
+from . import test_obr004_models  # noqa: F401
+from . import test_obr006_wizard  # noqa: F401
+from . import test_obr007_import  # noqa: F401
+from . import test_obr008_matching_ui  # noqa: F401
+from . import test_obr009_mass_actions  # noqa: F401
+from . import test_obr010_qty_management  # noqa: F401
+from . import test_obr011_issue_picking  # noqa: F401
+from . import test_obr012_confirm_issue  # noqa: F401
+from . import test_obr013_report  # noqa: F401
+from . import test_obr014_report  # noqa: F401
+from . import test_obr015_state_machine  # noqa: F401
+from . import test_obr017_security  # noqa: F401
+from . import test_obr018_pilot_scenarios  # noqa: F401
+from . import test_obr019_stock_check  # noqa: F401
+from . import test_obr020_reservation  # noqa: F401

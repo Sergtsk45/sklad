@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_object_request_issue_wizard_form" model="ir.ui.view">
+        <field name="name">object.request.issue.wizard.form</field>
+        <field name="model">object.request.issue.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Создание выдачи со склада">
+                <sheet>
+                    <group string="Требование">
+                        <field name="request_id" readonly="1"/>
+                    </group>
+
+                    <group string="Параметры выдачи">
+                        <group>
+                            <field name="warehouse_id"/>
+                            <field name="picking_type_id"/>
+                        </group>
+                        <group>
+                            <field name="source_location_id"/>
+                            <field name="destination_location_id"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <field name="scheduled_date"/>
+                        <field name="comment" placeholder="Комментарий к выдаче..."/>
+                    </group>
+
+                    <separator string="Строки к выдаче"/>
+                    <field name="line_ids">
+                        <list>
+                            <field name="sequence" string="№"/>
+                            <field name="name_raw" string="Наименование"/>
+                            <field name="product_id" string="Товар"/>
+                            <field name="uom_id" string="Ед. изм."/>
+                            <field name="qty_requested" string="Запрошено"/>
+                            <field name="qty_to_issue" string="К выдаче"/>
+                            <field name="preferred_vendor_id" string="Поставщик" optional="hide"/>
+                        </list>
+                    </field>
+                </sheet>
+                <footer>
+                    <button
+                        name="action_create_issue"
+                        string="Создать выдачу"
+                        type="object"
+                        class="btn-primary"
+                    />
+                    <button string="Отмена" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>

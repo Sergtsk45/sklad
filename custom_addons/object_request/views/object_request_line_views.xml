@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================================================================
+         SEARCH VIEW для строк (используется в smart-button «Проблемные строки»)
+         ================================================================ -->
+    <record id="view_object_request_line_search" model="ir.ui.view">
+        <field name="name">object.request.line.search</field>
+        <field name="model">object.request.line</field>
+        <field name="arch" type="xml">
+            <search string="Строки требований">
+                <field name="name_raw" string="Наименование"/>
+                <field name="supplier_article" string="Артикул поставщика"/>
+                <field name="product_id" string="Товар"/>
+                <field name="request_id" string="Документ"/>
+                <filter
+                    name="filter_matching_required"
+                    string="Требует сопоставления"
+                    domain="[('matching_required', '=', True)]"
+                />
+                <filter
+                    name="filter_vendor_required"
+                    string="Требует поставщика"
+                    domain="[('manual_vendor_required', '=', True)]"
+                />
+                <filter
+                    name="filter_problem"
+                    string="Только проблемные"
+                    domain="['|',
+                        ('matching_required', '=', True),
+                        ('manual_vendor_required', '=', True)]"
+                />
+                <separator/>
+                <filter
+                    name="filter_partially_issued"
+                    string="Частично выдано"
+                    domain="[('line_state', '=', 'partially_issued')]"
+                />
+                <filter
+                    name="filter_fully_supplied"
+                    string="Полностью обеспечено"
+                    domain="[('line_state', '=', 'fully_supplied')]"
+                />
+                <separator/>
+                <filter
+                    name="group_request"
+                    string="Документ"
+                    context="{'group_by': 'request_id'}"
+                />
+                <filter
+                    name="group_product"
+                    string="Товар"
+                    context="{'group_by': 'product_id'}"
+                />
+                <filter
+                    name="group_line_state"
+                    string="Статус строки"
+                    context="{'group_by': 'line_state'}"
+                />
+            </search>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         LIST VIEW для строк (автономный — для smart-button «Строки»)
+         ================================================================ -->
+    <record id="view_object_request_line_list" model="ir.ui.view">
+        <field name="name">object.request.line.list</field>
+        <field name="model">object.request.line</field>
+        <field name="arch" type="xml">
+            <list
+                string="Строки требования"
+                decoration-danger="matching_required == True"
+                decoration-warning="(manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued'"
+                decoration-success="line_state == 'fully_supplied'"
+                create="0"
+                delete="0"
+            >
+                <field name="request_id" string="Документ" optional="show"/>
+                <field name="sequence" string="№"/>
+                <field name="name_raw" string="Наименование (файл)"/>
+                <field name="supplier_article" string="Артикул" optional="show"/>
+                <field
+                    name="product_id"
+                    string="Товар"
+                    context="{'display_default_code': True}"
+                />
+                <field name="uom_id" string="Ед. изм." optional="show"/>
+                <field name="zone" string="Зона" optional="hide"/>
+                <field name="floor" string="Этаж" optional="hide"/>
+                <field name="section" string="Участок" optional="hide"/>
+                <field name="qty_requested" string="Запрошено"/>
+                <field name="qty_to_issue" string="К выдаче" optional="show"/>
+                <field name="qty_to_buy" string="К закупке" optional="show"/>
+                <field name="qty_issued" string="Выдано" optional="show"/>
+                <field name="qty_reserved" string="Зарезервировано" optional="show"/>
+                <field name="preferred_vendor_id" string="Поставщик" optional="show"/>
+                <field
+                    name="line_state"
+                    string="Статус"
+                    widget="badge"
+                    decoration-danger="line_state == 'requires_mapping'"
+                    decoration-warning="line_state == 'partially_issued'"
+                    decoration-success="line_state == 'fully_supplied'"
+                />
+                <field name="matching_required" column_invisible="1"/>
+                <field name="manual_vendor_required" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         ACTION для открытия строк конкретного документа
+         (используется в smart-button «Строки»)
+         ================================================================ -->
+    <record id="action_object_request_line" model="ir.actions.act_window">
+        <field name="name">Строки требования</field>
+        <field name="res_model">object.request.line</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_object_request_line_search"/>
+    </record>
+
+</odoo>

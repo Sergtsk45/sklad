@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================================================================
+         ACTION REPORT
+         ================================================================ -->
+    <record id="action_report_issue_picking" model="ir.actions.report">
+        <field name="name">Расходная накладная</field>
+        <field name="model">stock.picking</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">object_request.report_issue_picking</field>
+        <field name="report_file">object_request.report_issue_picking</field>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="base.paperformat_euro"/>
+    </record>
+
+    <!-- ================================================================
+         QWEB TEMPLATE
+         ================================================================ -->
+    <template id="report_issue_picking">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-call="web.external_layout">
+                    <div class="page">
+
+                        <!-- Заголовок документа -->
+                        <div class="row mb-4">
+                            <div class="col-12 text-center">
+                                <h3>Расходная накладная</h3>
+                            </div>
+                        </div>
+
+                        <!-- Шапка документа -->
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <table class="table table-borderless table-sm">
+                                    <tr>
+                                        <td class="fw-bold" style="width: 40%;">Номер документа:</td>
+                                        <td><span t-field="doc.name"/></td>
+                                    </tr>
+                                    <t t-if="doc.origin">
+                                        <tr>
+                                            <td class="fw-bold">Источник:</td>
+                                            <td><span t-field="doc.origin"/></td>
+                                        </tr>
+                                    </t>
+                                    <t t-if="doc.object_request_project_id">
+                                        <tr>
+                                            <td class="fw-bold">Объект:</td>
+                                            <td><span t-field="doc.object_request_project_id"/></td>
+                                        </tr>
+                                    </t>
+                                    <t t-if="doc.object_request_ids">
+                                        <tr>
+                                            <td class="fw-bold">Требование:</td>
+                                            <td>
+                                                <t t-foreach="doc.object_request_ids" t-as="req">
+                                                    <span t-esc="req.name"/>
+                                                    <t t-if="not req_last">, </t>
+                                                </t>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </table>
+                            </div>
+                            <div class="col-6">
+                                <table class="table table-borderless table-sm">
+                                    <tr>
+                                        <td class="fw-bold" style="width: 45%;">Дата выдачи:</td>
+                                        <td>
+                                            <t t-if="doc.date_done">
+                                                <span t-field="doc.date_done" t-options='{"widget": "date"}'/>
+                                            </t>
+                                            <t t-else="">
+                                                <span t-field="doc.scheduled_date" t-options='{"widget": "date"}'/>
+                                            </t>
+                                        </td>
+                                    </tr>
+                                    <t t-if="doc.location_id">
+                                        <tr>
+                                            <td class="fw-bold">Склад (откуда):</td>
+                                            <td><span t-field="doc.location_id"/></td>
+                                        </tr>
+                                    </t>
+                                    <t t-if="doc.location_dest_id">
+                                        <tr>
+                                            <td class="fw-bold">Назначение:</td>
+                                            <td><span t-field="doc.location_dest_id"/></td>
+                                        </tr>
+                                    </t>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Таблица строк -->
+                        <table class="table table-bordered table-sm" style="font-size: 11px;">
+                            <thead>
+                                <tr class="bg-light">
+                                    <th style="width: 4%; text-align: center;">№</th>
+                                    <th style="width: 30%;">Наименование товара</th>
+                                    <th style="width: 8%; text-align: center;">Ед. изм.</th>
+                                    <th style="width: 10%; text-align: right;">Запрошено</th>
+                                    <th style="width: 10%; text-align: right;">Выдано</th>
+                                    <th style="width: 8%;">Зона</th>
+                                    <th style="width: 8%;">Этаж</th>
+                                    <th style="width: 8%;">Участок</th>
+                                    <th style="width: 14%;">Примечание</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-set="move_index" t-value="0"/>
+                                <t t-foreach="doc.move_ids" t-as="move">
+                                    <t t-set="req_line" t-value="env['object.request.line'].search([('issue_move_id', '=', move.id)], limit=1)"/>
+                                    <tr>
+                                        <td style="text-align: center;">
+                                            <t t-esc="move_index + 1"/>
+                                        </td>
+                                        <td><span t-field="move.product_id"/></td>
+                                        <td style="text-align: center;">
+                                            <span t-field="move.product_uom"/>
+                                        </td>
+                                        <td style="text-align: right;">
+                                            <span t-esc="'%.2f' % move.product_uom_qty"/>
+                                        </td>
+                                        <td style="text-align: right;">
+                                            <t t-if="move.quantity">
+                                                <span t-esc="'%.2f' % move.quantity"/>
+                                            </t>
+                                            <t t-else="">—</t>
+                                        </td>
+                                        <td>
+                                            <t t-if="req_line">
+                                                <span t-esc="req_line.zone or ''"/>
+                                            </t>
+                                        </td>
+                                        <td>
+                                            <t t-if="req_line">
+                                                <span t-esc="req_line.floor or ''"/>
+                                            </t>
+                                        </td>
+                                        <td>
+                                            <t t-if="req_line">
+                                                <span t-esc="req_line.section or ''"/>
+                                            </t>
+                                        </td>
+                                        <td>
+                                            <t t-if="req_line">
+                                                <span t-esc="req_line.comment or ''"/>
+                                            </t>
+                                        </td>
+                                    </tr>
+                                    <t t-set="move_index" t-value="move_index + 1"/>
+                                </t>
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-light fw-bold">
+                                    <td colspan="3" style="text-align: right;">Итого:</td>
+                                    <td style="text-align: right;">
+                                        <span t-esc="'%.2f' % sum(doc.move_ids.mapped('product_uom_qty'))"/>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <span t-esc="'%.2f' % sum(doc.move_ids.mapped('quantity'))"/>
+                                    </td>
+                                    <td colspan="4"/>
+                                </tr>
+                            </tfoot>
+                        </table>
+
+                        <!-- Блок подписей -->
+                        <div class="row mt-5">
+                            <div class="col-6 text-center">
+                                <div style="border-top: 1px solid black; margin-top: 30px; padding-top: 5px;">
+                                    <strong>Кладовщик (выдал)</strong>
+                                </div>
+                                <div class="text-muted" style="font-size: 11px;">
+                                    <t t-set="storekeeper" t-value="doc.object_request_ids and doc.object_request_ids[0].warehouse_user_id or False"/>
+                                    <t t-if="storekeeper">
+                                        <span t-esc="storekeeper.name"/>
+                                    </t>
+                                    <t t-else="">___________________</t>
+                                </div>
+                                <div class="text-muted" style="font-size: 10px;">Подпись / Дата</div>
+                            </div>
+                            <div class="col-6 text-center">
+                                <div style="border-top: 1px solid black; margin-top: 30px; padding-top: 5px;">
+                                    <strong>Получатель (представитель объекта)</strong>
+                                </div>
+                                <div class="text-muted" style="font-size: 11px;">
+                                    <t t-set="foreman" t-value="doc.object_request_ids and doc.object_request_ids[0].foreman_user_id or False"/>
+                                    <t t-if="foreman">
+                                        <span t-esc="foreman.name"/>
+                                    </t>
+                                    <t t-else="">___________________</t>
+                                </div>
+                                <div class="text-muted" style="font-size: 10px;">Подпись / Дата</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

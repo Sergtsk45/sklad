@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Record rule: Прораб видит только свои документы -->
+    <record id="rule_object_request_foreman_own" model="ir.rule">
+        <field name="name">Object Request: Прораб — только свои документы</field>
+        <field name="model_id" ref="model_object_request"/>
+        <field name="groups" eval="[(4, ref('object_request.group_foreman'))]"/>
+        <field name="domain_force">[('foreman_user_id', '=', user.id)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <!-- Снабженец — без ограничений, видит все документы (правило не нужно) -->
+
+    <!-- Record rule: Кладовщик видит только документы в статусе «В работе» -->
+    <record id="rule_object_request_storekeeper_in_progress" model="ir.rule">
+        <field name="name">Object Request: Кладовщик — только документы в работе</field>
+        <field name="model_id" ref="model_object_request"/>
+        <field name="groups" eval="[(4, ref('object_request.group_storekeeper'))]"/>
+        <field name="domain_force">[('state', '=', 'in_progress')]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+</odoo>

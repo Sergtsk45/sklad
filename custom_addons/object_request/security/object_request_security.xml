@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Категория модуля -->
+    <record id="module_object_request" model="ir.module.category">
+        <field name="name">Object Request</field>
+        <field name="description">Требование на комплектацию объекта</field>
+        <field name="sequence">100</field>
+    </record>
+
+    <!-- Привилегия (группировщик ролей модуля) -->
+    <record id="privilege_object_request" model="res.groups.privilege">
+        <field name="name">Требование на комплектацию</field>
+        <field name="category_id" ref="module_object_request"/>
+    </record>
+
+    <!-- Группа: Прораб -->
+    <record id="group_foreman" model="res.groups">
+        <field name="name">Прораб</field>
+        <field name="privilege_id" ref="privilege_object_request"/>
+        <field name="sequence">10</field>
+        <field name="comment">Создаёт требования на комплектацию объектов</field>
+    </record>
+
+    <!-- Группа: Снабженец -->
+    <record id="group_supply_manager" model="res.groups">
+        <field name="name">Снабженец</field>
+        <field name="privilege_id" ref="privilege_object_request"/>
+        <field name="sequence">20</field>
+        <field name="comment">Обрабатывает требования, управляет сопоставлением и закупками</field>
+    </record>
+
+    <!-- Группа: Кладовщик -->
+    <record id="group_storekeeper" model="res.groups">
+        <field name="name">Кладовщик</field>
+        <field name="privilege_id" ref="privilege_object_request"/>
+        <field name="sequence">30</field>
+        <field name="comment">Подтверждает выдачу материалов со склада</field>
+    </record>
+
+    <!-- Группа: Согласующий (заглушка для этапа 2) -->
+    <record id="group_approver" model="res.groups">
+        <field name="name">Согласующий</field>
+        <field name="privilege_id" ref="privilege_object_request"/>
+        <field name="sequence">40</field>
+        <field name="comment">Согласует требования (заглушка, будет реализовано в этапе 2)</field>
+    </record>
+</odoo>

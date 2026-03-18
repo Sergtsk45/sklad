@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================================================================
+         LIST VIEW для объектов
+         ================================================================ -->
+    <record id="view_object_request_project_list" model="ir.ui.view">
+        <field name="name">object.request.project.list</field>
+        <field name="model">object.request.project</field>
+        <field name="arch" type="xml">
+            <list string="Объекты">
+                <field name="code" string="Код"/>
+                <field name="name" string="Наименование"/>
+                <field name="partner_id" string="Контрагент" optional="show"/>
+                <field name="address" string="Адрес" optional="show"/>
+                <field name="request_count" string="Документов" optional="show"/>
+                <field name="active" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         FORM VIEW для объектов
+         ================================================================ -->
+    <record id="view_object_request_project_form" model="ir.ui.view">
+        <field name="name">object.request.project.form</field>
+        <field name="model">object.request.project</field>
+        <field name="arch" type="xml">
+            <form string="Объект">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button
+                            class="oe_stat_button"
+                            icon="fa-file-text-o"
+                            type="object"
+                            name="action_open_requests"
+                            invisible="request_count == 0"
+                        >
+                            <field
+                                name="request_count"
+                                widget="statinfo"
+                                string="Требований"
+                            />
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="name" string="Наименование объекта"/>
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="code" string="Код объекта"/>
+                            <field name="partner_id" string="Контрагент"/>
+                        </group>
+                        <group>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="address" string="Адрес" placeholder="Адрес объекта..."/>
+                    </group>
+                    <group>
+                        <field name="comment" string="Комментарий" placeholder="Описание объекта..."/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action для объектов -->
+    <record id="action_object_request_project" model="ir.actions.act_window">
+        <field name="name">Объекты</field>
+        <field name="res_model">object.request.project</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>

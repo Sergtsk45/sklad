@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "description": "Knowledge pack index for Odoo 19 AI Assistant",
+  "modules": [
+    {
+      "module": "stock",
+      "odoo_app": "Склад",
+      "file": "stock.json",
+      "keywords": ["склад", "inventory", "stock", "товар", "приёмка", "отгрузка", "перемещение", "инвентаризация", "маршрут", "warehouse"]
+    },
+    {
+      "module": "crm",
+      "odoo_app": "CRM",
+      "file": "crm.json",
+      "keywords": ["crm", "лид", "возможность", "воронка", "сделка", "продажи", "pipeline", "lead", "opportunity"]
+    },
+    {
+      "module": "contacts",
+      "odoo_app": "Контакты",
+      "file": "contacts.json",
+      "keywords": ["контакт", "клиент", "поставщик", "партнёр", "компания", "контрагент", "contacts", "partner"]
+    },
+    {
+      "module": "sale",
+      "odoo_app": "Продажи",
+      "file": "sale.json",
+      "keywords": ["продажи", "заказ продажи", "котировка", "счёт", "sales", "sale", "заказ клиенту", "прайс-лист продажи"]
+    },
+    {
+      "module": "purchase",
+      "odoo_app": "Закупки",
+      "file": "purchase.json",
+      "keywords": ["закупка", "заказ поставщику", "запрос котировки", "rfq", "purchase", "поставщик", "приёмка закупки"]
+    },
+    {
+      "module": "settings",
+      "odoo_app": "Настройки",
+      "file": "settings.json",
+      "keywords": ["настройки", "settings", "пользователь", "права", "модуль", "установка", "навигация", "компания", "язык"]
+    }
+  ],
+  "fallback_module": "settings"
+}
