@@ -28,7 +28,7 @@ class AiAssistantConfig(models.TransientModel):
         string='Включить AI-ассистент',
         config_parameter='ai_assistant.enabled',
     )
-    ai_assistant_system_prompt_override = fields.Text(
+    ai_assistant_system_prompt_override = fields.Char(
         string='Кастомный системный промпт (опционально)',
         config_parameter='ai_assistant.system_prompt_override',
     )
