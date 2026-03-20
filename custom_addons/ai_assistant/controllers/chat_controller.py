@@ -82,6 +82,11 @@ class AiAssistantController(http.Controller):
                 message, history, context, override=override
             )
             result = OpenRouterClient(request.env).send_chat(messages)
+            _logger.debug(
+                '[AI Assistant] Response: model=%s, len=%d',
+                result.get('model_used'),
+                len(result.get('answer', '')),
+            )
             return {
                 'answer': result['answer'],
                 'suggestions': [],
@@ -120,6 +125,27 @@ class AiAssistantController(http.Controller):
             system_parts.append(tech_block)
 
         system_prompt = '\n\n'.join(system_parts)
+
+        debug = request.env['ir.config_parameter'].sudo().get_param(
+            'ai_assistant.debug_logging', False
+        )
+        if debug in (True, '1', 'True', 'true'):
+            _logger.debug(
+                '[AI Assistant] Prompt debug:\n'
+                '  module=%s, history_len=%d\n'
+                '  tech_context=%s (%d chars)\n'
+                '  snippets=%d\n'
+                '  system_prompt_len=%d chars\n'
+                '--- SYSTEM PROMPT START ---\n%s\n--- SYSTEM PROMPT END ---',
+                module,
+                len(history),
+                'yes' if technical_context else 'no',
+                len(technical_context or ''),
+                len(snippets),
+                len(system_prompt),
+                system_prompt,
+            )
+
         return _prompt_builder.build_messages(system_prompt, history, message)
 
     def _mock_response(self):
