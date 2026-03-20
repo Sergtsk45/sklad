@@ -1,3 +1,7 @@
+## [2026-03-20] - Документация: Akaidoo для knowledge base ai_assistant
+### Добавлено
+- `docs/roadmap_akaidoo.md` — дорожная карта: установка Akaidoo на хосте, `akaidoo.conf`, разведка модулей, генерация контекста (`--shrink`, `-B`, `-E`, `--agent`), интеграция с `knowledge_provider` / `prompt_builder`, скрипт `update_knowledge.sh`, план действий.
+
 ## [2026-03-18] - OBR-020: Резервирование товаров под требование (object_request)
 ### Добавлено
 - `models/object_request_line.py` — поле `issue_reserved` (Boolean, `Резерв создан`): флаг что по строке выполнено резервирование на складе.
