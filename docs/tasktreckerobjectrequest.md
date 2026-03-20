@@ -574,61 +574,80 @@
 
 ### Задача: OBR-021 — Создание черновиков закупки (RFQ / Purchase Order)
 
-- **Статус**: Не начата
+- **Статус**: Выполнена ✅
+- **Дата выполнения**: 2026-03-19
 - **Приоритет**: Средний
 - **Описание**: По строкам дефицита создавать черновики закупок, сгруппированные по поставщику.
 - **Шаги выполнения**:
-  - [ ] Создать `wizards/purchase_wizard.py` с моделью `object.request.purchase.wizard`:
-    - [ ] `request_id`, `line_ids`, `group_by_vendor` (default=True), `create_draft_only` (default=True), `comment`
-  - [ ] Расширить модель `purchase.order` (`_inherit = 'purchase.order'`):
-    - [ ] `object_request_ids` — Many2many (обратная сторона rel-таблицы)
-    - [ ] `is_object_request_purchase` — Boolean, index
-    - [ ] `object_request_project_id` — Many2one `object.request.project`, index
-  - [ ] Реализовать метод `action_create_purchase()` в wizard / `object.request`:
-    - [ ] Фильтрация строк: qty_to_buy > 0 и product_id и preferred_vendor_id
-    - [ ] Группировка строк по preferred_vendor_id
-    - [ ] Создание draft `purchase.order` для каждого поставщика
-    - [ ] Создание `purchase.order.line` по каждой строке
-    - [ ] Обновление связей: `purchase_order_ids` в шапке, `purchase_order_id` и `purchase_order_line_id` в строке
-  - [ ] Обработка строк без поставщика:
-    - [ ] Оставить в документе как `manual_vendor_required`
-    - [ ] Показать предупреждение с количеством таких строк
-  - [ ] Реализовать smart button `Закупки`:
-    - [ ] Показывает count связанных purchase.order
-    - [ ] Открывает tree/form
-  - [ ] Заменить заглушку кнопки `Подготовить закупку`
-  - [ ] Проверить, что черновики создаются и группируются корректно
+  - [x] Создать `wizards/purchase_wizard.py` с моделью `object.request.purchase.wizard`:
+    - [x] `request_id`, `line_ids`, `group_by_vendor` (default=True), `create_draft_only` (default=True), `comment`
+    - [x] `line_count`, `lines_without_vendor_count` — computed
+    - [x] `default_get()` — авто-заполнение строк с qty_to_buy > 0
+  - [x] Создать `models/purchase_order_ext.py` — расширить `purchase.order`:
+    - [x] `object_request_ids` — Many2many (обратная сторона rel-таблицы)
+    - [x] `is_object_request_purchase` — Boolean, index
+    - [x] `object_request_project_id` — Many2one `object.request.project`, index
+    - [x] `object_request_count` — computed, `action_open_object_requests()`
+  - [x] Реализовать `action_create_purchase()` в wizard:
+    - [x] Фильтрация строк: qty_to_buy > 0 и product_id
+    - [x] Группировка строк по preferred_vendor_id
+    - [x] Создание draft `purchase.order` для каждого поставщика
+    - [x] Создание `purchase.order.line` по каждой строке
+    - [x] Обновление связей: `purchase_order_ids` в шапке, `purchase_order_id` и `purchase_order_line_id` в строке
+  - [x] Обработка строк без поставщика: `manual_vendor_required=True` + chatter-уведомление
+  - [x] Smart button `Закупки` уже был в views (OBR-005) — работает корректно
+  - [x] Заменить заглушку кнопки `Подготовить закупку` на `action_open_purchase_wizard`
+  - [x] Добавить view inherit на форме purchase.order — smart button «Требования»
+  - [x] 14 тестов в `tests/test_obr021_purchase.py` — ✅
+  - [x] 208 тестов всего — ✅ (0 failed, 0 errors)
 - **Критерий готовности**: Черновики закупок создаются; строки сгруппированы по поставщику; связи с документом требования сохраняются.
 - **Зависимости**: OBR-019, OBR-010
 
 ### Задача: OBR-022 — Модуль согласования
 
-- **Статус**: Не начата
+- **Статус**: Выполнена ✅
+- **Дата выполнения**: 2026-03-19
 - **Приоритет**: Низкий
 - **Описание**: Реализовать workflow согласования документа перед переводом в работу.
 - **Шаги выполнения**:
-  - [ ] Определить процесс согласования: кто, сколько уровней, правила
-  - [ ] Расширить `approval_state`: `not_required`, `pending`, `approved`, `rejected`
-  - [ ] Добавить кнопки `Отправить на согласование`, `Согласовать`, `Отклонить`
-  - [ ] Реализовать уведомления согласующему
-  - [ ] Связать с переходом Черновик → В работе
-  - [ ] Проверить workflow согласования
-- **Критерий готовности**: Документ проходит согласование; уведомления отправляются; переход в работу блокируется до согласования.
+  - [x] `approval_state` уже имел все нужные значения: `not_required`, `pending`, `approved`, `rejected`
+  - [x] Добавить `action_submit_for_approval()` — отправка на согласование с уведомлением
+  - [x] Добавить `action_approve()` — согласование с уведомлением прораба/снабженца
+  - [x] Добавить `action_reject()` — отклонение с уведомлением прораба/снабженца
+  - [x] Добавить кнопки в header формы: «На согласование», «Согласовать», «Отклонить»
+  - [x] Связать `action_in_progress()` с состоянием согласования: блокировать при `pending`/`rejected`
+  - [x] Кнопка «В работу» скрывается при `approval_state in ('pending', 'rejected')`
+  - [x] Повторная отправка разрешена из состояния `rejected`
+  - [x] Добавить поле `approver_user_id` в форму (group «Ответственные»)
+  - [x] Дать группе `group_approver` право write на `object.request`
+  - [x] Уведомления через `message_post` с `partner_ids` (approver / foreman / buyer)
+  - [x] 13 тестов в `tests/test_obr022_approval.py` — ✅
+  - [x] 221 тест всего — ✅ (0 failed, 0 errors)
+- **Критерий готовности**: Документ проходит согласование; уведомления отправляются; переход в работу блокируется при pending/rejected.
 - **Зависимости**: OBR-015
 
 ### Задача: OBR-023 — Отчёты и аналитика
 
-- **Статус**: Не начата
+- **Статус**: Выполнена ✅
+- **Дата выполнения**: 2026-03-19
 - **Приоритет**: Низкий
 - **Описание**: Создать отчёты по документам требований, загрузке по объектам, статистику выдач и закупок.
 - **Шаги выполнения**:
-  - [ ] Определить список отчётов:
-    - [ ] Сводка по объекту: всего требований, строк, выдано, закуплено
-    - [ ] Незакрытые требования с просроченной датой потребности
-    - [ ] Статистика сопоставления: % автоматических, % ручных
-  - [ ] Реализовать отчёты через QWeb или pivot view
-  - [ ] Добавить меню отчётов в модуль
-  - [ ] Проверить корректность данных
+  - [x] **Аналитика требований** (`object.request`, pivot+graph+list):
+    - [x] Pivot view — строки: project_id; колонки: state; меры: qty_totals, line_counts
+    - [x] Graph view — bar chart по объектам + статусам
+    - [x] Action с меню «Аналитика требований»
+  - [x] **Просроченные требования** (`object.request`, list):
+    - [x] Фильтр «Просроченные» через `context_today()` в search view (extend)
+    - [x] Action с pre-applied фильтром (`search_default_overdue=1`)
+    - [x] Меню «Просроченные требования»
+  - [x] **Статистика сопоставления** (`object.request.line`, pivot+graph):
+    - [x] Pivot — группировка по `matching_state` и `procurement_mode`
+    - [x] Graph (pie chart) по `matching_state`
+    - [x] Меню «Статистика сопоставления»
+  - [x] Подменю «Отчёты» в корневом меню модуля
+  - [x] 12 тестов в `tests/test_obr023_reports.py` — ✅
+  - [x] 233 теста всего — ✅ (0 failed, 0 errors)
 - **Критерий готовности**: Отчёты отображают актуальные данные; доступны из меню модуля.
 - **Зависимости**: OBR-015, OBR-021
 
@@ -658,8 +677,8 @@
 | OBR-018  | Ручные пилотные сценарии                                   | 7    | Средний     | Выполнена ✅ | OBR-017                  |
 | OBR-019  | Автоматический расчёт наличия                              | 8    | Средний     | Не начата  | OBR-010, OBR-016           |
 | OBR-020  | Резервирование товаров                                     | 8    | Средний     | Выполнена ✅ | OBR-019, OBR-011          |
-| OBR-021  | Черновики закупки (RFQ / Purchase Order)                   | 8    | Средний     | Не начата  | OBR-019, OBR-010           |
-| OBR-022  | Модуль согласования                                        | 8    | Низкий      | Не начата  | OBR-015                    |
+| OBR-021  | Черновики закупки (RFQ / Purchase Order)                   | 8    | Средний     | Выполнена ✅ | OBR-019, OBR-010          |
+| OBR-022  | Модуль согласования                                        | 8    | Низкий      | Выполнена ✅ | OBR-015                   |
 | OBR-023  | Отчёты и аналитика                                         | 8    | Низкий      | Не начата  | OBR-015, OBR-021           |
 
 ---

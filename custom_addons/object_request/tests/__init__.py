@@ -13,3 +13,6 @@ from . import test_obr017_security  # noqa: F401
 from . import test_obr018_pilot_scenarios  # noqa: F401
 from . import test_obr019_stock_check  # noqa: F401
 from . import test_obr020_reservation  # noqa: F401
+from . import test_obr021_purchase  # noqa: F401
+from . import test_obr022_approval  # noqa: F401
+from . import test_obr023_reports  # noqa: F401

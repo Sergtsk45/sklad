@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================================================================
+         РАСШИРЕНИЕ ПОИСКА — фильтр «Просроченные»
+         ================================================================ -->
+    <record id="view_object_request_search_ext" model="ir.ui.view">
+        <field name="name">object.request.search.ext</field>
+        <field name="model">object.request</field>
+        <field name="inherit_id" ref="view_object_request_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='filter_cancelled']" position="after">
+                <separator/>
+                <filter
+                    name="overdue"
+                    string="Просроченные (активные)"
+                    domain="[('need_date', '&lt;', context_today().strftime('%Y-%m-%d')), ('state', 'in', ['draft', 'in_progress'])]"
+                />
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         PIVOT VIEW — Аналитика требований (object.request)
+         ================================================================ -->
+    <record id="view_object_request_pivot" model="ir.ui.view">
+        <field name="name">object.request.pivot</field>
+        <field name="model">object.request</field>
+        <field name="arch" type="xml">
+            <pivot string="Аналитика требований" disable_linking="False">
+                <field name="project_id" type="row"/>
+                <field name="state" type="col"/>
+                <field name="line_matched_count" type="measure"/>
+                <field name="line_problem_count" type="measure"/>
+                <field name="qty_total_requested" type="measure" string="Запрошено (кол-во)"/>
+                <field name="qty_total_issued" type="measure" string="Выдано (кол-во)"/>
+                <field name="qty_total_to_buy" type="measure" string="К закупке (кол-во)"/>
+            </pivot>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         GRAPH VIEW — Аналитика требований (object.request)
+         ================================================================ -->
+    <record id="view_object_request_graph" model="ir.ui.view">
+        <field name="name">object.request.graph</field>
+        <field name="model">object.request</field>
+        <field name="arch" type="xml">
+            <graph string="Аналитика требований" type="bar" stacked="True">
+                <field name="project_id" type="row"/>
+                <field name="state" type="col"/>
+                <field name="qty_total_requested" type="measure" string="Запрошено"/>
+            </graph>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         PIVOT VIEW — Статистика сопоставления (object.request.line)
+         ================================================================ -->
+    <record id="view_object_request_line_pivot" model="ir.ui.view">
+        <field name="name">object.request.line.pivot</field>
+        <field name="model">object.request.line</field>
+        <field name="arch" type="xml">
+            <pivot string="Статистика сопоставления">
+                <field name="matching_state" type="row"/>
+                <field name="procurement_mode" type="col"/>
+                <field name="qty_requested" type="measure" string="Запрошено"/>
+                <field name="qty_issued" type="measure" string="Выдано"/>
+                <field name="qty_to_buy" type="measure" string="К закупке"/>
+            </pivot>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         GRAPH VIEW — Статистика сопоставления (object.request.line)
+         ================================================================ -->
+    <record id="view_object_request_line_graph" model="ir.ui.view">
+        <field name="name">object.request.line.graph</field>
+        <field name="model">object.request.line</field>
+        <field name="arch" type="xml">
+            <graph string="Статистика сопоставления" type="pie">
+                <field name="matching_state" type="row"/>
+                <field name="qty_requested" type="measure" string="Запрошено"/>
+            </graph>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         ACTION — Аналитика требований
+         ================================================================ -->
+    <record id="action_object_request_analytics" model="ir.actions.act_window">
+        <field name="name">Аналитика требований</field>
+        <field name="res_model">object.request</field>
+        <field name="view_mode">pivot,graph,list</field>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'pivot', 'view_id': ref('view_object_request_pivot')}),
+            (0, 0, {'view_mode': 'graph', 'view_id': ref('view_object_request_graph')}),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_object_request_list')}),
+        ]"/>
+        <field name="context">{
+            'search_default_group_project': 1
+        }</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Нет данных для анализа
+            </p>
+            <p>Создайте требования на комплектацию для отображения аналитики.</p>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         ACTION — Просроченные требования
+         ================================================================ -->
+    <record id="action_object_request_overdue" model="ir.actions.act_window">
+        <field name="name">Просроченные требования</field>
+        <field name="res_model">object.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_object_request_list')}),
+        ]"/>
+        <field name="context">{'search_default_overdue': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Просроченных требований нет
+            </p>
+            <p>Все активные требования обработаны в срок.</p>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         ACTION — Статистика сопоставления строк
+         ================================================================ -->
+    <record id="action_object_request_line_matching" model="ir.actions.act_window">
+        <field name="name">Статистика сопоставления</field>
+        <field name="res_model">object.request.line</field>
+        <field name="view_mode">pivot,graph,list</field>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'pivot', 'view_id': ref('view_object_request_line_pivot')}),
+            (0, 0, {'view_mode': 'graph', 'view_id': ref('view_object_request_line_graph')}),
+        ]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Нет данных для анализа
+            </p>
+        </field>
+    </record>
+
+</odoo>

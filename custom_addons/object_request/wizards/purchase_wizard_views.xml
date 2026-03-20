@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_object_request_purchase_wizard_form" model="ir.ui.view">
+        <field name="name">object.request.purchase.wizard.form</field>
+        <field name="model">object.request.purchase.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Создание черновиков закупки">
+                <sheet>
+                    <group string="Требование">
+                        <field name="request_id" readonly="1"/>
+                    </group>
+
+                    <group string="Параметры">
+                        <group>
+                            <field name="group_by_vendor"/>
+                            <field name="create_draft_only"/>
+                        </group>
+                        <group>
+                            <field name="line_count" readonly="1"/>
+                            <field
+                                name="lines_without_vendor_count"
+                                readonly="1"
+                                decoration-warning="lines_without_vendor_count &gt; 0"
+                                widget="integer"
+                            />
+                        </group>
+                    </group>
+
+                    <group>
+                        <field name="comment" placeholder="Комментарий к закупке..."/>
+                    </group>
+
+                    <separator string="Строки к закупке"/>
+                    <field name="line_ids">
+                        <list>
+                            <field name="sequence" string="№"/>
+                            <field name="name_raw" string="Наименование"/>
+                            <field name="product_id" string="Товар"/>
+                            <field name="uom_id" string="Ед. изм."/>
+                            <field name="qty_requested" string="Запрошено"/>
+                            <field name="qty_to_buy" string="К закупке"/>
+                            <field name="preferred_vendor_id" string="Поставщик"/>
+                        </list>
+                    </field>
+                </sheet>
+                <footer>
+                    <button
+                        name="action_create_purchase"
+                        string="Создать закупки"
+                        type="object"
+                        class="btn-primary"
+                    />
+                    <button string="Отмена" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>

@@ -2,7 +2,7 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_object_request_foreman,object.request foreman,model_object_request,object_request.group_foreman,1,1,1,0
 access_object_request_supply_manager,object.request supply_manager,model_object_request,object_request.group_supply_manager,1,1,1,1
 access_object_request_storekeeper,object.request storekeeper,model_object_request,object_request.group_storekeeper,1,1,0,0
-access_object_request_approver,object.request approver,model_object_request,object_request.group_approver,1,0,0,0
+access_object_request_approver,object.request approver,model_object_request,object_request.group_approver,1,1,0,0
 access_object_request_line_foreman,object.request.line foreman,model_object_request_line,object_request.group_foreman,1,1,1,0
 access_object_request_line_supply_manager,object.request.line supply_manager,model_object_request_line,object_request.group_supply_manager,1,1,1,1
 access_object_request_line_storekeeper,object.request.line storekeeper,model_object_request_line,object_request.group_storekeeper,1,1,0,0
@@ -23,3 +23,4 @@ access_object_request_issue_wizard_supply_manager,object.request.issue.wizard su
 access_object_request_issue_wizard_storekeeper,object.request.issue.wizard storekeeper,model_object_request_issue_wizard,object_request.group_storekeeper,1,1,1,1
 access_object_request_confirm_wizard_foreman,object.request.confirm.wizard foreman,model_object_request_confirm_wizard,object_request.group_foreman,1,1,1,1
 access_object_request_confirm_wizard_supply_manager,object.request.confirm.wizard supply_manager,model_object_request_confirm_wizard,object_request.group_supply_manager,1,1,1,1
+access_object_request_purchase_wizard_supply_manager,object.request.purchase.wizard supply_manager,model_object_request_purchase_wizard,object_request.group_supply_manager,1,1,1,1

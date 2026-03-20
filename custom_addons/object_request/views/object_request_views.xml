@@ -137,11 +137,37 @@
                 <!-- HEADER: кнопки действий + statusbar -->
                 <header>
                     <button
+                        name="action_submit_for_approval"
+                        string="На согласование"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="state != 'draft' or approval_state not in ('not_required', 'rejected') or not approver_user_id"
+                        groups="object_request.group_foreman,object_request.group_supply_manager"
+                        title="Отправить документ на согласование указанному согласующему"
+                    />
+                    <button
+                        name="action_approve"
+                        string="Согласовать"
+                        type="object"
+                        class="btn-primary"
+                        invisible="state != 'draft' or approval_state != 'pending'"
+                        groups="object_request.group_approver"
+                    />
+                    <button
+                        name="action_reject"
+                        string="Отклонить"
+                        type="object"
+                        class="btn-danger"
+                        invisible="state != 'draft' or approval_state != 'pending'"
+                        groups="object_request.group_approver"
+                        confirm="Вы уверены, что хотите отклонить документ?"
+                    />
+                    <button
                         name="action_in_progress"
                         string="В работу"
                         type="object"
                         class="btn-primary"
-                        invisible="state != 'draft'"
+                        invisible="state != 'draft' or approval_state in ('pending', 'rejected')"
                         groups="object_request.group_foreman,object_request.group_supply_manager"
                     />
                     <button
@@ -291,9 +317,17 @@
                             <field name="buyer_user_id"/>
                             <field name="warehouse_user_id"/>
                             <field
+                                name="approver_user_id"
+                                readonly="state in ('closed', 'cancelled')"
+                            />
+                            <field
                                 name="approval_state"
+                                widget="badge"
+                                decoration-info="approval_state == 'not_required'"
+                                decoration-warning="approval_state == 'pending'"
+                                decoration-success="approval_state == 'approved'"
+                                decoration-danger="approval_state == 'rejected'"
                                 readonly="1"
-                                title="Полноценное согласование будет доступно на Этапе 2"
                             />
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>
@@ -445,10 +479,10 @@
                                     <button
                                         string="Подготовить закупку"
                                         type="object"
-                                        name="action_prepare_purchase_stub"
+                                        name="action_open_purchase_wizard"
                                         class="btn-secondary"
-                                        disabled="1"
-                                        title="Создание черновиков закупок по строкам дефицита будет доступно на Этапе 2"
+                                        title="Создать черновики закупок по строкам с количеством к закупке"
+                                        groups="object_request.group_supply_manager"
                                     />
                                 </div>
                             </group>

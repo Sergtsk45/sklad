@@ -35,10 +35,13 @@
         'wizards/assign_lines_wizard_views.xml',
         'wizards/issue_wizard_views.xml',
         'wizards/confirm_state_wizard_views.xml',
+        'wizards/purchase_wizard_views.xml',
         'views/stock_picking_inherit_views.xml',
+        'views/purchase_order_inherit_views.xml',
         'views/object_request_project_views.xml',
         'views/object_request_line_views.xml',
         'views/object_request_views.xml',
+        'views/object_request_analytics_views.xml',
         'views/object_request_menu.xml',
     ],
     'demo': [

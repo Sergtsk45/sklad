@@ -82,7 +82,7 @@ class ObjectRequest(models.Model):
     buyer_user_id = fields.Many2one('res.users', string='Снабженец', tracking=True)
     warehouse_user_id = fields.Many2one('res.users', string='Кладовщик', tracking=True)
     approver_user_id = fields.Many2one(
-        'res.users', string='Согласующий (заглушка)', tracking=True,
+        'res.users', string='Согласующий', tracking=True,
     )
 
     # --- Связи с документами Odoo ---
@@ -204,11 +204,82 @@ class ObjectRequest(models.Model):
         for rec in self:
             rec.purchase_order_count = len(rec.purchase_order_ids)
 
+    # --- Методы согласования ---
+    def action_submit_for_approval(self):
+        """Отправить документ на согласование."""
+        self.ensure_one()
+        if not self.approver_user_id:
+            raise UserError(
+                'Укажите согласующего перед отправкой на согласование.'
+            )
+        if self.approval_state == 'pending':
+            raise UserError('Документ уже отправлен на согласование.')
+        self.write({'approval_state': 'pending'})
+        self.message_post(
+            body=(
+                f'Требование отправлено на согласование. '
+                f'Согласующий: {self.approver_user_id.name}.'
+            ),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+            partner_ids=[self.approver_user_id.partner_id.id],
+        )
+
+    def action_approve(self):
+        """Согласовать документ."""
+        self.ensure_one()
+        self.write({'approval_state': 'approved'})
+        partner_ids = [
+            p.id for p in (
+                self.foreman_user_id.partner_id
+                | self.buyer_user_id.partner_id
+            ) if p
+        ]
+        self.message_post(
+            body=(
+                f'Требование согласовано ({self.env.user.name}). '
+                'Документ можно перевести в работу.'
+            ),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+            partner_ids=partner_ids,
+        )
+
+    def action_reject(self):
+        """Отклонить документ."""
+        self.ensure_one()
+        self.write({'approval_state': 'rejected'})
+        partner_ids = [
+            p.id for p in (
+                self.foreman_user_id.partner_id
+                | self.buyer_user_id.partner_id
+            ) if p
+        ]
+        self.message_post(
+            body=(
+                f'Требование отклонено ({self.env.user.name}). '
+                'Исправьте замечания и повторно отправьте на согласование.'
+            ),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+            partner_ids=partner_ids,
+        )
+
     # --- Методы смены статуса ---
     def action_in_progress(self):
         self.ensure_one()
         if not self.line_ids:
             raise UserError('Нельзя перевести документ в работу без строк.')
+        if self.approval_state == 'pending':
+            raise UserError(
+                'Документ ожидает согласования. '
+                'Дождитесь решения согласующего.'
+            )
+        if self.approval_state == 'rejected':
+            raise UserError(
+                'Документ отклонён согласующим. '
+                'Исправьте замечания и повторно отправьте на согласование.'
+            )
         unmatched = self.line_ids.filtered(
             lambda ln: ln.matching_required or not ln.product_id
         )
@@ -484,8 +555,27 @@ class ObjectRequest(models.Model):
             },
         }
 
-    def action_prepare_purchase_stub(self):
-        raise UserError('Подготовка закупки будет доступна на Этапе 2.')
+    def action_open_purchase_wizard(self):
+        """Открыть wizard создания черновиков закупки."""
+        self.ensure_one()
+        lines_to_buy = self.line_ids.filtered(
+            lambda ln: ln.qty_to_buy > 0 and ln.product_id
+        )
+        if not lines_to_buy:
+            raise UserError(
+                'Нет строк с товаром и количеством к закупке. '
+                'Заполните поле «К закупке» в строках документа.'
+            )
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Создать закупки',
+            'res_model': 'object.request.purchase.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_request_id': self.id,
+            },
+        }
 
     # --- Constraints ---
     @api.constrains('state', 'line_ids')
