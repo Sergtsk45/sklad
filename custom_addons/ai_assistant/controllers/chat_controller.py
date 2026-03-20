@@ -55,6 +55,7 @@ class AiAssistantController(http.Controller):
                 return {'error': error}
 
             history = self._trim_history(history)
+            _logger.info('[AI Assistant] RAW context from frontend: %r', context)
             resolved_ctx = ContextResolver().resolve(context, request.env)
             override = params.get_param(
                 'ai_assistant.system_prompt_override', ''
@@ -103,6 +104,34 @@ class AiAssistantController(http.Controller):
 
     def _build_messages(self, message, history, context, override=None):
         module = (context or {}).get('module', '')
+        if not module:
+            model = (context or {}).get('model', '')
+            if model:
+                prefix = model.split('.')[0]
+                _MODULE_FROM_MODEL = {
+                    'stock': 'stock', 'purchase': 'purchase', 'sale': 'sale',
+                    'account': 'account', 'crm': 'crm', 'res': 'contacts',
+                    'project': 'project', 'hr': 'hr',
+                }
+                module = _MODULE_FROM_MODEL.get(prefix, '')
+                if module:
+                    _logger.info('[AI Assistant] module resolved from model %r -> %r', model, module)
+        if not module:
+            action = (context or {}).get('action', '')
+            _MODULE_FROM_ACTION = {
+                'склад': 'stock', 'warehouse': 'stock',
+                'закупки': 'purchase', 'purchase': 'purchase',
+                'продажи': 'sale', 'sales': 'sale',
+                'crm': 'crm',
+                'контакты': 'contacts', 'contacts': 'contacts',
+                'бухгалтерия': 'account', 'accounting': 'account', 'invoicing': 'account',
+                'настройки': 'settings', 'settings': 'settings',
+                'проект': 'project', 'project': 'project',
+                'персонал': 'hr', 'employees': 'hr',
+            }
+            module = _MODULE_FROM_ACTION.get(action.lower().strip(), '')
+            if module:
+                _logger.info('[AI Assistant] module resolved from action %r -> %r', action, module)
         snippets = _knowledge_provider.get_snippets(module, message)
 
         system_parts = [_prompt_builder.build_system_prompt(override=override)]
@@ -125,6 +154,12 @@ class AiAssistantController(http.Controller):
             system_parts.append(tech_block)
 
         system_prompt = '\n\n'.join(system_parts)
+        _logger.info(
+            '[AI Assistant] build_messages: module=%r snippets=%d tech_context=%s system_prompt_len=%d',
+            module, len(snippets),
+            ('yes(%d)' % len(technical_context)) if technical_context else 'no',
+            len(system_prompt),
+        )
 
         debug = request.env['ir.config_parameter'].sudo().get_param(
             'ai_assistant.debug_logging', False
