@@ -149,3 +149,21 @@ class TestPromptBuilder(TransactionCase):
     def test_build_messages_system_prompt_is_first(self):
         messages = self.builder.build_messages('SYSTEM', [], 'Q')
         self.assertEqual(messages[0]['content'], 'SYSTEM')
+
+    # --- build_technical_context_block ---
+
+    def test_build_technical_context_block_with_content(self):
+        content = '## `purchase.order`\n| field | type |\n|-------|------|\n'
+        block = self.builder.build_technical_context_block(content)
+        self.assertIn('## Структура данных текущего модуля', block)
+        self.assertIn('техническая карта', block)
+        self.assertIn('## `purchase.order`', block)
+        self.assertIn('| field | type |', block)
+
+    def test_build_technical_context_block_none_returns_empty(self):
+        block = self.builder.build_technical_context_block(None)
+        self.assertEqual(block, '')
+
+    def test_build_technical_context_block_empty_string_returns_empty(self):
+        block = self.builder.build_technical_context_block('')
+        self.assertEqual(block, '')

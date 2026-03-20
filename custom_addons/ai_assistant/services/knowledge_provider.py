@@ -10,7 +10,20 @@ _KNOWLEDGE_DIR = os.path.join(
     '..', 'static', 'knowledge'
 )
 
+GENERATED_DIR = os.path.join(_KNOWLEDGE_DIR, 'generated')
+
 MAX_SNIPPET_CHARS = 8000  # ~2000 tokens
+MAX_TECH_CONTEXT_CHARS = 15000  # ~4000 tokens
+
+MODULE_CONTEXT_FILES = {
+    'stock': 'stock_context.md',
+    'purchase': 'purchase_context.md',
+    'sale': 'sale_context.md',
+    'crm': 'crm_context.md',
+    'contacts': 'contacts_context.md',
+    'account': 'account_context.md',
+    'object_request': 'object_request_context.md',
+}
 
 
 class KnowledgeProvider:
@@ -18,6 +31,7 @@ class KnowledgeProvider:
     def __init__(self):
         self._index = None
         self._cache = {}
+        self._tech_cache = {}
 
     def load_knowledge_index(self):
         if self._index is not None:
@@ -87,6 +101,36 @@ class KnowledgeProvider:
         if positive:
             return [s for _, s in positive]
         return [s for _, s in scored[:3]]
+
+    def get_technical_context(self, module):
+        if module in self._tech_cache:
+            return self._tech_cache[module]
+
+        filename = MODULE_CONTEXT_FILES.get(module, f'{module}_context.md')
+        path = os.path.join(GENERATED_DIR, filename)
+
+        if not os.path.isfile(path):
+            _logger.warning(
+                'Technical context not found for module %r: %s', module, path
+            )
+            self._tech_cache[module] = None
+            return None
+
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except Exception:
+            _logger.warning(
+                'Failed to read technical context for module %r: %s', module, path
+            )
+            self._tech_cache[module] = None
+            return None
+
+        if len(content) > MAX_TECH_CONTEXT_CHARS:
+            content = content[:MAX_TECH_CONTEXT_CHARS] + '\n...(обрезано)'
+
+        self._tech_cache[module] = content
+        return content
 
     def _apply_size_limit(self, snippets):
         result = []

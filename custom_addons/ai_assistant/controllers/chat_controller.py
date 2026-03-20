@@ -114,6 +114,11 @@ class AiAssistantController(http.Controller):
         if knowledge_block:
             system_parts.append(knowledge_block)
 
+        technical_context = _knowledge_provider.get_technical_context(module)
+        tech_block = _prompt_builder.build_technical_context_block(technical_context)
+        if tech_block:
+            system_parts.append(tech_block)
+
         system_prompt = '\n\n'.join(system_parts)
         return _prompt_builder.build_messages(system_prompt, history, message)
 

@@ -71,6 +71,17 @@ class PromptBuilder:
                 lines.append(f'\n### {topic}\n{content}')
         return '\n'.join(lines)
 
+    def build_technical_context_block(self, technical_context):
+        if not technical_context:
+            return ''
+        return (
+            '## Структура данных текущего модуля\n'
+            'Ниже — техническая карта моделей, полей и связей. '
+            'Используй её для точных ответов о полях, '
+            'связях между моделями и доступных данных.\n\n'
+            + technical_context
+        )
+
     def build_messages(self, system_prompt, history, user_message):
         messages = [{'role': 'system', 'content': system_prompt}]
         for item in history:

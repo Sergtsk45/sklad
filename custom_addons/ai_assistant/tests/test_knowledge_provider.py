@@ -4,7 +4,7 @@ from odoo.tests.common import TransactionCase
 from odoo.tests import tagged
 
 from odoo.addons.ai_assistant.services.knowledge_provider import (
-    KnowledgeProvider, MAX_SNIPPET_CHARS,
+    KnowledgeProvider, MAX_SNIPPET_CHARS, MAX_TECH_CONTEXT_CHARS,
 )
 
 
@@ -168,3 +168,61 @@ class TestKnowledgeProvider(TransactionCase):
     def test_find_module_entry_not_found_returns_none(self):
         entry = self.provider._find_module_entry(_SAMPLE_INDEX, 'nonexistent')
         self.assertIsNone(entry)
+
+    # --- get_technical_context ---
+
+    def test_get_technical_context_returns_content(self):
+        provider = KnowledgeProvider()
+        sample = '# Odoo Schema\n## `purchase.order`\n| field | type |\n'
+        with patch('builtins.open', MagicMock(
+            return_value=MagicMock(
+                __enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value=sample))),
+                __exit__=MagicMock(return_value=False),
+            )
+        )), patch('os.path.isfile', return_value=True):
+            result = provider.get_technical_context('purchase')
+        self.assertEqual(result, sample)
+
+    def test_get_technical_context_unknown_module_returns_none(self):
+        provider = KnowledgeProvider()
+        with patch('os.path.isfile', return_value=False):
+            result = provider.get_technical_context('nonexistent_module_xyz')
+        self.assertIsNone(result)
+
+    def test_get_technical_context_caches_result(self):
+        provider = KnowledgeProvider()
+        sample = '# Schema\n## `stock.move`\n'
+        open_mock = MagicMock(
+            return_value=MagicMock(
+                __enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value=sample))),
+                __exit__=MagicMock(return_value=False),
+            )
+        )
+        with patch('builtins.open', open_mock), patch('os.path.isfile', return_value=True):
+            first = provider.get_technical_context('stock')
+            second = provider.get_technical_context('stock')
+        self.assertIs(first, second)
+        # open() called only once — second call hits cache
+        self.assertEqual(open_mock.call_count, 1)
+
+    def test_get_technical_context_truncates_large_content(self):
+        provider = KnowledgeProvider()
+        large_content = 'x' * (MAX_TECH_CONTEXT_CHARS + 500)
+        with patch('builtins.open', MagicMock(
+            return_value=MagicMock(
+                __enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value=large_content))),
+                __exit__=MagicMock(return_value=False),
+            )
+        )), patch('os.path.isfile', return_value=True):
+            result = provider.get_technical_context('stock')
+        self.assertEqual(len(result), MAX_TECH_CONTEXT_CHARS + len('\n...(обрезано)'))
+        self.assertTrue(result.endswith('...(обрезано)'))
+
+    def test_get_technical_context_file_not_found_returns_none(self):
+        provider = KnowledgeProvider()
+        with patch('os.path.isfile', return_value=False):
+            result = provider.get_technical_context('sale')
+        self.assertIsNone(result)
+        # Повторный вызов тоже None — закэшировано
+        result2 = provider.get_technical_context('sale')
+        self.assertIsNone(result2)
