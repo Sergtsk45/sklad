@@ -524,9 +524,9 @@
 | AIA-014  | knowledge_provider_v2                     | V2-1   | Критический | ✅ Готова  | —        | AIA-012, AIA-013     | —                 |
 | AIA-015  | Скрипт обновления knowledge base          | V2-1   | Высокий     | ✅ Готова  | —        | AIA-012, AIA-013     | —                 |
 | AIA-016  | Обновить prompt_builder для v2            | V2-1   | Критический | ✅ Готова  | ✅ Да    | AIA-014              | ✅ (1-й)           |
-| AIA-017  | Два поля модели в Settings                | V2-2   | Высокий     | Не начата  | —        | —                    | —                 |
-| AIA-018  | openrouter_client_v2: model_override      | V2-2   | Высокий     | Не начата  | —        | AIA-017              | ✅ (2-й)           |
-| AIA-019  | Обновить Settings UI                      | V2-2   | Средний     | Не начата  | —        | AIA-017              | —                 |
+| AIA-017  | Два поля модели в Settings                | V2-2   | Высокий     | ✅ Готова  | —        | —                    | —                 |
+| AIA-018  | openrouter_client_v2: model_override      | V2-2   | Высокий     | ✅ Готова  | —        | AIA-017              | ✅ (2-й)           |
+| AIA-019  | Обновить Settings UI                      | V2-2   | Средний     | ✅ Готова  | —        | AIA-017              | —                 |
 | AIA-020  | Подключить html2canvas                    | V2-3   | Высокий     | Не начата  | ✅ Да    | —                    | —                 |
 | AIA-021  | screenshot_trigger.js                     | V2-3   | Высокий     | Не начата  | —        | —                    | —                 |
 | AIA-022  | captureScreen()                           | V2-3   | Высокий     | Не начата  | ✅ Да    | AIA-020              | —                 |

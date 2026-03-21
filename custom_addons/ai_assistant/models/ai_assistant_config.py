@@ -13,8 +13,18 @@ class AiAssistantConfig(models.TransientModel):
         config_parameter='ai_assistant.openrouter_base_url',
     )
     ai_assistant_model = fields.Char(
-        string='Модель',
+        string='Модель (устарело)',
         config_parameter='ai_assistant.openrouter_model',
+    )
+    ai_assistant_text_model = fields.Char(
+        string='Модель (текст)',
+        config_parameter='ai_assistant.text_model',
+        default='google/gemini-2.0-flash-001',
+    )
+    ai_assistant_vision_model = fields.Char(
+        string='Модель (скриншот/vision)',
+        config_parameter='ai_assistant.vision_model',
+        default='openai/gpt-4o',
     )
     ai_assistant_timeout = fields.Integer(
         string='Таймаут (сек)',

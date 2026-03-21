@@ -1,3 +1,11 @@
+## [2026-03-21] - AIA-017+018+019: двухуровневая модель + Settings UI (ai_assistant)
+### Добавлено
+- `models/ai_assistant_config.py` — два новых поля: `ai_assistant_text_model` (default: `google/gemini-2.0-flash-001`) и `ai_assistant_vision_model` (default: `openai/gpt-4o`); старое поле `ai_assistant_model` оставлено для обратной совместимости.
+- `services/openrouter_client.py` — параметр `model_override=None` в `send_chat()`; автоматический fallback с `text_model` на legacy `openrouter_model`; логирование режима (`text`/`vision`); `_parse_response()` возвращает поле `mode`.
+### Изменено
+- `views/ai_assistant_settings_views.xml` — раздел «Модели» заменяет одно поле двумя (`text_model` + `vision_model`) с help-подсказками (рекомендованные модели, цены/M token).
+- `controllers/chat_controller.py` — `_get_ai_response()` принимает `model_override`, передаёт в `send_chat()`; `meta` дополнен полем `mode`.
+
 ## [2026-03-21] - AIA-016: PromptBuilder v2 + chat_controller на KnowledgeProviderV2 (ai_assistant)
 ### Изменено
 - `custom_addons/ai_assistant/services/prompt_builder.py` — обновлён до v2: новый system prompt с явными правилами Odoo 19 (нет «Сохранить»/«Редактировать», «Новое» вместо «Создать»); новая сигнатура `build_messages(message, history, context, knowledge=None, override=None, image_data=None)`; добавлен `build_term_mapping_block()` — вставляет maппинг EN→RU в системный промпт; `build_knowledge_block()` поддерживает оба формата — v2 dict (`{docs_snippets, tech_context, term_mapping}`) и v1 list (обратная совместимость).

@@ -97,21 +97,27 @@ class AiAssistantController(http.Controller):
             return []
         return history[-MAX_HISTORY_SIZE:]
 
-    def _get_ai_response(self, message, history, context=None, override=None):
+    def _get_ai_response(self, message, history, context=None,
+                         override=None, model_override=None):
         try:
             messages = self._build_messages(
                 message, history, context, override=override
             )
-            result = OpenRouterClient(request.env).send_chat(messages)
+            client = OpenRouterClient(request.env)
+            result = client.send_chat(messages, model_override=model_override)
             _logger.debug(
-                '[AI Assistant] Response: model=%s, len=%d',
+                '[AI Assistant] Response: model=%s mode=%s len=%d',
                 result.get('model_used'),
+                result.get('mode', 'text'),
                 len(result.get('answer', '')),
             )
             return {
                 'answer': result['answer'],
                 'suggestions': [],
-                'meta': {'model_used': result.get('model_used')},
+                'meta': {
+                    'model_used': result.get('model_used'),
+                    'mode': result.get('mode', 'text'),
+                },
             }
         except ValueError:
             return self._mock_response()
