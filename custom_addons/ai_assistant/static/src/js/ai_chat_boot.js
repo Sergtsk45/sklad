@@ -3,7 +3,6 @@
 import { Component, useState, useRef, onMounted } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
-import { rpc } from "@web/core/network/rpc";
 
 const SUGGESTED_PROMPTS = [
     "Как пользоваться этим разделом?",
@@ -24,6 +23,7 @@ export class AiChatWidget extends Component {
             messages: this.chatService.loadHistory(),
             inputText: "",
             isLoading: false,
+            isCapturing: false,   // идёт захват скриншота
             status: "online",
             hasAccess: false,
         });
@@ -32,8 +32,21 @@ export class AiChatWidget extends Component {
         onMounted(async () => {
             this._scrollToBottom();
             try {
-                const result = await rpc("/ai_assistant/check_access", {});
-                this.state.hasAccess = result && result.has_access === true;
+                const result = await fetch("/ai_assistant/check_access", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: "2.0",
+                        method: "call",
+                        params: {},
+                    }),
+                });
+                const data = await result.json();
+                this.state.hasAccess =
+                    data && data.result && data.result.has_access === true;
             } catch {
                 this.state.hasAccess = false;
             }
@@ -46,6 +59,12 @@ export class AiChatWidget extends Component {
 
     get showSuggested() {
         return this.state.messages.length === 0 && !this.state.isLoading;
+    }
+
+    get loadingLabel() {
+        return this.state.isCapturing
+            ? "Делаю скриншот..."
+            : "Думаю...";
     }
 
     toggleChat() {
@@ -79,6 +98,7 @@ export class AiChatWidget extends Component {
         this.state.messages = this.chatService.clearHistory();
         this.state.inputText = "";
         this.state.isLoading = false;
+        this.state.isCapturing = false;
     }
 
     _doSend() {
@@ -102,6 +122,7 @@ export class AiChatWidget extends Component {
 
     async _fetchAnswer(userMessage) {
         this.state.isLoading = true;
+        this.state.isCapturing = false;
         try {
             const result = await this._callBackend(userMessage);
             this._addMessage("assistant", result.answer);
@@ -114,6 +135,7 @@ export class AiChatWidget extends Component {
             this.state.status = "error";
         } finally {
             this.state.isLoading = false;
+            this.state.isCapturing = false;
         }
     }
 
@@ -121,6 +143,30 @@ export class AiChatWidget extends Component {
         const context = this.chatService.collectContext
             ? this.chatService.collectContext()
             : {};
+
+        // AIA-022/023: захват скриншота при триггерных фразах
+        let screenshot = null;
+        if (this.chatService.maybeCapture) {
+            this.state.isCapturing = true;
+            try {
+                screenshot = await this.chatService.maybeCapture(message);
+            } catch {
+                // продолжаем без скриншота
+            }
+            this.state.isCapturing = false;
+        }
+
+        const params = {
+            message,
+            context,
+            history: this._buildHistory(),
+        };
+
+        // Добавить скриншот в payload только если захват удался
+        if (screenshot) {
+            params.screenshot = screenshot;
+        }
+
         const response = await fetch("/ai_assistant/chat", {
             method: "POST",
             headers: {
@@ -130,11 +176,7 @@ export class AiChatWidget extends Component {
             body: JSON.stringify({
                 jsonrpc: "2.0",
                 method: "call",
-                params: {
-                    message,
-                    context,
-                    history: this._buildHistory(),
-                },
+                params,
             }),
         });
         if (!response.ok) {
@@ -148,6 +190,7 @@ export class AiChatWidget extends Component {
     }
 
     _buildHistory() {
+        // AIA-023: исключаем скриншоты из истории
         return this.state.messages.slice(-10).map((m) => ({
             role: m.role,
             content: m.content,

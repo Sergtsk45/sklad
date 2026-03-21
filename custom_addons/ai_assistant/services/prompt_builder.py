@@ -56,7 +56,27 @@ class PromptBuilder:
             if role in ('user', 'assistant') and content:
                 msgs.append({'role': role, 'content': content})
 
-        msgs.append({'role': 'user', 'content': message})
+        # AIA-025: vision mode — multimodal content
+        if image_data:
+            user_content = [
+                {
+                    'type': 'text',
+                    'text': self._build_vision_prompt(message, context),
+                },
+                {
+                    'type': 'image_url',
+                    'image_url': {
+                        'url': (
+                            f"data:{image_data['media_type']};"
+                            f"base64,{image_data['data']}"
+                        ),
+                    },
+                },
+            ]
+        else:
+            user_content = message
+
+        msgs.append({'role': 'user', 'content': user_content})
         return msgs
 
     # ------------------------------------------------------------------
@@ -187,6 +207,21 @@ class PromptBuilder:
             'Используй её для точных ответов о полях, '
             'связях между моделями и доступных данных.\n\n'
             + technical_context
+        )
+
+    def _build_vision_prompt(self, message, context):
+        """Специальный промпт для анализа скриншота (AIA-025)."""
+        ctx = context or {}
+        return (
+            f"Пользователь прислал скриншот экрана Odoo 19.\n"
+            f"Текущий контекст: модуль={ctx.get('module', '?')}, "
+            f"модель={ctx.get('model', '?')}, "
+            f"экран={ctx.get('view_type', '?')}.\n"
+            f"Язык интерфейса: {ctx.get('lang', 'ru_RU')}.\n\n"
+            f"Вопрос пользователя: {message}\n\n"
+            f"Проанализируй скриншот и ответь, опираясь на то, "
+            f"что РЕАЛЬНО видно на экране. Называй кнопки и меню "
+            f"ТОЧНО так, как они отображены на скриншоте."
         )
 
     # ------------------------------------------------------------------

@@ -1,3 +1,19 @@
+## [2026-03-21] - AIA-020..026: Screenshot capture + Vision pipeline (ai_assistant)
+### Добавлено
+- `static/lib/html2canvas.min.js` v1.4.1 (199 KB) — библиотека захвата DOM в canvas.
+- `static/src/js/screenshot_trigger.js` — 22 триггерных фразы на русском; `needsScreenshot(message)` → boolean; case-insensitive.
+- `services/prompt_builder.py` — vision mode (AIA-025): `build_messages()` при `image_data` формирует multimodal content `[{type:text},{type:image_url}]`; `_build_vision_prompt()` — специальный промпт с контекстом экрана.
+### Изменено
+- `static/src/js/ai_chat_service.js` — `captureScreen()`: скрывает виджет → html2canvas(scale=0.7, JPEG 0.8) → проверка 500 KB → восстанавливает виджет; `maybeCapture(msg)` — оркестрация trigger+capture; `saveHistory()` никогда не сохраняет скриншоты.
+- `static/src/js/ai_chat_boot.js` — интеграция: `isCapturing` state, loadingLabel «Делаю скриншот...» / «Думаю...», `_callBackend()` вызывает `maybeCapture()`, добавляет `screenshot` в params, `_buildHistory()` исключает скриншоты.
+- `controllers/chat_controller.py` — `chat()` принимает `screenshot=None`; `_parse_screenshot()` валидирует format/размер; `_vision_rate_ok()` rate limit 5/мин на пользователя; выбор vision-модели из настроек при наличии скриншота.
+- `__manifest__.py` — добавлены `html2canvas.min.js` и `screenshot_trigger.js` в `web.assets_backend`.
+
+## [2026-03-21] - Аудит roadmap/tasktracker AI-ассистент v2 (документация)
+### Изменено
+- `docs/tasktracker_ai_assistant_v2.md` — сверка с кодом: закрыты противоречия в AIA-016 (шаги/статус); AIA-017 отмечена выполненной (без отдельной миграции БД); AIA-018 и AIA-019 — **частично**; AIA-025 — **заготовка** (`image_data` в сигнатуре); сноска к таблице задач; чеклист готовности v2 с фактическими отметками.
+- `docs/roadmap_ai_assistant_v2.md` — таблица «Фактическое выполнение», обновлён §11 (критерии готовности) в соответствии с репозиторием.
+
 ## [2026-03-21] - Этапы V2-1 и V2-2 завершены (ai_assistant)
 ### Итог
 Завершены оба подготовительных этапа roadmap AI-ассистента v2:

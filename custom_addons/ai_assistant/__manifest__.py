@@ -19,8 +19,10 @@
     ],
     'assets': {
         'web.assets_backend': [
+            'ai_assistant/static/lib/html2canvas.min.js',
             'ai_assistant/static/src/scss/ai_chat_widget.scss',
             'ai_assistant/static/src/xml/ai_chat_widget.xml',
+            'ai_assistant/static/src/js/screenshot_trigger.js',
             'ai_assistant/static/src/js/ai_chat_service.js',
             'ai_assistant/static/src/js/ai_chat_boot.js',
         ],

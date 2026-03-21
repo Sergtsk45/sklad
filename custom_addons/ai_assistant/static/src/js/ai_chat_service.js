@@ -1,11 +1,13 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
+import { needsScreenshot } from "./screenshot_trigger";
 
 const SESSION_KEY = "odoo_ai_assistant_session_v1";
 const SCHEMA_VERSION = 1;
 const MAX_MESSAGES = 50;
-const MAX_BYTES = 100 * 1024; // 100 KB
+const MAX_BYTES = 100 * 1024; // 100 KB (без скриншотов — они не сохраняются)
+const MAX_SCREENSHOT_BYTES = 500 * 1024; // 500 KB base64
 
 export const aiChatService = {
     start(env) {
@@ -33,10 +35,17 @@ export const aiChatService = {
 
         function saveHistory(messages) {
             try {
+                // Никогда не сохраняем скриншоты в историю
+                const clean = messages.map((m) => ({
+                    role: m.role,
+                    content: m.content,
+                    timestamp: m.timestamp,
+                }));
+
                 let trimmed =
-                    messages.length > MAX_MESSAGES
-                        ? messages.slice(-MAX_MESSAGES)
-                        : messages;
+                    clean.length > MAX_MESSAGES
+                        ? clean.slice(-MAX_MESSAGES)
+                        : clean;
 
                 let serialized = JSON.stringify({
                     version: SCHEMA_VERSION,
@@ -133,7 +142,83 @@ export const aiChatService = {
             }
         }
 
-        return { loadHistory, saveHistory, addMessage, clearHistory, collectContext };
+        /**
+         * AIA-022: Захватить скриншот DOM → JPEG base64.
+         * Скрывает виджет чата перед захватом, восстанавливает в finally.
+         * @returns {Promise<string|null>} data URL или null при ошибке
+         */
+        async function captureScreen() {
+            // html2canvas должен быть загружен через assets
+            if (typeof window.html2canvas !== 'function') {
+                console.warn('[AI Assistant] html2canvas не загружен');
+                return null;
+            }
+
+            // Скрыть виджет чата перед захватом
+            const chatPanel = document.querySelector('.o_ai_chat_panel');
+            const chatFab = document.querySelector('.o_ai_chat_fab');
+            const hidden = [];
+            for (const el of [chatPanel, chatFab]) {
+                if (el) {
+                    el.style.setProperty('display', 'none', 'important');
+                    hidden.push(el);
+                }
+            }
+
+            try {
+                const canvas = await window.html2canvas(document.body, {
+                    scale: 0.7,
+                    useCORS: true,
+                    logging: false,
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    windowWidth: window.innerWidth,
+                    windowHeight: window.innerHeight,
+                });
+
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+                // Проверяем размер: base64 после заголовка
+                const b64 = dataUrl.split(',')[1] || '';
+                if (b64.length > MAX_SCREENSHOT_BYTES) {
+                    console.warn('[AI Assistant] Скриншот слишком большой, пропускаем');
+                    return null;
+                }
+
+                return dataUrl;
+            } catch (err) {
+                console.warn('[AI Assistant] captureScreen failed:', err);
+                return null;
+            } finally {
+                // Восстановить видимость
+                for (const el of hidden) {
+                    el.style.removeProperty('display');
+                }
+            }
+        }
+
+        /**
+         * AIA-021/022/023: Определить, нужен ли скриншот, и захватить его.
+         * @param {string} message
+         * @returns {Promise<string|null>}
+         */
+        async function maybeCapture(message) {
+            if (!needsScreenshot(message)) {
+                return null;
+            }
+            return captureScreen();
+        }
+
+        return {
+            loadHistory,
+            saveHistory,
+            addMessage,
+            clearHistory,
+            collectContext,
+            captureScreen,
+            maybeCapture,
+            needsScreenshot,
+        };
     },
 };
 

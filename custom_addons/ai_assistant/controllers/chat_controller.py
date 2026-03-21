@@ -1,4 +1,5 @@
 import logging
+import time
 
 from odoo import http
 from odoo.http import request
@@ -17,20 +18,24 @@ from odoo.addons.ai_assistant.services.response_guard import ResponseGuard
 _logger = logging.getLogger(__name__)
 
 MAX_HISTORY_SIZE = 12
+MAX_SCREENSHOT_B64 = 500_000   # ~500 KB base64 — AIA-024
+
+# AIA-026: Rate limit для vision-запросов
+_VISION_RATE = {}              # {uid: [timestamp, ...]}
+VISION_RATE_WINDOW = 60        # секунд
+VISION_RATE_MAX = 5            # запросов в окне
 
 _knowledge_provider = KnowledgeProviderV2()
 _prompt_builder = PromptBuilder()
 
 _GROUP_USER = 'ai_assistant.group_ai_assistant_user'
 
-# Маппинг model prefix → module
 _MODULE_FROM_MODEL = {
     'stock': 'stock', 'purchase': 'purchase', 'sale': 'sale',
     'account': 'account', 'crm': 'crm', 'res': 'contacts',
     'project': 'project', 'hr': 'hr',
 }
 
-# Маппинг action name → module
 _MODULE_FROM_ACTION = {
     'склад': 'stock', 'warehouse': 'stock',
     'закупки': 'purchase', 'purchase': 'purchase',
@@ -49,13 +54,13 @@ class AiAssistantController(http.Controller):
     @http.route('/ai_assistant/check_access', type='jsonrpc', auth='user',
                 methods=['POST'])
     def check_access(self, **kwargs):
-        """Return whether the current user has AI Assistant access."""
         has_access = request.env.user.has_group(_GROUP_USER)
         return {'has_access': has_access}
 
     @http.route('/ai_assistant/chat', type='jsonrpc', auth='user',
                 methods=['POST'])
-    def chat(self, message=None, context=None, history=None, **kwargs):
+    def chat(self, message=None, context=None, history=None,
+             screenshot=None, **kwargs):
         try:
             if not request.env.user.has_group(_GROUP_USER):
                 return {'error': 'Доступ запрещён'}
@@ -77,11 +82,32 @@ class AiAssistantController(http.Controller):
             history = self._trim_history(history)
             _logger.info('[AI Assistant] RAW context from frontend: %r', context)
             resolved_ctx = ContextResolver().resolve(context, request.env)
-            override = params.get_param(
-                'ai_assistant.system_prompt_override', ''
-            )
+            override = params.get_param('ai_assistant.system_prompt_override', '')
+
+            # AIA-024: парсинг и валидация скриншота
+            image_data = self._parse_screenshot(screenshot)
+
+            # AIA-026: rate limit для vision-запросов
+            if image_data:
+                uid = request.env.uid
+                if not self._vision_rate_ok(uid):
+                    _logger.warning(
+                        '[AI Assistant] Vision rate limit exceeded for uid=%s', uid
+                    )
+                    image_data = None  # деградируем до текстового
+
+            # Выбор модели: vision если есть скриншот
+            model_override = None
+            if image_data:
+                model_override = params.get_param(
+                    'ai_assistant.vision_model', ''
+                ) or None
+
             result = self._get_ai_response(
-                message, history, resolved_ctx, override=override or None
+                message, history, resolved_ctx,
+                override=override or None,
+                image_data=image_data,
+                model_override=model_override,
             )
 
             if 'answer' in result:
@@ -98,10 +124,11 @@ class AiAssistantController(http.Controller):
         return history[-MAX_HISTORY_SIZE:]
 
     def _get_ai_response(self, message, history, context=None,
-                         override=None, model_override=None):
+                         override=None, image_data=None, model_override=None):
         try:
             messages = self._build_messages(
-                message, history, context, override=override
+                message, history, context,
+                override=override, image_data=image_data,
             )
             client = OpenRouterClient(request.env)
             result = client.send_chat(messages, model_override=model_override)
@@ -128,7 +155,8 @@ class AiAssistantController(http.Controller):
                 'meta': {'status': 'error'},
             }
 
-    def _build_messages(self, message, history, context, override=None):
+    def _build_messages(self, message, history, context,
+                        override=None, image_data=None):
         module = self._resolve_module(context)
 
         knowledge = _knowledge_provider.get_knowledge(
@@ -141,39 +169,35 @@ class AiAssistantController(http.Controller):
         if debug in (True, '1', 'True', 'true'):
             _logger.debug(
                 '[AI Assistant] Prompt debug:\n'
-                '  module=%s, history_len=%d\n'
-                '  docs_chars=%d, tech_context=%s\n'
-                '  term_mapping keys=%s',
-                module,
-                len(history),
+                '  module=%s, history_len=%d, has_screenshot=%s\n'
+                '  docs_chars=%d, tech_context=%s',
+                module, len(history), bool(image_data),
                 len(knowledge.get('docs_snippets', '') or ''),
-                ('yes(%d)' % len(knowledge['tech_context']))
-                if knowledge.get('tech_context') else 'no',
-                list(knowledge.get('term_mapping', {}).keys()),
+                'yes' if knowledge.get('tech_context') else 'no',
             )
 
         _logger.info(
-            '[AI Assistant] build_messages: module=%r docs_chars=%d tech=%s',
+            '[AI Assistant] build_messages: module=%r docs_chars=%d '
+            'tech=%s vision=%s',
             module,
             len(knowledge.get('docs_snippets', '') or ''),
             'yes' if knowledge.get('tech_context') else 'no',
+            'yes' if image_data else 'no',
         )
 
         return _prompt_builder.build_messages(
             message, history, context,
             knowledge=knowledge,
             override=override,
+            image_data=image_data,
         )
 
     def _resolve_module(self, context):
-        """Определить модуль из контекста экрана."""
         if not context:
             return ''
-
         module = context.get('module', '')
         if module:
             return module
-
         model = context.get('model', '')
         if model:
             prefix = model.split('.')[0]
@@ -184,7 +208,6 @@ class AiAssistantController(http.Controller):
                     model, module
                 )
                 return module
-
         action = context.get('action', '')
         if action:
             module = _MODULE_FROM_ACTION.get(action.lower().strip(), '')
@@ -194,6 +217,49 @@ class AiAssistantController(http.Controller):
                     action, module
                 )
         return module
+
+    # AIA-024 ──────────────────────────────────────────────────────────
+
+    def _parse_screenshot(self, data_url):
+        """
+        Валидировать и распарсить скриншот из data URL.
+        Не логируем содержимое (персональные данные на экране).
+
+        :returns dict|None: {'media_type': str, 'data': str} или None
+        """
+        if not data_url or not isinstance(data_url, str):
+            return None
+        if not data_url.startswith('data:image/'):
+            _logger.warning('[AI Assistant] Invalid screenshot format')
+            return None
+        try:
+            header, b64data = data_url.split(',', 1)
+        except ValueError:
+            return None
+        if len(b64data) > MAX_SCREENSHOT_B64:
+            _logger.warning('[AI Assistant] Screenshot too large: %d bytes', len(b64data))
+            return None
+        try:
+            media_type = header.split(':')[1].split(';')[0]
+        except (IndexError, AttributeError):
+            return None
+        if media_type not in ('image/jpeg', 'image/png', 'image/webp'):
+            return None
+        return {'media_type': media_type, 'data': b64data}
+
+    # AIA-026 ──────────────────────────────────────────────────────────
+
+    def _vision_rate_ok(self, uid):
+        """Проверить rate limit для vision-запросов (5/мин на пользователя)."""
+        now = time.time()
+        timestamps = _VISION_RATE.get(uid, [])
+        # Удаляем устаревшие
+        timestamps = [t for t in timestamps if now - t < VISION_RATE_WINDOW]
+        if len(timestamps) >= VISION_RATE_MAX:
+            return False
+        timestamps.append(now)
+        _VISION_RATE[uid] = timestamps
+        return True
 
     def _mock_response(self):
         return {

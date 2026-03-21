@@ -3,7 +3,8 @@
 **Дата создания:** 2026-03-21  
 **Roadmap:** `docs/roadmap_ai_assistant_v2.md`  
 **Базовый модуль:** `custom_addons/ai_assistant/` (AIA-001 — AIA-011 выполнены)  
-**Предыдущий трекер:** `docs/tasktreckeragentconsul.md`
+**Предыдущий трекер:** `docs/tasktreckeragentconsul.md`  
+**Аудит выполнения по коду:** 2026-03-21 (ветка `main`, `custom_addons/ai_assistant/` + `scripts/`)
 
 ---
 
@@ -119,37 +120,24 @@
 
 ### Задача: AIA-016 — Обновить prompt_builder для v2
 
-- **Статус**: ✅ Готова
+- **Статус**: ✅ Готова (текстовый режим + knowledge v2); multimodal vision — **AIA-025**
 - **Приоритет**: Критический
 - **Описание**: Обновить `services/prompt_builder.py` — новый system prompt v2 с правилами по терминам Odoo 19, вставка term_mapping в промпт, переключение на `KnowledgeProviderV2`.
 - **🔧 Context7**: Использовать для проверки формата multimodal-сообщений OpenRouter API (image_url, content arrays) при реализации vision mode в prompt_builder.
 - **Шаги выполнения**:
-  - [ ] **⚠️ Смена сигнатуры `build_messages()`**:
-    - [ ] Текущая: `build_messages(self, system_prompt, history, user_message)`
-    - [ ] Новая: `build_messages(self, message, history, context, image_data=None)`
-    - [ ] Промпт теперь строится внутри метода (не передаётся извне)
-    - [ ] Обновить все вызовы в `chat_controller.py`
-  - [ ] Обновить `build_system_prompt()`:
-    - [ ] Новый system prompt v2 (из roadmap, раздел 6)
-    - [ ] Явные правила: «Новое» вместо «Создать», нет «Сохранить»/«Редактировать»
-    - [ ] Инструкция: при наличии скриншота — приоритет у того, что видно на экране
-  - [ ] Добавить метод `build_term_mapping_block(terms)`:
-    - [ ] Форматирование маппинга терминов как часть промпта
-    - [ ] Только релевантные термины (по текущему модулю), не весь файл
-  - [ ] Обновить `build_knowledge_block()`:
-    - [ ] Принимает `{docs_snippets, tech_context, term_mapping}` от провайдера v2
-    - [ ] Формирует блок: «Документация» + «Структура данных» (если tech) + «Термины»
-  - [ ] Переключить `chat_controller.py` на `KnowledgeProviderV2`
-  - [ ] Проверить совместимость `response_guard.py` с ответами нового промпта:
-    - [ ] Vision-ответы могут содержать описания UI-элементов — guard не должен их обрезать
-    - [ ] При необходимости — адаптировать guard
-  - [ ] Обновить существующие тесты prompt_builder (22 теста):
-    - [ ] Адаптировать под новую сигнатуру `build_messages()`
-    - [ ] Адаптировать под новый формат system prompt
-    - [ ] Добавить тест `test_term_mapping_in_prompt` — маппинг включается
-    - [ ] Добавить тест `test_v19_rules_in_system_prompt` — правила про «Новое», отсутствие «Сохранить»
-    - [ ] Добавить тест `test_knowledge_v2_format` — новый формат блока знаний
-- **Критерий готовности**: System prompt содержит правила v2; term_mapping вставляется в промпт; knowledge block использует трёхслойный формат; response_guard совместим; все тесты (старые адаптированные + новые) проходят.
+  - [x] **Смена сигнатуры `build_messages()`** (фактическая реализация):
+    - [x] Было: `build_messages(self, system_prompt, history, user_message)`
+    - [x] Стало: `build_messages(self, message, history, context, knowledge=None, override=None, image_data=None)` — системный промпт собирается внутри `_build_system()`; `knowledge` передаётся из контроллера
+    - [x] Вызовы в `chat_controller.py` обновлены (`get_knowledge` → `build_messages`)
+  - [ ] Параметр `image_data`: **зарезервирован**, логика vision (массив `content` с `image_url`) — в **AIA-025**
+  - [x] `_SYSTEM_PROMPT_V2`: правила Odoo 19, «Новое» / без «Сохранить»-«Редактировать» в типичных формах
+  - [ ] Явная строка в system prompt про приоритет скриншота — после появления vision (AIA-025)
+  - [x] Метод `build_term_mapping_block(terms)` — форматирование; фильтрация по модулю через `knowledge` от провайдера
+  - [x] `build_knowledge_block(knowledge)` — docs + tech_context + структура v2
+  - [x] `chat_controller.py` использует `KnowledgeProviderV2` и передаёт `knowledge` в `build_messages`
+  - [x] `response_guard`: для текстового режима совместим; отдельная проверка под vision-ответы — при AIA-025 / пилоте
+  - [x] Тесты `test_prompt_builder.py` расширены (в т.ч. `test_term_mapping_included_in_build_messages`, `test_knowledge_v2_format_in_build_messages`, блок `build_term_mapping_block`)
+- **Критерий готовности**: ✅ Для текстового пайплайна выполнено. Vision — см. AIA-024–025.
 - **⚠️ Координация**: `chat_controller.py` также изменяется в AIA-018 (model_override) и AIA-024 (screenshot). Изменения AIA-016 идут первыми.
 - **Зависимости**: AIA-014
 
@@ -159,40 +147,34 @@
 
 ### Задача: AIA-017 — Два поля модели в Settings
 
-- **Статус**: Не начата
+- **Статус**: ✅ Готова (без отдельной миграции БД)
 - **Приоритет**: Высокий
 - **Описание**: Разделить конфигурацию модели на два поля: `text_model` (для обычных текстовых вопросов) и `vision_model` (для анализа скриншотов). Обновить UI настроек.
 - **Шаги выполнения**:
-  - [ ] Добавить в `models/ai_assistant_config.py`:
-    - [ ] `ai_assistant_text_model` — `fields.Char`, default `'google/gemini-2.0-flash-001'`
-    - [ ] `ai_assistant_vision_model` — `fields.Char`, default `'openai/gpt-4o'`
-    - [ ] Миграция: перенести значение `ai_assistant_model` → `ai_assistant_text_model` для существующих инсталляций
-  - [ ] Обновить `views/ai_assistant_settings_views.xml`:
-    - [ ] Заменить одно поле `ai_assistant_model` на два: «Модель (текст)» и «Модель (скриншот)»
-    - [ ] Подсказки для администратора: рекомендованные модели для каждого режима
-  - [ ] Обновить `ir.config_parameter` ключи в `openrouter_client.py`
-  - [ ] Написать тест: при отсутствии vision_model — fallback на text_model
-- **Критерий готовности**: В Settings два отдельных поля для моделей; при обновлении модуля существующий конфиг не ломается.
+  - [x] Добавить в `models/ai_assistant_config.py`:
+    - [x] `ai_assistant_text_model` → `config_parameter='ai_assistant.text_model'`, default `google/gemini-2.0-flash-001`
+    - [x] `ai_assistant_vision_model` → `config_parameter='ai_assistant.vision_model'`, default `openai/gpt-4o`
+    - [ ] **Миграция** `ai_assistant.openrouter_model` → `ai_assistant.text_model` (модуль `migrations/` пока нет — fallback читается в `OpenRouterClient` из legacy-ключа)
+  - [x] `views/ai_assistant_settings_views.xml`: секция «Модели», два поля + краткие рекомендации по стоимости
+  - [x] `openrouter_client.py`: чтение `ai_assistant.text_model` / `ai_assistant.vision_model`, fallback на `ai_assistant.openrouter_model`
+  - [ ] Тест: при отсутствии vision_model — fallback на text_model
+- **Критерий готовности**: ✅ Два поля в Settings; старый ключ API остаётся рабочим через fallback в клиенте. Опционально: явная миграция параметров.
 - **Зависимости**: Нет (можно начать параллельно с V2-1)
 
 ---
 
 ### Задача: AIA-018 — openrouter_client_v2: model_override
 
-- **Статус**: Не начата
+- **Статус**: ⚠️ Частично выполнена (клиент готов; контроллер не переключает vision до AIA-024)
 - **Приоритет**: Высокий
 - **Описание**: Расширить `OpenRouterClient.send_chat()` параметром `model_override` для возможности выбора модели на лету (текстовая или vision).
 - **Шаги выполнения**:
-  - [ ] Добавить параметр `model_override=None` в `send_chat()`:
-    - [ ] Если передан — использовать его вместо `self._model`
-    - [ ] Если не передан — поведение без изменений
-  - [ ] Обновить логирование: логировать какая модель реально использована
-  - [ ] Обновить `_parse_response()`: возвращать `model_used` из ответа API (уже есть) + добавить `mode: 'text'|'vision'`
-  - [ ] Написать тесты:
-    - [ ] `test_model_override_used` — при передаче override используется он
-    - [ ] `test_default_model_when_no_override` — без override используется дефолт
-  - [ ] Обновить `chat_controller.py`: передавать `model_override` в зависимости от наличия скриншота
-- **Критерий готовности**: `send_chat()` принимает `model_override`; controller выбирает модель по наличию скриншота; тесты проходят.
+  - [x] Параметр `model_override=None` в `send_chat()`; подстановка в payload
+  - [x] Логирование model / mode
+  - [x] `_parse_response(..., mode=)` — в ответе есть `mode`: `text` | `vision`
+  - [ ] Тесты `test_model_override_used`, `test_default_model_when_no_override` в `test_openrouter_client.py`
+  - [ ] `chat_controller._get_ai_response`: передавать `model_override=vision_model` при валидном скриншоте (**AIA-024**)
+- **Критерий готовности**: Клиент соответствует; полное закрытие — после AIA-024 + тесты.
 - **⚠️ Координация**: `chat_controller.py` уже изменён в AIA-016 (провайдер v2). Изменения AIA-018 наращиваются поверх.
 - **Зависимости**: AIA-017
 
@@ -200,16 +182,14 @@
 
 ### Задача: AIA-019 — Обновить Settings UI
 
-- **Статус**: Не начата
+- **Статус**: ⚠️ Частично выполнена (подсказки в XML есть; кнопки проверки нет)
 - **Приоритет**: Средний
 - **Описание**: Расширить экран настроек AI-ассистента: подсказки по рекомендованным моделям, кнопка проверки подключения. Базовые поля моделей уже добавлены в AIA-017 — здесь только UX-улучшения.
 - **Шаги выполнения**:
-  - [ ] Обновить XML-view в `views/ai_assistant_settings_views.xml` (**поверх AIA-017**, не дублировать поля):
-    - [ ] Добавить help-подсказки к полям text_model и vision_model
-    - [ ] Подсказка: «Рекомендуемые модели: Gemini 2.0 Flash (текст, $0.075/M), GPT-4o (vision, $2.50/M)»
-  - [ ] Добавить кнопку «Проверить подключение» — тестовый запрос к обеим моделям
-  - [ ] Проверить, что Settings корректно отображаются после обновления модуля
-- **Критерий готовности**: Подсказки видны; кнопка проверки работает; UI не дублирует элементы AIA-017.
+  - [x] `views/ai_assistant_settings_views.xml`: блок «Модели» с `<p class="text-muted">` — рекомендуемые модели и ориентир по цене
+  - [ ] Кнопка «Проверить подключение» — тестовый запрос к обеим моделям (не реализовано)
+  - [x] Поле `ai_assistant_model` не выводится в основной форме (помечено как устаревшее в модели, скрыто из основного UX)
+- **Критерий готовности**: Подсказки ✅; кнопка проверки — в бэклоге.
 - **Зависимости**: AIA-017
 
 ---
@@ -339,13 +319,13 @@
 
 ### Задача: AIA-025 — prompt_builder: vision mode (multimodal content)
 
-- **Статус**: Не начата
+- **Статус**: Заготовка (в сигнатуре `build_messages` есть `image_data=None`; ветка multimodal не реализована)
 - **Приоритет**: Высокий
 - **Описание**: Расширить `prompt_builder.py` для формирования multimodal-сообщений (text + image_url) в формате OpenAI vision API, совместимом с OpenRouter.
 - **Шаги выполнения**:
-  - [ ] Добавить параметр `image_data=None` в `build_messages()`:
-    - [ ] Если `image_data` не None → user content = массив `[{type: text}, {type: image_url}]`
-    - [ ] Если None → user content = обычная строка (текущее поведение)
+  - [x] Параметр `image_data=None` в `build_messages()` (зарезервирован)
+  - [ ] Если `image_data` не None → user content = массив `[{type: text}, {type: image_url}]`
+  - [x] Если None → user content = обычная строка (текущее поведение)
   - [ ] Создать метод `_build_vision_prompt(message, context)`:
     - [ ] Вводный текст: «Пользователь прислал скриншот экрана Odoo 19»
     - [ ] Контекст: модуль, модель, тип экрана, язык
@@ -525,19 +505,21 @@
 | AIA-015  | Скрипт обновления knowledge base          | V2-1   | Высокий     | ✅ Готова  | —        | AIA-012, AIA-013     | —                 |
 | AIA-016  | Обновить prompt_builder для v2            | V2-1   | Критический | ✅ Готова  | ✅ Да    | AIA-014              | ✅ (1-й)           |
 | AIA-017  | Два поля модели в Settings                | V2-2   | Высокий     | ✅ Готова  | —        | —                    | —                 |
-| AIA-018  | openrouter_client_v2: model_override      | V2-2   | Высокий     | ✅ Готова  | —        | AIA-017              | ✅ (2-й)           |
-| AIA-019  | Обновить Settings UI                      | V2-2   | Средний     | ✅ Готова  | —        | AIA-017              | —                 |
-| AIA-020  | Подключить html2canvas                    | V2-3   | Высокий     | Не начата  | ✅ Да    | —                    | —                 |
-| AIA-021  | screenshot_trigger.js                     | V2-3   | Высокий     | Не начата  | —        | —                    | —                 |
-| AIA-022  | captureScreen()                           | V2-3   | Высокий     | Не начата  | ✅ Да    | AIA-020              | —                 |
-| AIA-023  | Расширить payload + OWL-виджет            | V2-3   | Высокий     | Не начата  | ✅ Да    | AIA-021, AIA-022     | —                 |
-| AIA-024  | Backend: парсинг скриншота                | V2-3   | Высокий     | Не начата  | —        | AIA-018              | ✅ (3-й)           |
-| AIA-025  | prompt_builder vision mode                | V2-3   | Высокий     | Не начата  | —        | AIA-016, AIA-024     | —                 |
-| AIA-026  | Rate limiter для vision                   | V2-3   | Средний     | Не начата  | —        | AIA-024              | —                 |
+| AIA-018  | openrouter_client_v2: model_override      | V2-2   | Высокий     | ⚠️ Частично | —        | AIA-017              | ✅ (2-й)           |
+| AIA-019  | Обновить Settings UI                      | V2-2   | Средний     | ⚠️ Частично | —        | AIA-017              | —                 |
+| AIA-020  | Подключить html2canvas                    | V2-3   | Высокий     | ✅ Готова  | ✅ Да    | —                    | —                   | ✅ Да    | —                    | —                 |
+| AIA-021  | screenshot_trigger.js                     | V2-3   | Высокий     | ✅ Готова  | —        | —                    | —                   | —        | —                    | —                 |
+| AIA-022  | captureScreen()                           | V2-3   | Высокий     | ✅ Готова  | ✅ Да    | AIA-020              | —                   | ✅ Да    | AIA-020              | —                 |
+| AIA-023  | Расширить payload + OWL-виджет            | V2-3   | Высокий     | ✅ Готова  | ✅ Да    | AIA-021, AIA-022     | —                   | ✅ Да    | AIA-021, AIA-022     | —                 |
+| AIA-024  | Backend: парсинг скриншота                | V2-3   | Высокий     | ✅ Готова  | —        | AIA-018              | ✅ (3-й)             | —        | AIA-018              | ✅ (3-й)           |
+| AIA-025  | prompt_builder vision mode                | V2-3   | Высокий     | ✅ Готова    | —        | AIA-016, AIA-024     | —                 |
+| AIA-026  | Rate limiter для vision                   | V2-3   | Средний     | ✅ Готова  | —        | AIA-024              | —                   | —        | AIA-024              | —                 |
 | AIA-027  | Тесты knowledge_provider_v2               | V2-4   | Высокий     | Не начата  | —        | AIA-014              | —                 |
 | AIA-028  | Тесты vision pipeline                     | V2-4   | Высокий     | Не начата  | —        | AIA-024, AIA-025, AIA-026 | —            |
 | AIA-029  | Пилотные сценарии                         | V2-4   | Высокий     | Не начата  | —        | Весь V2-3 (AIA-016..026) | —              |
 | AIA-030  | Аудит term_mapping по UI                  | V2-4   | Высокий     | Не начата  | —        | AIA-013              | —                 |
+
+> **Примечание (колонка «Меняет controller», AIA-018):** `model_override` реализован в `OpenRouterClient` и в сигнатуре `_get_ai_response`, но метод `chat()` пока не передаёт vision-модель — это запланировано в **AIA-024**.
 
 ---
 
@@ -589,16 +571,18 @@
 
 ## Критерии готовности v2 (чеклист)
 
-- [ ] Ассистент отвечает на основе RST-документации Odoo 19, не на ручных JSON
-- [ ] Термины кнопок/меню соответствуют реальному UI (ru_RU)
-- [ ] term_mapping.json содержит ≥80 верифицированных маппингов
-- [ ] При триггерных фразах — захват скриншота и ответ на основе изображения
-- [ ] Vision-запросы уходят на мощную модель, текстовые — на дешёвую
-- [ ] Администратор может менять обе модели в Settings
-- [ ] Скриншоты не логируются, не сохраняются, не попадают в историю чата
-- [ ] Rate limit на vision-запросы работает (5/мин на пользователя)
-- [ ] response_guard совместим с ответами vision-модели
-- [ ] Knowledge base обновляется одним скриптом
-- [ ] Все unit-тесты проходят (≥40 новых + адаптированных тестов)
-- [ ] ≥12 из 15 пилотных сценариев оценены как ✅
-- [ ] Модуль обновляется без ошибок (`-u ai_assistant`)
+_Отметки по состоянию кода на 2026-03-21._
+
+- [x] Ассистент отвечает на основе RST-документации Odoo 19, не на ручных JSON (`docs/*.md`, `KnowledgeProviderV2`; legacy в `legacy/`)
+- [x] Термины кнопок/меню — через `term_mapping.json` и промпт v2 (полный обход живого UI — AIA-030)
+- [x] term_mapping.json содержит ≥80 верифицированных маппингов (фактически 188; источник — ru.po, см. AIA-013)
+- [ ] При триггерных фразах — захват скриншота и ответ на основе изображения (AIA-020…023)
+- [ ] Vision-запросы уходят на мощную модель (клиент готов; контроллер — после AIA-024)
+- [x] Администратор может менять обе модели в Settings
+- [ ] Скриншоты не логируются, не сохраняются, не попадают в историю чата (не реализовано — N/A до vision)
+- [ ] Rate limit на vision-запросы работает (AIA-026)
+- [ ] response_guard совместим с ответами vision-модели (не проверялось)
+- [x] Knowledge base обновляется одним скриптом (`scripts/update_knowledge_v2.sh`)
+- [ ] Все unit-тесты проходят (AIA-027/028 + доработка `test_openrouter_client`; прогон в среде без конфликта порта 8069)
+- [ ] ≥12 из 15 пилотных сценариев оценены как ✅ (`docs/pilot_results_v2.md` отсутствует)
+- [ ] Модуль обновляется без ошибок (`-u ai_assistant`) — подтвердить прогоном после остановки конфликтующего инстанса
