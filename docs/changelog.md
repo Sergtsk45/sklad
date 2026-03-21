@@ -1,3 +1,11 @@
+## [2026-03-21] - Этапы V2-1 и V2-2 завершены (ai_assistant)
+### Итог
+Завершены оба подготовительных этапа roadmap AI-ассистента v2:
+- **V2-1 (Knowledge base v2):** AIA-012..016 — RST-конвертер, term_mapping (188 маппингов, верифицирован по ru.po), KnowledgeProviderV2 (трёхслойный: docs/akaidoo/term_mapping), скрипты update_knowledge_v2.sh + rebuild_knowledge_index.py, PromptBuilder v2 (system prompt Odoo 19, term_mapping в промпте, новая сигнатура build_messages).
+- **V2-2 (Двухуровневая модель):** AIA-017..019 — раздельные поля text_model/vision_model в Settings, model_override в OpenRouterClient, обновлённый Settings UI с рекомендациями.
+
+Система готова к этапу V2-3: Screenshot capture + Vision (AIA-020..026).
+
 ## [2026-03-21] - AIA-017+018+019: двухуровневая модель + Settings UI (ai_assistant)
 ### Добавлено
 - `models/ai_assistant_config.py` — два новых поля: `ai_assistant_text_model` (default: `google/gemini-2.0-flash-001`) и `ai_assistant_vision_model` (default: `openai/gpt-4o`); старое поле `ai_assistant_model` оставлено для обратной совместимости.
