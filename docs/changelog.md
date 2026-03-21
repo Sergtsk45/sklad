@@ -1,3 +1,10 @@
+## [2026-03-21] - AIA-012: Скрипт конвертации RST → локализованный Markdown (ai_assistant)
+### Добавлено
+- `scripts/convert_rst_to_knowledge.py` — Python-скрипт конвертации RST-документации Odoo 19 → Markdown для knowledge base AI-ассистента. Парсит `:menuselection:`, `**Кнопки**`, `#. Шаги`, `.. note::/tip::`. Применяет `term_mapping.json` (EN→RU). Удаляет шаги с устаревшими кнопками (`Save`, `Edit`) из `removed_in_v19`. CLI: `--source`, `--output`, `--term-mapping`, `--demo`, `--dry-run`, `--verbose`. Demo-режим генерирует 12 заглушек-файлов при отсутствии RST-репозитория.
+- `custom_addons/ai_assistant/static/knowledge/term_mapping.json` — маппинг EN→RU терминов Odoo 19: 80+ маппингов (кнопки, пункты меню, поля форм, типы представлений, `removed_in_v19`).
+- `custom_addons/ai_assistant/static/knowledge/docs/` — 12 MD-файлов knowledge base (stock, sale, purchase, crm, contacts, settings), сгенерированных в demo-режиме.
+- `custom_addons/ai_assistant/static/knowledge/legacy/` — старые JSON-сниппеты перемещены для отката.
+
 ## [2026-03-20] - Документация: Akaidoo для knowledge base ai_assistant
 ### Добавлено
 - `docs/roadmap_akaidoo.md` — дорожная карта: установка Akaidoo на хосте, `akaidoo.conf`, разведка модулей, генерация контекста (`--shrink`, `-B`, `-E`, `--agent`), интеграция с `knowledge_provider` / `prompt_builder`, скрипт `update_knowledge.sh`, план действий.
