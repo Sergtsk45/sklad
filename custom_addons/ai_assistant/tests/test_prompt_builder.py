@@ -73,14 +73,12 @@ class TestPromptBuilder(TransactionCase):
             'user_groups': [f'group_{i}' for i in range(10)],
         }
         block = self.builder.build_context_block(context)
-        # Only 5 groups should appear
         shown_groups = [g for g in context['user_groups'][:5]]
         for g in shown_groups:
             self.assertIn(g, block)
-        # 6th group should not be in block
         self.assertNotIn('group_5', block)
 
-    # --- build_knowledge_block ---
+    # --- build_knowledge_block (v1 list format) ---
 
     def test_build_knowledge_block_with_snippets(self):
         snippets = [
@@ -108,14 +106,72 @@ class TestPromptBuilder(TransactionCase):
         block = self.builder.build_knowledge_block(snippets)
         self.assertIn('Тест', block)
 
-    # --- build_messages ---
+    # --- build_knowledge_block (v2 dict format) ---
+
+    def test_build_knowledge_block_v2_format_docs_snippets(self):
+        knowledge = {
+            'docs_snippets': '## Поступления\n1. Открой Склад → Трансферы.',
+            'tech_context': None,
+            'term_mapping': {},
+        }
+        block = self.builder.build_knowledge_block(knowledge)
+        self.assertIn('ДОКУМЕНТАЦИЯ', block)
+        self.assertIn('Поступления', block)
+
+    def test_build_knowledge_block_v2_format_with_tech_context(self):
+        knowledge = {
+            'docs_snippets': 'Документация',
+            'tech_context': '## stock.picking\n| field | type |',
+            'term_mapping': {},
+        }
+        block = self.builder.build_knowledge_block(knowledge)
+        self.assertIn('Структура данных', block)
+        self.assertIn('stock.picking', block)
+
+    def test_build_knowledge_block_v2_empty_dict_returns_empty(self):
+        block = self.builder.build_knowledge_block({})
+        self.assertEqual(block, '')
+
+    # --- build_term_mapping_block ---
+
+    def test_build_term_mapping_block_contains_buttons(self):
+        terms = {
+            'buttons': {'New': 'Новое', 'Validate': 'Подтвердить'},
+            'menu_items': {'Inventory': 'Склад'},
+            'removed_in_v19': {'Save': 'нет кнопки Сохранить в v19'},
+        }
+        block = self.builder.build_term_mapping_block(terms)
+        self.assertIn('МАППИНГ ТЕРМИНОВ', block)
+        self.assertIn('Новое', block)
+        self.assertIn('Подтвердить', block)
+
+    def test_build_term_mapping_block_contains_removed_in_v19(self):
+        terms = {
+            'buttons': {},
+            'removed_in_v19': {'Save': 'Автосохранение, кнопки нет'},
+        }
+        block = self.builder.build_term_mapping_block(terms)
+        self.assertIn('Save', block)
+        self.assertIn('Автосохранение', block)
+
+    def test_build_term_mapping_block_empty_returns_empty(self):
+        block = self.builder.build_term_mapping_block({})
+        self.assertEqual(block, '')
+
+    def test_build_term_mapping_block_none_returns_empty(self):
+        block = self.builder.build_term_mapping_block(None)
+        self.assertEqual(block, '')
+
+    # --- build_messages (new signature) ---
 
     def test_build_messages_order_system_history_user(self):
         history = [
             {'role': 'user', 'content': 'Первый вопрос'},
             {'role': 'assistant', 'content': 'Первый ответ'},
         ]
-        messages = self.builder.build_messages('sys', history, 'Новый вопрос')
+        messages = self.builder.build_messages(
+            'Новый вопрос', history, context=None, override='SYSTEM'
+        )
         self.assertEqual(messages[0]['role'], 'system')
         self.assertEqual(messages[1]['role'], 'user')
         self.assertEqual(messages[2]['role'], 'assistant')
@@ -123,7 +179,9 @@ class TestPromptBuilder(TransactionCase):
         self.assertEqual(messages[-1]['content'], 'Новый вопрос')
 
     def test_build_messages_empty_history(self):
-        messages = self.builder.build_messages('sys', [], 'Вопрос')
+        messages = self.builder.build_messages(
+            'Вопрос', [], context=None, override='SYS'
+        )
         self.assertEqual(len(messages), 2)
         self.assertEqual(messages[0]['role'], 'system')
         self.assertEqual(messages[1]['role'], 'user')
@@ -133,7 +191,9 @@ class TestPromptBuilder(TransactionCase):
             {'role': 'admin', 'content': 'Секрет'},
             {'role': 'user', 'content': 'Привет'},
         ]
-        messages = self.builder.build_messages('sys', history, 'Вопрос')
+        messages = self.builder.build_messages(
+            'Вопрос', history, context=None, override='SYS'
+        )
         roles = [m['role'] for m in messages]
         self.assertNotIn('admin', roles)
 
@@ -142,13 +202,72 @@ class TestPromptBuilder(TransactionCase):
             {'role': 'user', 'content': ''},
             {'role': 'assistant', 'content': 'Ответ'},
         ]
-        messages = self.builder.build_messages('sys', history, 'Вопрос')
+        messages = self.builder.build_messages(
+            'Вопрос', history, context=None, override='SYS'
+        )
         contents = [m['content'] for m in messages]
         self.assertNotIn('', contents)
 
     def test_build_messages_system_prompt_is_first(self):
-        messages = self.builder.build_messages('SYSTEM', [], 'Q')
-        self.assertEqual(messages[0]['content'], 'SYSTEM')
+        messages = self.builder.build_messages(
+            'Q', [], context=None, override='SYSTEM'
+        )
+        self.assertEqual(messages[0]['role'], 'system')
+        self.assertIn('SYSTEM', messages[0]['content'])
+
+    def test_build_messages_user_is_last(self):
+        messages = self.builder.build_messages(
+            'Мой вопрос', [], context=None, override='SYS'
+        )
+        self.assertEqual(messages[-1]['role'], 'user')
+        self.assertEqual(messages[-1]['content'], 'Мой вопрос')
+
+    # --- System prompt v2 rules ---
+
+    def test_v19_rules_in_system_prompt(self):
+        prompt = self.builder.build_system_prompt()
+        self.assertIn('Сохранить', prompt)
+        self.assertIn('Редактировать', prompt)
+        self.assertIn('Новое', prompt)
+
+    def test_system_prompt_contains_no_save_rule(self):
+        """System prompt должен объяснять отсутствие кнопки Сохранить."""
+        prompt = self.builder.build_system_prompt()
+        self.assertIn('НЕТ', prompt.upper() + 'НЕТ')
+
+    # --- term_mapping в промпте ---
+
+    def test_term_mapping_included_in_build_messages(self):
+        """term_mapping должен попадать в системный промпт через build_messages."""
+        knowledge = {
+            'docs_snippets': '',
+            'tech_context': None,
+            'term_mapping': {
+                'buttons': {'New': 'Новое'},
+                'menu_items': {},
+                'removed_in_v19': {'Save': 'Нет в v19'},
+            },
+        }
+        messages = self.builder.build_messages(
+            'Вопрос', [], context=None, knowledge=knowledge
+        )
+        system_content = messages[0]['content']
+        self.assertIn('Новое', system_content)
+        self.assertIn('МАППИНГ ТЕРМИНОВ', system_content)
+
+    def test_knowledge_v2_format_in_build_messages(self):
+        """Документация v2 (dict) должна попадать в системный промпт."""
+        knowledge = {
+            'docs_snippets': 'Инструкция: нажмите Новое.',
+            'tech_context': None,
+            'term_mapping': {},
+        }
+        messages = self.builder.build_messages(
+            'Как создать товар?', [], context=None, knowledge=knowledge
+        )
+        system_content = messages[0]['content']
+        self.assertIn('ДОКУМЕНТАЦИЯ', system_content)
+        self.assertIn('Инструкция', system_content)
 
     # --- build_technical_context_block ---
 

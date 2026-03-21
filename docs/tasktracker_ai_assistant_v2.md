@@ -119,7 +119,7 @@
 
 ### Задача: AIA-016 — Обновить prompt_builder для v2
 
-- **Статус**: Не начата
+- **Статус**: ✅ Готова
 - **Приоритет**: Критический
 - **Описание**: Обновить `services/prompt_builder.py` — новый system prompt v2 с правилами по терминам Odoo 19, вставка term_mapping в промпт, переключение на `KnowledgeProviderV2`.
 - **🔧 Context7**: Использовать для проверки формата multimodal-сообщений OpenRouter API (image_url, content arrays) при реализации vision mode в prompt_builder.
@@ -523,7 +523,7 @@
 | AIA-013  | Создать term_mapping.json                 | V2-1   | Критический | ✅ Готова  | —        | —                    | —                 |
 | AIA-014  | knowledge_provider_v2                     | V2-1   | Критический | ✅ Готова  | —        | AIA-012, AIA-013     | —                 |
 | AIA-015  | Скрипт обновления knowledge base          | V2-1   | Высокий     | ✅ Готова  | —        | AIA-012, AIA-013     | —                 |
-| AIA-016  | Обновить prompt_builder для v2            | V2-1   | Критический | Не начата  | ✅ Да    | AIA-014              | ✅ (1-й)           |
+| AIA-016  | Обновить prompt_builder для v2            | V2-1   | Критический | ✅ Готова  | ✅ Да    | AIA-014              | ✅ (1-й)           |
 | AIA-017  | Два поля модели в Settings                | V2-2   | Высокий     | Не начата  | —        | —                    | —                 |
 | AIA-018  | openrouter_client_v2: model_override      | V2-2   | Высокий     | Не начата  | —        | AIA-017              | ✅ (2-й)           |
 | AIA-019  | Обновить Settings UI                      | V2-2   | Средний     | Не начата  | —        | AIA-017              | —                 |

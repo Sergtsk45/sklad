@@ -1,21 +1,16 @@
-_SYSTEM_PROMPT = (
-    "Ты — встроенный AI-консультант системы Odoo 19.\n"
-    "Твоя задача — помогать пользователям разобраться"
-    " в интерфейсе и возможностях Odoo.\n"
+_SYSTEM_PROMPT_V2 = (
+    "Ты — встроенный AI-консультант по Odoo 19. Язык ответа: русский.\n"
     "\n"
-    "Правила:\n"
-    "- Отвечай только на вопросы об использовании"
-    " интерфейса Odoo и его функциях.\n"
-    "- Давай короткие пошаговые инструкции.\n"
-    "- Используй термины интерфейса на языке пользователя"
-    " (преимущественно на русском).\n"
-    "- Не выдумывай кнопки, поля или пути в меню —"
-    " опирайся только на предоставленную документацию и контекст.\n"
-    "- Если не уверен в ответе — скажи об этом прямо.\n"
-    "- Если функция недоступна пользователю — предложи,"
-    " где её включить или к кому обратиться.\n"
-    "- Не выполняй действия от имени пользователя.\n"
-    "- Не обещай автоматических изменений в системе."
+    "ПРАВИЛА:\n"
+    "1. Отвечай ТОЛЬКО на основе предоставленной документации и контекста.\n"
+    "2. НИКОГДА не выдумывай кнопки, поля или пути меню. Если не уверен — скажи.\n"
+    "3. В Odoo 19 НЕТ кнопок «Сохранить» и «Редактировать» —\n"
+    "   формы сохраняются автоматически, редактирование начинается сразу.\n"
+    "4. Кнопка создания новой записи называется «Новое», НЕ «Создать».\n"
+    "5. Формат ответа: короткие пошаговые инструкции.\n"
+    "6. Используй термины из раздела МАППИНГ ТЕРМИНОВ (приоритет над любыми другими).\n"
+    "7. Если функционал недоступен — предложи, где его включить в Настройках.\n"
+    "8. Не выполняй действия от имени пользователя. Не обещай автоматических изменений."
 )
 
 _SAFETY_RULES = (
@@ -26,13 +21,78 @@ _SAFETY_RULES = (
     "- Если вопрос вне твоей компетенции — вежливо сообщи об этом."
 )
 
+MAX_HISTORY = 12
+
 
 class PromptBuilder:
+    """
+    Строит сообщения для LLM-запроса.
+
+    Новая сигнатура build_messages() принимает user message, history, context
+    и опциональный словарь knowledge от KnowledgeProviderV2.
+    """
+
+    def build_messages(self, message, history, context,
+                       knowledge=None, override=None, image_data=None):
+        """
+        Собрать список сообщений для LLM.
+
+        :param message: str — сообщение пользователя
+        :param history: list — история чата
+        :param context: dict — контекст экрана (module, model, view_type, lang...)
+        :param knowledge: dict|None — от KnowledgeProviderV2.get_knowledge()
+                          {docs_snippets, tech_context, term_mapping}
+        :param override: str|None — переопределение системного промпта из настроек
+        :param image_data: dict|None — зарезервировано для AIA-025 (vision mode)
+        :returns: list[dict] — messages для LLM API
+        """
+        system_prompt = self._build_system(context, knowledge, override)
+
+        msgs = [{'role': 'system', 'content': system_prompt}]
+
+        for item in (history or [])[-MAX_HISTORY:]:
+            role = item.get('role', '')
+            content = item.get('content', '')
+            if role in ('user', 'assistant') and content:
+                msgs.append({'role': role, 'content': content})
+
+        msgs.append({'role': 'user', 'content': message})
+        return msgs
+
+    # ------------------------------------------------------------------
+    # Построение системного промпта
+    # ------------------------------------------------------------------
+
+    def _build_system(self, context, knowledge, override):
+        """Собрать полный системный промпт из блоков."""
+        parts = [override if override else _SYSTEM_PROMPT_V2]
+
+        parts.append(_SAFETY_RULES)
+
+        context_block = self.build_context_block(context)
+        if context_block:
+            parts.append(context_block)
+
+        if knowledge:
+            knowledge_block = self.build_knowledge_block(knowledge)
+            if knowledge_block:
+                parts.append(knowledge_block)
+
+            term_block = self.build_term_mapping_block(
+                knowledge.get('term_mapping', {})
+            )
+            if term_block:
+                parts.append(term_block)
+
+        return '\n\n'.join(parts)
+
+    # ------------------------------------------------------------------
+    # Блоки промпта — публичные (используются в тестах и контроллере)
+    # ------------------------------------------------------------------
 
     def build_system_prompt(self, override=None):
-        if override:
-            return override
-        return _SYSTEM_PROMPT
+        """Вернуть базовый системный промпт (для совместимости)."""
+        return override if override else _SYSTEM_PROMPT_V2
 
     def build_safety_rules(self):
         return _SAFETY_RULES
@@ -56,22 +116,69 @@ class PromptBuilder:
             parts.append(f"Группы пользователя: {', '.join(groups[:5])}")
         if not parts:
             return ''
-        lines = ['Текущий контекст экрана пользователя:']
+        lines = ['КОНТЕКСТ ЭКРАНА:']
         lines += [f'- {p}' for p in parts]
         return '\n'.join(lines)
 
-    def build_knowledge_block(self, snippets):
-        if not snippets:
+    def build_knowledge_block(self, knowledge):
+        """
+        Принимает либо:
+        - dict от KnowledgeProviderV2: {docs_snippets, tech_context, term_mapping}
+        - list сниппетов от v1 KnowledgeProvider (обратная совместимость)
+        """
+        if not knowledge:
             return ''
-        lines = ['Справочная документация по Odoo:']
-        for snippet in snippets:
-            topic = snippet.get('topic', '')
-            content = snippet.get('content', '')
-            if topic and content:
-                lines.append(f'\n### {topic}\n{content}')
+
+        # Формат v1: список сниппетов
+        if isinstance(knowledge, list):
+            return self._build_knowledge_block_v1(knowledge)
+
+        # Формат v2: словарь
+        parts = []
+
+        docs = knowledge.get('docs_snippets', '')
+        if docs:
+            parts.append('ДОКУМЕНТАЦИЯ:\n' + docs)
+
+        tech = knowledge.get('tech_context')
+        if tech:
+            parts.append(
+                '## Структура данных текущего модуля\n'
+                'Техническая карта моделей и полей:\n\n'
+                + tech
+            )
+
+        return '\n\n'.join(parts) if parts else ''
+
+    def build_term_mapping_block(self, term_mapping):
+        """Сформировать блок маппинга терминов для промпта."""
+        if not term_mapping:
+            return ''
+
+        lines = ['МАППИНГ ТЕРМИНОВ Odoo 19 (EN → RU, используй эти названия):']
+
+        buttons = term_mapping.get('buttons', {})
+        if buttons:
+            lines.append('Кнопки: ' + ', '.join(
+                f'{en}→«{ru}»' for en, ru in list(buttons.items())[:20]
+            ))
+
+        menu_items = term_mapping.get('menu_items', {})
+        if menu_items:
+            lines.append('Меню: ' + ', '.join(
+                f'{en}→«{ru}»' for en, ru in list(menu_items.items())[:20]
+            ))
+
+        removed = term_mapping.get('removed_in_v19', {})
+        if removed:
+            lines.append('Удалено в v19: ' + '; '.join(
+                f'«{k}» — {v}' for k, v in removed.items()
+            ))
+
         return '\n'.join(lines)
 
     def build_technical_context_block(self, technical_context):
+        """Для обратной совместимости с контроллером v1."""
         if not technical_context:
             return ''
         return (
@@ -82,12 +189,18 @@ class PromptBuilder:
             + technical_context
         )
 
-    def build_messages(self, system_prompt, history, user_message):
-        messages = [{'role': 'system', 'content': system_prompt}]
-        for item in history:
-            role = item.get('role', '')
-            content = item.get('content', '')
-            if role in ('user', 'assistant') and content:
-                messages.append({'role': role, 'content': content})
-        messages.append({'role': 'user', 'content': user_message})
-        return messages
+    # ------------------------------------------------------------------
+    # Внутренние
+    # ------------------------------------------------------------------
+
+    def _build_knowledge_block_v1(self, snippets):
+        """Формат v1: список сниппетов с 'topic' и 'content'."""
+        lines = ['Справочная документация по Odoo:']
+        for snippet in snippets:
+            topic = snippet.get('topic', '')
+            content = snippet.get('content', '')
+            if topic and content:
+                lines.append(f'\n### {topic}\n{content}')
+            elif content:
+                lines.append(content)
+        return '\n'.join(lines)

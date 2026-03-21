@@ -1,3 +1,9 @@
+## [2026-03-21] - AIA-016: PromptBuilder v2 + chat_controller на KnowledgeProviderV2 (ai_assistant)
+### Изменено
+- `custom_addons/ai_assistant/services/prompt_builder.py` — обновлён до v2: новый system prompt с явными правилами Odoo 19 (нет «Сохранить»/«Редактировать», «Новое» вместо «Создать»); новая сигнатура `build_messages(message, history, context, knowledge=None, override=None, image_data=None)`; добавлен `build_term_mapping_block()` — вставляет maппинг EN→RU в системный промпт; `build_knowledge_block()` поддерживает оба формата — v2 dict (`{docs_snippets, tech_context, term_mapping}`) и v1 list (обратная совместимость).
+- `custom_addons/ai_assistant/controllers/chat_controller.py` — переключён на `KnowledgeProviderV2`; вызов `build_messages()` обновлён под новую сигнатуру; логика `_resolve_module()` вынесена в отдельный метод.
+- `custom_addons/ai_assistant/tests/test_prompt_builder.py` — адаптированы 22 теста под новую сигнатуру; добавлено 5 новых тестов: `test_v19_rules_in_system_prompt`, `test_build_knowledge_block_v2_format_*`, `test_build_term_mapping_block_*`, `test_term_mapping_included_in_build_messages`, `test_knowledge_v2_format_in_build_messages`.
+
 ## [2026-03-21] - AIA-014 + AIA-015: KnowledgeProviderV2 + скрипты обновления (ai_assistant)
 ### Добавлено
 - `custom_addons/ai_assistant/services/knowledge_provider_v2.py` — трёхслойный провайдер знаний: RST-based docs (поиск по секциям MD), akaidoo context, term_mapping. Методы: `get_knowledge()`, `_search_docs()` (keyword index + boost), `get_snippets()` (совместимость с v1), `get_technical_context()`, `_get_relevant_terms()`. MAX_DOCS_CHARS=10000.
