@@ -1,0 +1,76 @@
+{
+  "odoo_version": "19.0",
+  "lang": "ru_RU",
+  "generated": "2026-03-21",
+  "docs_dir": "docs",
+  "generated_dir": "generated",
+  "fallback_module": "settings",
+  "modules": [
+    {
+      "module": "stock",
+      "label": "Склад",
+      "docs": [
+        "docs/stock_warehouses.md",
+        "docs/stock_products.md",
+        "docs/stock_operations.md",
+        "docs/stock_inventory.md"
+      ],
+      "generated": "generated/stock_context.md"
+    },
+    {
+      "module": "sale",
+      "label": "Продажи",
+      "docs": [
+        "docs/sale_quotations.md",
+        "docs/sale_invoicing.md"
+      ],
+      "generated": "generated/sale_context.md"
+    },
+    {
+      "module": "purchase",
+      "label": "Закупки",
+      "docs": [
+        "docs/purchase_orders.md",
+        "docs/purchase_receipts.md"
+      ],
+      "generated": "generated/purchase_context.md"
+    },
+    {
+      "module": "crm",
+      "label": "CRM",
+      "docs": [
+        "docs/crm_leads.md",
+        "docs/crm_pipeline.md"
+      ],
+      "generated": "generated/crm_context.md"
+    },
+    {
+      "module": "contacts",
+      "label": "Контакты",
+      "docs": [
+        "docs/contacts_management.md"
+      ],
+      "generated": "generated/contacts_context.md"
+    },
+    {
+      "module": "settings",
+      "label": "Настройки",
+      "docs": [
+        "docs/settings_general.md"
+      ],
+      "generated": null
+    },
+    {
+      "module": "account",
+      "label": "Бухгалтерия",
+      "docs": [],
+      "generated": "generated/account_context.md"
+    },
+    {
+      "module": "object_request",
+      "label": "Запрос объекта",
+      "docs": [],
+      "generated": "generated/object_request_context.md"
+    }
+  ]
+}

@@ -73,26 +73,24 @@
 
 ### Задача: AIA-014 — Реализовать knowledge_provider_v2
 
-- **Статус**: Не начата
+- **Статус**: ✅ Готова
 - **Приоритет**: Критический
 - **Описание**: Переписать `services/knowledge_provider.py` на трёхслойную архитектуру: RST-based docs (пользовательские инструкции), akaidoo context (структура моделей), term_mapping (валидация терминов). Сохранить обратную совместимость с существующим интерфейсом `get_snippets()`.
 - **Шаги выполнения**:
-  - [ ] Создать `services/knowledge_provider_v2.py` с классом `KnowledgeProviderV2`:
-    - [ ] Метод `get_knowledge(module, query, include_technical=False)` → `{docs_snippets, tech_context, term_mapping}`
-    - [ ] Метод `_search_docs(module, query, limit=5)` — полнотекстовый поиск по MD-файлам в `docs/`
-    - [ ] Метод `get_technical_context(module)` — загрузка akaidoo-контекста из `generated/` (перенести из v1)
-    - [ ] Метод `_get_relevant_terms(module)` — извлечение терминов из `term_mapping.json` для текущего модуля
-    - [ ] Метод `get_snippets(module, query, limit=5)` — обёртка совместимости с v1 (делегирует в `_search_docs`)
-  - [ ] Реализовать поиск по MD-файлам:
-    - [ ] Индексация: при первом вызове — загрузить все MD из `docs/`, разбить на секции по `##`, построить keyword-индекс
-    - [ ] Ранжирование: keyword matching (как в v1) + boost за совпадение module name в имени файла
-    - [ ] Лимит размера: `MAX_DOCS_CHARS = 10000` (~2500 tokens)
-  - [ ] Обновить `index.json`:
-    - [ ] Добавить `odoo_version`, `lang`, `docs_dir`, `generated_dir`
-    - [ ] Маппинг module → список MD-файлов (вместо одного JSON)
-  - [ ] Перевести старые JSON в `static/knowledge/legacy/` (не удалять, для отката)
-  - [ ] Обновить `services/__init__.py` — импорт `KnowledgeProviderV2`
-- **Критерий готовности**: Провайдер возвращает релевантные фрагменты из RST-based docs + akaidoo + term_mapping; старый интерфейс `get_snippets()` продолжает работать. Unit-тесты — в AIA-027.
+  - [x] Создать `services/knowledge_provider_v2.py` с классом `KnowledgeProviderV2`:
+    - [x] Метод `get_knowledge(module, query, include_technical=False)` → `{docs_snippets, tech_context, term_mapping}`
+    - [x] Метод `_search_docs(module, query, limit=5)` — полнотекстовый поиск по MD-секциям в `docs/`
+    - [x] Метод `get_technical_context(module)` — загрузка akaidoo-контекста из `generated/` (перенесён из v1)
+    - [x] Метод `_get_relevant_terms(module)` — извлечение терминов из `term_mapping.json`
+    - [x] Метод `get_snippets(module, query, limit=5)` — обёртка совместимости с v1
+  - [x] Реализовать поиск по MD-файлам:
+    - [x] Индексация: при первом вызове — загрузить все MD из `docs/`, разбить по `##`, построить keyword-индекс
+    - [x] Ранжирование: keyword matching + boost за совпадение module name в имени файла
+    - [x] Лимит размера: `MAX_DOCS_CHARS = 10000`
+  - [x] Создать `index.json` с `odoo_version`, `lang`, `docs_dir`, `generated_dir`, маппингом module → docs + generated
+  - [x] Обновить `services/__init__.py` — импорт `KnowledgeProviderV2`
+  - _Примечание: legacy JSON уже в `static/knowledge/legacy/` с AIA-012_
+- **Критерий готовности**: ✅ Smoke-тест пройден: `get_knowledge('stock', ...)` → docs_snippets + term_mapping; `get_snippets('purchase', ...)` → 5 фрагментов; `get_knowledge('crm', ...)` работает. Unit-тесты — в AIA-027.
 - **Зависимости**: AIA-012, AIA-013
 
 ---
@@ -524,7 +522,7 @@
 |----------|-------------------------------------------|--------|-------------|------------|----------|----------------------|-------------------|
 | AIA-012  | Скрипт конвертации RST → MD               | V2-1   | Критический | ✅ Готова  | ✅ Да    | AIA-013              | —                 |
 | AIA-013  | Создать term_mapping.json                 | V2-1   | Критический | ✅ Готова  | —        | —                    | —                 |
-| AIA-014  | knowledge_provider_v2                     | V2-1   | Критический | Не начата  | —        | AIA-012, AIA-013     | —                 |
+| AIA-014  | knowledge_provider_v2                     | V2-1   | Критический | ✅ Готова  | —        | AIA-012, AIA-013     | —                 |
 | AIA-015  | Скрипт обновления knowledge base          | V2-1   | Высокий     | Не начата  | —        | AIA-012, AIA-013     | —                 |
 | AIA-016  | Обновить prompt_builder для v2            | V2-1   | Критический | Не начата  | ✅ Да    | AIA-014              | ✅ (1-й)           |
 | AIA-017  | Два поля модели в Settings                | V2-2   | Высокий     | Не начата  | —        | —                    | —                 |
