@@ -1,3 +1,7 @@
+## [2026-03-21] - AIA-013: Верификация и расширение term_mapping.json (ai_assistant)
+### Изменено
+- `custom_addons/ai_assistant/static/knowledge/term_mapping.json` — верифицирован и расширен по официальным `ru.po` файлам Odoo 19: 188 маппингов (было ~80). Исправлены расхождения: Reserve→«Резерв», Unreserve→«Отменить бронирование», Scrap→«Брак», Apply All→«Применить все», Put in Pack→«Положить в упаковку», Log note→«Внутренняя заметка», Quotations→«Коммерческие предложения», Purchase Orders→«Заказы на покупку», Expected Revenue→«Ожидаемый доход». Добавлены: раздел `statuses` (14 статусов), новые кнопки (Won/Lost/Mark Lost/Confirm Order/Receive Products/Convert/Update Quantity), новые пункты меню (Transfers/Adjustments/Procurement — актуальная структура Odoo 19). Задокументированы расхождения с legacy JSON-сниппетами в разделе `discrepancies_vs_legacy`.
+
 ## [2026-03-21] - AIA-012: Скрипт конвертации RST → локализованный Markdown (ai_assistant)
 ### Добавлено
 - `scripts/convert_rst_to_knowledge.py` — Python-скрипт конвертации RST-документации Odoo 19 → Markdown для knowledge base AI-ассистента. Парсит `:menuselection:`, `**Кнопки**`, `#. Шаги`, `.. note::/tip::`. Применяет `term_mapping.json` (EN→RU). Удаляет шаги с устаревшими кнопками (`Save`, `Edit`) из `removed_in_v19`. CLI: `--source`, `--output`, `--term-mapping`, `--demo`, `--dry-run`, `--verbose`. Demo-режим генерирует 12 заглушек-файлов при отсутствии RST-репозитория.
