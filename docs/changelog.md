@@ -1,3 +1,10 @@
+## [2026-03-21] - AIA-014 + AIA-015: KnowledgeProviderV2 + скрипты обновления (ai_assistant)
+### Добавлено
+- `custom_addons/ai_assistant/services/knowledge_provider_v2.py` — трёхслойный провайдер знаний: RST-based docs (поиск по секциям MD), akaidoo context, term_mapping. Методы: `get_knowledge()`, `_search_docs()` (keyword index + boost), `get_snippets()` (совместимость с v1), `get_technical_context()`, `_get_relevant_terms()`. MAX_DOCS_CHARS=10000.
+- `custom_addons/ai_assistant/static/knowledge/index.json` — индекс knowledge base: 8 модулей с маппингом docs + generated файлов, odoo_version/lang метаданные.
+- `scripts/rebuild_knowledge_index.py` — Python-скрипт пересборки index.json: автодетект модуля по префиксу имени файла, --dry-run режим, summary.
+- `scripts/update_knowledge_v2.sh` — единый bash-скрипт полного обновления knowledge base: 5 шагов (git pull/clone, RST→MD, akaidoo, index). Флаги: --dry-run, --skip-docs, --skip-akaidoo. Graceful при отсутствии akaidoo или RST-репозитория.
+
 ## [2026-03-21] - AIA-013: Верификация и расширение term_mapping.json (ai_assistant)
 ### Изменено
 - `custom_addons/ai_assistant/static/knowledge/term_mapping.json` — верифицирован и расширен по официальным `ru.po` файлам Odoo 19: 188 маппингов (было ~80). Исправлены расхождения: Reserve→«Резерв», Unreserve→«Отменить бронирование», Scrap→«Брак», Apply All→«Применить все», Put in Pack→«Положить в упаковку», Log note→«Внутренняя заметка», Quotations→«Коммерческие предложения», Purchase Orders→«Заказы на покупку», Expected Revenue→«Ожидаемый доход». Добавлены: раздел `statuses` (14 статусов), новые кнопки (Won/Lost/Mark Lost/Confirm Order/Receive Products/Convert/Update Quantity), новые пункты меню (Transfers/Adjustments/Procurement — актуальная структура Odoo 19). Задокументированы расхождения с legacy JSON-сниппетами в разделе `discrepancies_vs_legacy`.
