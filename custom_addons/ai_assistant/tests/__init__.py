@@ -5,3 +5,5 @@ from . import test_context_resolver  # noqa: F401
 from . import test_prompt_builder  # noqa: F401
 from . import test_knowledge_provider  # noqa: F401
 from . import test_response_guard  # noqa: F401
+from . import test_knowledge_provider_v2  # noqa: F401
+from . import test_vision_pipeline  # noqa: F401

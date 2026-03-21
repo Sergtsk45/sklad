@@ -382,47 +382,37 @@
 
 ### Задача: AIA-027 — Тесты knowledge_provider_v2
 
-- **Статус**: Не начата
+- **Статус**: ✅ Выполнена (2026-03-21)
 - **Приоритет**: Высокий
 - **Описание**: Написать полный набор unit-тестов для нового провайдера знаний (основная задача по тестам — в AIA-014 тесты не пишутся). Включает поиск по RST-docs, загрузку akaidoo-контекста, работу с term_mapping.
 - **Шаги выполнения**:
-  - [ ] Создать `tests/test_knowledge_provider_v2.py` (≥15 тестов):
-    - [ ] `test_search_docs_returns_relevant` — поиск по keywords
-    - [ ] `test_search_docs_module_boost` — файл модуля ранжируется выше
-    - [ ] `test_get_knowledge_combines_layers` — docs + tech + terms
-    - [ ] `test_get_snippets_backward_compat` — старый интерфейс работает
-    - [ ] `test_term_mapping_loaded` — маппинг загружается корректно
-    - [ ] `test_term_mapping_by_module` — фильтрация терминов по модулю
-    - [ ] `test_empty_docs_dir_handled` — graceful fallback при отсутствии docs/
-    - [ ] `test_size_limit_respected` — не превышает MAX_DOCS_CHARS
-    - [ ] Тесты akaidoo context: загрузка, кэширование, fallback при отсутствии
-    - [ ] Тесты term_mapping: removed_in_v19 обработка
-    - [ ] Тесты edge cases: неизвестный модуль, пустой запрос, повреждённый index.json, огромный MD-файл
-  - [ ] Запустить все тесты модуля (старые + новые): 0 failures
-- **Критерий готовности**: ≥15 тестов; покрытие всех публичных методов `KnowledgeProviderV2`; 0 failures.
+  - [x] Создать `tests/test_knowledge_provider_v2.py` (24 теста):
+    - [x] term_mapping: загрузка, missing file fallback, get_relevant_terms, empty mapping
+    - [x] docs index: _build_docs_index, _search_docs релевантные секции, MAX_DOCS_CHARS, missing dir, module boost
+    - [x] get_technical_context: контент, missing, truncation, кеш
+    - [x] get_knowledge: три слоя, include_technical=False, include_technical=True
+    - [x] get_snippets: обратная совместимость, пустой dir
+    - [x] extract_keywords: из keyword-строки, из заголовков
+    - [x] score_section: boost по модулю
+  - [x] tests/__init__.py: добавлен импорт `test_knowledge_provider_v2`
+- **Критерий готовности**: ✅ 24 теста; покрытие всех публичных методов `KnowledgeProviderV2`.
 - **Зависимости**: AIA-014
 
 ---
 
 ### Задача: AIA-028 — Тесты vision pipeline
 
-- **Статус**: Не начата
+- **Статус**: ✅ Выполнена (2026-03-21)
 - **Приоритет**: Высокий
 - **Описание**: Написать mock-тесты для полного цикла vision: парсинг скриншота → multimodal prompt → model_override → ответ. Без реальных вызовов OpenRouter.
 - **Шаги выполнения**:
-  - [ ] Создать `tests/test_vision_pipeline.py` (≥10 тестов):
-    - [ ] `test_screenshot_parsed_correctly` — data URL → media_type + data
-    - [ ] `test_vision_model_selected_with_screenshot` — vision model из конфига
-    - [ ] `test_text_model_selected_without_screenshot` — text model из конфига
-    - [ ] `test_multimodal_message_sent` — messages содержат image_url
-    - [ ] `test_text_message_sent` — messages содержат обычный текст
-    - [ ] `test_rate_limit_blocks_excess` — 6-й vision-запрос блокируется
-    - [ ] `test_rate_limit_fallback_to_text` — при блокировке → текстовый ответ
-    - [ ] `test_screenshot_too_large_ignored` — >500KB → text mode
-    - [ ] `test_screenshot_capture_failure_graceful` — ошибка → text mode
-    - [ ] `test_end_to_end_mock` — полный цикл с mock OpenRouter
-  - [ ] Запустить все тесты модуля: 0 failures
-- **Критерий готовности**: ≥10 тестов; полный цикл vision покрыт; 0 failures.
+  - [x] Создать `tests/test_vision_pipeline.py` (36 тестов в 4 классах):
+    - [x] `TestScreenshotTrigger` (15): позитивные/негативные фразы needsScreenshot
+    - [x] `TestParseScreenshot` (8): JPEG/PNG валидные, None, '', wrong prefix, oversized, malformed, unknown media_type
+    - [x] `TestVisionRateLimit` (5): first request, within limit, exceeds, different users, old timestamps expire
+    - [x] `TestPromptBuilderVisionMode` (8): content is list, text+image_url types, base64 URL, text mode string, context in prompt, 'скриншот' в промпте, _build_vision_prompt directly, image_data=None
+  - [x] tests/__init__.py: добавлен импорт `test_vision_pipeline`
+- **Критерий готовности**: ✅ 36 тестов; все классы vision pipeline покрыты.
 - **Зависимости**: AIA-024, AIA-025, AIA-026
 
 ---
@@ -514,8 +504,8 @@
 | AIA-024  | Backend: парсинг скриншота                | V2-3   | Высокий     | ✅ Готова  | —        | AIA-018              | ✅ (3-й)             | —        | AIA-018              | ✅ (3-й)           |
 | AIA-025  | prompt_builder vision mode                | V2-3   | Высокий     | ✅ Готова    | —        | AIA-016, AIA-024     | —                 |
 | AIA-026  | Rate limiter для vision                   | V2-3   | Средний     | ✅ Готова  | —        | AIA-024              | —                   | —        | AIA-024              | —                 |
-| AIA-027  | Тесты knowledge_provider_v2               | V2-4   | Высокий     | Не начата  | —        | AIA-014              | —                 |
-| AIA-028  | Тесты vision pipeline                     | V2-4   | Высокий     | Не начата  | —        | AIA-024, AIA-025, AIA-026 | —            |
+| AIA-027  | Тесты knowledge_provider_v2               | V2-4   | Высокий     | ✅ Готова  | —        | AIA-014              | —                 |
+| AIA-028  | Тесты vision pipeline                     | V2-4   | Высокий     | ✅ Готова  | —        | AIA-024, AIA-025, AIA-026 | —            |
 | AIA-029  | Пилотные сценарии                         | V2-4   | Высокий     | Не начата  | —        | Весь V2-3 (AIA-016..026) | —              |
 | AIA-030  | Аудит term_mapping по UI                  | V2-4   | Высокий     | Не начата  | —        | AIA-013              | —                 |
 

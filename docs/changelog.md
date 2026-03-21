@@ -1,3 +1,10 @@
+## [2026-03-21] - AIA-027+028: Unit-тесты KnowledgeProviderV2 + vision pipeline (ai_assistant)
+### Добавлено
+- `tests/test_knowledge_provider_v2.py` (AIA-027) — 24 unit-теста: загрузка/кеш term_mapping, построение индекса docs, поиск секций `_search_docs`, соблюдение MAX_DOCS_CHARS, boost по модулю, get_technical_context (кеш, обрезание, отсутствующий файл), get_knowledge (интеграция трёх слоёв), get_snippets (compat v1), extract_keywords, score_section.
+- `tests/test_vision_pipeline.py` (AIA-028) — 36 unit-тестов в 4 классах: `TestScreenshotTrigger` (15 тестов: позитивные/негативные фразы-триггеры), `TestParseScreenshot` (8 тестов: JPEG/PNG, None, неправильный prefix, oversized, malformed), `TestVisionRateLimit` (5 тестов: первый запрос, в пределах лимита, превышение, разные пользователи, устаревшие метки), `TestPromptBuilderVisionMode` (8 тестов: multimodal content, image_url, text mode fallback, контекст в промпте).
+### Изменено
+- `tests/__init__.py` — добавлены импорты `test_knowledge_provider_v2` и `test_vision_pipeline`.
+
 ## [2026-03-21] - AIA-020..026: Screenshot capture + Vision pipeline (ai_assistant)
 ### Добавлено
 - `static/lib/html2canvas.min.js` v1.4.1 (199 KB) — библиотека захвата DOM в canvas.
