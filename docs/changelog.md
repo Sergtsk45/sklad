@@ -1,3 +1,8 @@
+## [2026-03-21] - AIA-029+030: Шаблоны для пилотных сценариев и аудита term_mapping
+### Добавлено
+- `docs/pilot_results_v2.md` (AIA-029) — шаблон 15 пилотных сценариев: T-01..T-10 (текстовые) и V-01..V-05 (vision). Для каждого: контекст, вопрос, ожидаемый результат, колонки для результатов. Инструкция по прогону с командами для логов.
+- `docs/audit_term_mapping_checklist.md` (AIA-030) — чеклист 175 маппингов term_mapping.json по 15 секциям (Склад, Продажи, Закупки, CRM, Контакты, Настройки, общие элементы). Структура: EN → RU в маппинге → реальный RU → статус. Итоговая статистика и таблица расхождений.
+
 ## [2026-03-21] - AIA-027+028: Unit-тесты KnowledgeProviderV2 + vision pipeline (ai_assistant)
 ### Добавлено
 - `tests/test_knowledge_provider_v2.py` (AIA-027) — 24 unit-теста: загрузка/кеш term_mapping, построение индекса docs, поиск секций `_search_docs`, соблюдение MAX_DOCS_CHARS, boost по модулю, get_technical_context (кеш, обрезание, отсутствующий файл), get_knowledge (интеграция трёх слоёв), get_snippets (compat v1), extract_keywords, score_section.
