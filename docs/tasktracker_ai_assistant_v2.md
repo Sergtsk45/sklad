@@ -481,19 +481,19 @@
 | AIA-017  | Два поля модели в Settings                | V2-2   | Высокий     | ✅ Готова  | —        | —                    | —                 |
 | AIA-018  | openrouter_client_v2: model_override      | V2-2   | Высокий     | ⚠️ Частично | —        | AIA-017              | ✅ (2-й)           |
 | AIA-019  | Обновить Settings UI                      | V2-2   | Средний     | ⚠️ Частично | —        | AIA-017              | —                 |
-| AIA-020  | Подключить html2canvas                    | V2-3   | Высокий     | ✅ Готова  | ✅ Да    | —                    | —                   | ✅ Да    | —                    | —                 |
-| AIA-021  | screenshot_trigger.js                     | V2-3   | Высокий     | ✅ Готова  | —        | —                    | —                   | —        | —                    | —                 |
-| AIA-022  | captureScreen()                           | V2-3   | Высокий     | ✅ Готова  | ✅ Да    | AIA-020              | —                   | ✅ Да    | AIA-020              | —                 |
-| AIA-023  | Расширить payload + OWL-виджет            | V2-3   | Высокий     | ✅ Готова  | ✅ Да    | AIA-021, AIA-022     | —                   | ✅ Да    | AIA-021, AIA-022     | —                 |
-| AIA-024  | Backend: парсинг скриншота                | V2-3   | Высокий     | ✅ Готова  | —        | AIA-018              | ✅ (3-й)             | —        | AIA-018              | ✅ (3-й)           |
-| AIA-025  | prompt_builder vision mode                | V2-3   | Высокий     | ✅ Готова    | —        | AIA-016, AIA-024     | —                 |
-| AIA-026  | Rate limiter для vision                   | V2-3   | Средний     | ✅ Готова  | —        | AIA-024              | —                   | —        | AIA-024              | —                 |
+| AIA-020  | Подключить html2canvas                    | V2-3   | Высокий     | ✅ Готова  | ✅ Да    | —                    | —                 |
+| AIA-021  | screenshot_trigger.js                     | V2-3   | Высокий     | ✅ Готова  | —        | —                    | —                 |
+| AIA-022  | captureScreen()                           | V2-3   | Высокий     | ✅ Готова  | ✅ Да    | AIA-020              | —                 |
+| AIA-023  | Расширить payload + OWL-виджет            | V2-3   | Высокий     | ✅ Готова  | ✅ Да    | AIA-021, AIA-022     | —                 |
+| AIA-024  | Backend: парсинг скриншота                | V2-3   | Высокий     | ✅ Готова  | —        | AIA-018              | ✅ (3-й)           |
+| AIA-025  | prompt_builder vision mode                | V2-3   | Высокий     | ✅ Готова  | —        | AIA-016, AIA-024     | —                 |
+| AIA-026  | Rate limiter для vision                   | V2-3   | Средний     | ✅ Готова  | —        | AIA-024              | —                 |
 | AIA-027  | Тесты knowledge_provider_v2               | V2-4   | Высокий     | ✅ Готова  | —        | AIA-014              | —                 |
 | AIA-028  | Тесты vision pipeline                     | V2-4   | Высокий     | ✅ Готова  | —        | AIA-024, AIA-025, AIA-026 | —            |
 | AIA-029  | Пилотные сценарии                         | V2-4   | Высокий     | ⏳ В процессе | —     | Весь V2-3 (AIA-016..026) | —              |
 | AIA-030  | Аудит term_mapping по UI                  | V2-4   | Высокий     | ⏳ В процессе | —     | AIA-013              | —                 |
 
-> **Примечание (колонка «Меняет controller», AIA-018):** `model_override` реализован в `OpenRouterClient` и в сигнатуре `_get_ai_response`, но метод `chat()` пока не передаёт vision-модель — это запланировано в **AIA-024**.
+> **Примечание (AIA-018):** при валидном скриншоте `chat()` подставляет `ai_assistant.vision_model` в `model_override`. Отдельные unit-тесты на `model_override` в `test_openrouter_client.py` по-прежнему желательны.
 
 ---
 
