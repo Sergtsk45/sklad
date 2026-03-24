@@ -1,30 +1,23 @@
 ---
-source: contacts/management
+source: essentials/contacts
 module: contacts
-generated: 2026-03-21
-demo: true
+generated: 2026-03-24
 ---
 
-# Управление контактами
-
-> **[DEMO - RST not available]** Этот файл сгенерирован как заглушка. Для получения реального контента выполните клонирование репозитория odoo/documentation и запустите скрипт без --demo.
-
-**Ключевые слова**: контакт, contact, клиент, поставщик, компания
+# Contacts
 
 ## Шаг за шагом
 
-### Создание контакта
+**Ключевые слова**: Контакты app, Контакты
 
-1. Перейдите в **Контакты**.
-2. Нажмите **Новое**.
-3. Укажите тип контакта: физическое лицо или компания.
-4. Заполните **Имя контакта**, **Телефон**, **Эл. почта**.
-5. Добавьте адрес: **Улица**, **Город**, **Страна**.
+### Contact type
 
-> **Примечание**: Контакты-сотрудники компании создаются как дочерние контакты от записи компании.
+> **Примечание**: **Person** contacts can be linked to a **Компания** contact. After selecting **Person**, the **Компания** field becomes visible.
 
-### Поиск и фильтрация контактов
+### Smart buttons
 
-1. В списке контактов используйте поле поиска.
-2. Примените **Фильтры** для отбора по типу, стране или тегу.
-3. Используйте **Группировать по** для группировки по компании или стране.
+> **Примечание**: If the corresponding applications are installed, their related smart buttons appear automatically on a contact form.
+
+### Archive contacts
+
+> **Примечание**: A contact can be *unarchived*, if the user decides to work with them again. To do that, just click the :icon:`fa-cog` **Действие** menu again at the top of the archived contact form, and click **Unarchive**. Upon doing so, the **Archived** banner is removed, and the contact is restored.

@@ -36,6 +36,7 @@ FILE_MAP = {
     'inventory_and_mrp/inventory/products': 'stock_products.md',
     'inventory_and_mrp/inventory/operations': 'stock_operations.md',
     'inventory_and_mrp/inventory/inventory_adjustments': 'stock_inventory.md',
+    'inventory_and_mrp/inventory/shipping_receiving/daily_operations/storage_category': 'stock_storage_category.md',
     # Продажи
     'sales/sales/quotations': 'sale_quotations.md',
     'sales/sales/invoicing': 'sale_invoicing.md',
@@ -57,6 +58,7 @@ MODULE_BY_OUTPUT = {
     'stock_products.md': 'stock',
     'stock_operations.md': 'stock',
     'stock_inventory.md': 'stock',
+    'stock_storage_category.md': 'stock',
     'sale_quotations.md': 'sale',
     'sale_invoicing.md': 'sale',
     'purchase_orders.md': 'purchase',
@@ -683,10 +685,10 @@ def render_markdown(
         '',
     ]
 
+    lines += ['## Шаг за шагом', '']
+
     if keywords_str:
         lines += [f'**Ключевые слова**: {keywords_str}', '']
-
-    lines += ['## Шаг за шагом', '']
 
     for sec in parsed['sections']:
         if not sec['steps'] and not sec['notes']:
@@ -749,10 +751,10 @@ def render_demo_markdown(output_name: str, generated_date: str) -> str:
         '',
     ]
 
+    lines += ['## Шаг за шагом', '']
+
     if keywords_str:
         lines += [f'**Ключевые слова**: {keywords_str}', '']
-
-    lines += ['## Шаг за шагом', '']
 
     for sec in template.get('sections', []):
         lines.append(f'### {sec["heading"]}')
