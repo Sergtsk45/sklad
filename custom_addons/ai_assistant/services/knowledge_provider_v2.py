@@ -159,6 +159,58 @@ class KnowledgeProviderV2:
     # Внутренние методы
     # ------------------------------------------------------------------
 
+    def _expand_query(self, query):
+        """
+        Расширить запрос синонимами из term_mapping.
+        'категории хранения' → 'категории хранения storage categories storage category'
+        'storage category' → 'storage category категории хранения'
+        """
+        if not self._term_mapping:
+            self._load_term_mapping()
+
+        mapping = self._term_mapping or {}
+        query_lower = query.lower()
+        extra_terms = set()
+
+        # Собрать все маппинги в один плоский словарь EN→RU
+        all_pairs = {}
+        for section in ['buttons', 'menu_items', 'fields', 'view_labels', 'statuses']:
+            section_data = mapping.get(section, {})
+            if isinstance(section_data, dict):
+                for en, ru in section_data.items():
+                    if ru and isinstance(ru, str):
+                        all_pairs[en.lower()] = ru.lower()
+
+        # Если запрос содержит русский термин → добавить английский и наоборот
+        for en, ru in all_pairs.items():
+            if ru in query_lower:
+                extra_terms.add(en)
+            if en in query_lower:
+                extra_terms.add(ru)
+
+        # Кастомные пары для составных терминов модуля Склад
+        CUSTOM_PAIRS = {
+            'storage categories': 'категории хранения',
+            'storage category': 'категория хранения',
+            'putaway rules': 'правила размещения',
+            'putaway rule': 'правило размещения',
+            'reordering rules': 'правила пополнения',
+            'serial numbers': 'серийные номера',
+            'lot': 'партия',
+            'packages': 'упаковки',
+            'locations': 'местонахождения',
+            'warehouses': 'склады',
+        }
+        for en, ru in CUSTOM_PAIRS.items():
+            if ru in query_lower:
+                extra_terms.add(en)
+            if en in query_lower:
+                extra_terms.add(ru)
+
+        if extra_terms:
+            return query + ' ' + ' '.join(extra_terms)
+        return query
+
     def _search_docs(self, module, query, limit=5):
         """
         Полнотекстовый поиск по MD-секциям из docs/.
@@ -168,7 +220,8 @@ class KnowledgeProviderV2:
         if not index:
             return ''
 
-        query_lower = query.lower()
+        expanded = self._expand_query(query)
+        query_lower = expanded.lower()
         query_words = set(re.findall(r'\w+', query_lower))
 
         scored = []

@@ -49,6 +49,21 @@ module: stock
 1. Откройте **Конфигурация** → **Склады**.
 """
 
+_STORAGE_CATEGORY_MD = """\
+---
+module: stock
+---
+
+# Storage Categories / Категории хранения
+
+**Ключевые слова**: storage category, storage categories, категории хранения, категория хранения
+
+## Настройка категорий хранения
+
+1. Перейдите в **Конфигурация** → **Категории хранения**.
+2. Нажмите **Создать**.
+"""
+
 _CRM_MD = """\
 ---
 module: crm
@@ -429,3 +444,54 @@ class TestKnowledgeProviderV2(TransactionCase):
             section_crm, 'контент', {'контент'}, 'stock'
         )
         self.assertGreater(score_stock, score_crm)
+
+    # ------------------------------------------------------------------
+    # Тесты _expand_query (билингвальное расширение)
+    # ------------------------------------------------------------------
+
+    def test_expand_query_ru_to_en(self):
+        """RU-термин → дополнен английским синонимом из CUSTOM_PAIRS."""
+        self.provider._term_mapping = {}
+        result = self.provider._expand_query('категории хранения')
+        self.assertIn('storage categories', result.lower())
+
+    def test_expand_query_en_to_ru(self):
+        """EN-термин → дополнен русским синонимом из CUSTOM_PAIRS."""
+        self.provider._term_mapping = {}
+        result = self.provider._expand_query('storage category')
+        self.assertIn('категория хранения', result.lower())
+
+    def test_expand_query_no_match(self):
+        """Запрос без известных терминов → возвращается без изменений."""
+        self.provider._term_mapping = {}
+        result = self.provider._expand_query('как дела')
+        self.assertEqual(result, 'как дела')
+
+    def test_search_finds_storage_category(self):
+        """Запрос 'категории хранения' должен находить storage_category.md."""
+        files = {'stock_storage_category.md': _STORAGE_CATEGORY_MD}
+        self.provider._term_mapping = {}
+        with patch(
+            'odoo.addons.ai_assistant.services.knowledge_provider_v2.os.path.isdir',
+            return_value=True
+        ), patch(
+            'odoo.addons.ai_assistant.services.knowledge_provider_v2.os.listdir',
+            return_value=list(files.keys())
+        ):
+            import io, builtins
+            real_open = builtins.open
+
+            def fake_open(path, *a, **kw):
+                fname = os.path.basename(path)
+                if fname in files:
+                    return io.StringIO(files[fname])
+                return real_open(path, *a, **kw)
+
+            with patch('builtins.open', side_effect=fake_open):
+                result = self.provider._search_docs('stock', 'категории хранения')
+
+        self.assertTrue(result, 'docs_snippets не должен быть пустым')
+        self.assertTrue(
+            'storage' in result.lower() or 'категор' in result.lower(),
+            'Результат должен содержать контент про storage category'
+        )
