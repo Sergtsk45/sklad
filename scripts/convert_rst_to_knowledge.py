@@ -32,7 +32,7 @@ from pathlib import Path
 # Значение — имя выходного файла.
 FILE_MAP = {
     # Склад
-    'inventory_and_mrp/inventory/warehouses_storage': 'stock_warehouses.md',
+    'inventory_and_mrp/inventory/warehouses_storage/inventory_management/warehouses': 'stock_warehouses.md',
     'inventory_and_mrp/inventory/products': 'stock_products.md',
     'inventory_and_mrp/inventory/operations': 'stock_operations.md',
     'inventory_and_mrp/inventory/inventory_adjustments': 'stock_inventory.md',
