@@ -331,6 +331,40 @@ class TestKnowledgeProviderV2(TransactionCase):
         self.assertEqual(result['tech_context'], 'tech context data')
 
     # ------------------------------------------------------------------
+    # Тесты _is_technical_query и автоматического include_technical
+    # ------------------------------------------------------------------
+
+    def test_technical_query_detected(self):
+        self.assertTrue(
+            self.provider._is_technical_query('какие поля у stock.picking')
+        )
+
+    def test_user_query_not_technical(self):
+        self.assertFalse(
+            self.provider._is_technical_query('как создать склад')
+        )
+
+    def test_tech_context_included_for_technical(self):
+        self.provider._term_mapping = _TERM_MAPPING
+        self.provider._tech_cache['stock'] = 'tech context data'
+        with patch(
+            'odoo.addons.ai_assistant.services.knowledge_provider_v2.os.path.isdir',
+            return_value=False
+        ):
+            result = self.provider.get_knowledge('stock', 'какие поля у stock.picking')
+        self.assertIsNotNone(result['tech_context'])
+
+    def test_tech_context_excluded_for_user(self):
+        self.provider._term_mapping = _TERM_MAPPING
+        self.provider._tech_cache['stock'] = 'tech context data'
+        with patch(
+            'odoo.addons.ai_assistant.services.knowledge_provider_v2.os.path.isdir',
+            return_value=False
+        ):
+            result = self.provider.get_knowledge('stock', 'как создать склад')
+        self.assertIsNone(result['tech_context'])
+
+    # ------------------------------------------------------------------
     # Тесты get_snippets (обратная совместимость)
     # ------------------------------------------------------------------
 

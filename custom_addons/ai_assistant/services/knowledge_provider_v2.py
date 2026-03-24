@@ -13,8 +13,19 @@ _KNOWLEDGE_DIR = os.path.join(
 DOCS_DIR = os.path.join(_KNOWLEDGE_DIR, 'docs')
 GENERATED_DIR = os.path.join(_KNOWLEDGE_DIR, 'generated')
 
-MAX_DOCS_CHARS = 10000      # ~2500 tokens
-MAX_TECH_CONTEXT_CHARS = 15000  # ~4000 tokens
+MAX_DOCS_CHARS = 10000     # ~2500 tokens
+MAX_TECH_CONTEXT_CHARS = 6000  # ~1500 tokens
+
+TECH_TRIGGERS = [
+    'модель', 'model', 'поле', 'field', 'fields',
+    'api', 'python', 'код', 'code', 'метод', 'method',
+    'compute', 'onchange', 'override', 'inherit',
+    'many2one', 'one2many', 'many2many',
+    'orm', 'recordset', 'domain', 'search',
+    'xml', 'view', 'qweb', 'xpath',
+    'разработка', 'разработчик', 'developer',
+    'technical', 'техническ',
+]
 
 MODULE_CONTEXT_FILES = {
     'stock': 'stock_context.md',
@@ -74,10 +85,12 @@ class KnowledgeProviderV2:
     # Публичный интерфейс
     # ------------------------------------------------------------------
 
-    def get_knowledge(self, module, query, include_technical=False):
+    def get_knowledge(self, module, query, include_technical=None):
         """
         Вернуть знания из всех трёх слоёв.
 
+        :param include_technical: если None — определяется автоматически
+            через _is_technical_query(). Передать True/False для явного управления.
         :returns dict: {
             'docs_snippets': str,   # релевантные фрагменты из docs/
             'tech_context': str|None,
@@ -85,6 +98,8 @@ class KnowledgeProviderV2:
         }
         """
         docs_snippets = self._search_docs(module, query)
+        if include_technical is None:
+            include_technical = self._is_technical_query(query)
         tech_context = (
             self.get_technical_context(module) if include_technical else None
         )
@@ -134,6 +149,11 @@ class KnowledgeProviderV2:
 
         self._tech_cache[module] = content
         return content
+
+    def _is_technical_query(self, query):
+        """Определить, нужен ли tech_context для этого вопроса."""
+        lower = query.lower()
+        return any(trigger in lower for trigger in TECH_TRIGGERS)
 
     # ------------------------------------------------------------------
     # Внутренние методы

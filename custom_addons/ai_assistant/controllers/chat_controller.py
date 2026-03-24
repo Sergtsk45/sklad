@@ -159,9 +159,7 @@ class AiAssistantController(http.Controller):
                         override=None, image_data=None):
         module = self._resolve_module(context)
 
-        knowledge = _knowledge_provider.get_knowledge(
-            module, message, include_technical=True
-        )
+        knowledge = _knowledge_provider.get_knowledge(module, message)
 
         debug = request.env['ir.config_parameter'].sudo().get_param(
             'ai_assistant.debug_logging', False
