@@ -8,7 +8,7 @@ generated: 2026-03-24
 
 ## Шаг за шагом
 
-**Ключевые слова**: Склад app → Конфигурация → Настройки, Склад app → Конфигурация → Местонахождениеs, Склад app → Конфигурация → Putaway Rules
+**Ключевые слова**: storage category, storage categories, категории хранения, категория хранения, putaway rules, правила размещения, вместимость, capacity, locations, местонахождения
 
 ### Storage categories
 
