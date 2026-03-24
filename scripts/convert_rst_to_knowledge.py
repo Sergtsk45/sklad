@@ -598,8 +598,17 @@ def parse_rst_file(path: Path, term_mapping: dict) -> dict:
             'notes': notes,
         })
 
-    # 4. Ключевые слова из меню и кнопок
-    keywords = list(dict.fromkeys(all_menus + all_buttons))
+    # 4. Ключевые слова: слова из заголовка + имя файла + последний сегмент меню + кнопки
+    title_words = re.findall(r'\w{3,}', title.lower())
+    stem_word = path.stem.lower()
+    menu_last_segments = []
+    for menu in all_menus:
+        last_seg = menu.split(' → ')[-1].strip()
+        if last_seg and last_seg not in menu_last_segments:
+            menu_last_segments.append(last_seg)
+    keywords = list(dict.fromkeys(
+        title_words + [stem_word] + menu_last_segments + all_buttons
+    ))
 
     return {
         'title': title,

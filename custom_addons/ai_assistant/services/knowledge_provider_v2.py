@@ -78,7 +78,9 @@ class KnowledgeProviderV2:
 
     def __init__(self):
         self._docs_index = None      # {section_text: [sections]}
+        self._docs_mtime = 0
         self._term_mapping = None
+        self._term_mapping_mtime = 0
         self._tech_cache = {}
 
     # ------------------------------------------------------------------
@@ -171,25 +173,13 @@ class KnowledgeProviderV2:
         mapping = self._term_mapping or {}
         query_lower = query.lower()
         extra_terms = set()
+        matched_ru_terms = set()  # RU-термины, уже покрытые CUSTOM_PAIRS
 
-        # Собрать все маппинги в один плоский словарь EN→RU
-        all_pairs = {}
-        for section in ['buttons', 'menu_items', 'fields', 'view_labels', 'statuses']:
-            section_data = mapping.get(section, {})
-            if isinstance(section_data, dict):
-                for en, ru in section_data.items():
-                    if ru and isinstance(ru, str):
-                        all_pairs[en.lower()] = ru.lower()
-
-        # Если запрос содержит русский термин → добавить английский и наоборот
-        for en, ru in all_pairs.items():
-            if ru in query_lower:
-                extra_terms.add(en)
-            if en in query_lower:
-                extra_terms.add(ru)
-
-        # Кастомные пары для составных терминов модуля Склад
+        # 1. Сначала CUSTOM_PAIRS (приоритет над term_mapping)
         CUSTOM_PAIRS = {
+            'warehouse': 'склад',
+            'warehouses': 'склады',
+            'create warehouse': 'создать склад',
             'storage categories': 'категории хранения',
             'storage category': 'категория хранения',
             'putaway rules': 'правила размещения',
@@ -199,10 +189,25 @@ class KnowledgeProviderV2:
             'lot': 'партия',
             'packages': 'упаковки',
             'locations': 'местонахождения',
-            'warehouses': 'склады',
         }
         for en, ru in CUSTOM_PAIRS.items():
             if ru in query_lower:
+                extra_terms.add(en)
+                matched_ru_terms.add(ru)
+            if en in query_lower:
+                extra_terms.add(ru)
+
+        # 2. term_mapping — пропускать RU-термины, уже покрытые CUSTOM_PAIRS
+        all_pairs = {}
+        for section in ['buttons', 'menu_items', 'fields', 'view_labels', 'statuses']:
+            section_data = mapping.get(section, {})
+            if isinstance(section_data, dict):
+                for en, ru in section_data.items():
+                    if ru and isinstance(ru, str):
+                        all_pairs[en.lower()] = ru.lower()
+
+        for en, ru in all_pairs.items():
+            if ru in query_lower and ru not in matched_ru_terms:
                 extra_terms.add(en)
             if en in query_lower:
                 extra_terms.add(ru)
@@ -236,10 +241,16 @@ class KnowledgeProviderV2:
         return self._join_sections(candidates)
 
     def _build_docs_index(self):
-        """Построить индекс секций из всех MD-файлов в docs/. Кешируется."""
-        if self._docs_index is not None:
+        """Построить индекс секций из всех MD-файлов в docs/. Кешируется с инвалидацией по mtime."""
+        try:
+            current_mtime = os.path.getmtime(DOCS_DIR)
+        except OSError:
+            current_mtime = 0
+
+        if self._docs_index is not None and current_mtime <= self._docs_mtime:
             return self._docs_index
 
+        self._docs_mtime = current_mtime
         self._docs_index = []
         if not os.path.isdir(DOCS_DIR):
             _logger.warning('Docs directory not found: %s', DOCS_DIR)
@@ -341,11 +352,20 @@ class KnowledgeProviderV2:
         }
 
     def _load_term_mapping(self):
-        """Загрузить term_mapping.json. Кешируется."""
-        if self._term_mapping is not None:
+        """Загрузить term_mapping.json. Кешируется с инвалидацией по mtime."""
+        path = os.path.join(_KNOWLEDGE_DIR, 'term_mapping.json')
+        try:
+            current_mtime = os.path.getmtime(path)
+        except OSError:
+            current_mtime = 0
+
+        # _term_mapping_mtime == 0 означает значение установлено вручную (напр. в тестах)
+        if self._term_mapping is not None and (
+            self._term_mapping_mtime == 0 or current_mtime <= self._term_mapping_mtime
+        ):
             return self._term_mapping
 
-        path = os.path.join(_KNOWLEDGE_DIR, 'term_mapping.json')
+        self._term_mapping_mtime = current_mtime
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 self._term_mapping = json.load(f)
