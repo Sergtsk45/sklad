@@ -17,7 +17,7 @@ MAX_DOCS_CHARS = 10000     # ~2500 tokens
 MAX_TECH_CONTEXT_CHARS = 6000  # ~1500 tokens
 
 TECH_TRIGGERS = [
-    'модель', 'model', 'поле', 'field', 'fields',
+    'модель', 'model', 'поле', 'поля', 'field', 'fields',
     'api', 'python', 'код', 'code', 'метод', 'method',
     'compute', 'onchange', 'override', 'inherit',
     'many2one', 'one2many', 'many2many',
