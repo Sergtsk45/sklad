@@ -236,7 +236,7 @@ class KnowledgeProviderV2:
 
         scored.sort(key=lambda x: x[0], reverse=True)
         positive = [(sc, s) for sc, s in scored if sc > 0]
-        candidates = [s for _, s in positive[:limit]] if positive else [s for _, s in scored[:3]]
+        candidates = [s for _, s in positive[:limit]]
 
         return self._join_sections(candidates)
 
