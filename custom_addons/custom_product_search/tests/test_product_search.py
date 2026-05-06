@@ -51,6 +51,13 @@ class TestCustomProductSearch(TransactionCase):
                     in product_model.name_search(query, limit=20)
                 ]
                 self.assertIn(self.product.id, result_ids)
+                template_model = self.env['product.template']
+                template_ids = [
+                    template_id
+                    for template_id, _display_name
+                    in template_model.name_search(query, limit=20)
+                ]
+                self.assertIn(self.product.product_tmpl_id.id, template_ids)
 
     def test_product_name_search_by_reference_and_barcode(self):
         product_model = self.env['product.product']
