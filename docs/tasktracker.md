@@ -1,3 +1,21 @@
+## Задача: Улучшенный поиск товаров custom_product_search
+- **Статус**: Завершена
+- **Описание**: Реализовать отдельный addon `custom_product_search` для нормализованного поиска товаров в Odoo 19: backend UI, складские документы и сервисный метод для AI-ассистента.
+- **Шаги выполнения**:
+ - [x] Проверить `docs/odoo_product_search_cursor.md` и актуальный Odoo 19 API поиска товаров.
+ - [x] Создать подробный трекер `docs/tasktrecker-odoo-search.md`.
+ - [x] Создать структуру addon в `custom_addons/custom_product_search`.
+ - [x] Добавить normalized stored indexed поля `x_search_name`.
+ - [x] Расширить `product.product.name_search()` с fallback по нормализованным полям.
+ - [x] Добавить `post_init_hook` для `pg_trgm` и GIN индексов.
+ - [x] Добавить `ai_search_products()` для AI-ассистента.
+ - [x] Добавить README и тестовые сценарии.
+ - [x] Выполнить проверки синтаксиса/линтера/Odoo tests.
+- **Зависимости**:
+ - Стандартные модули Odoo: `product`, `stock`.
+ - PostgreSQL extension `pg_trgm`.
+ - Детальный план: `docs/tasktrecker-odoo-search.md`.
+
 ## Задача: Odoo 19 Docker workflow (Cursor → VPS → deploy)
 - **Статус**: Завершена
 - **Описание**: Подготовить документацию и готовую конфигурацию для запуска Odoo 19 в Docker локально (Cursor/WSL2) и на VPS (Ubuntu 22.04) с доменом `skladtsk.duckdns.org`, хранением данных в volumes и деплоем изменений через `git pull` + рестарт контейнера.

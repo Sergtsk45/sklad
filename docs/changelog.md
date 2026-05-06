@@ -1,3 +1,12 @@
+## [2026-05-06] - Улучшенный поиск товаров custom_product_search
+### Добавлено
+- Новый addon `custom_product_search` для Odoo 19: normalized stored поле `x_search_name` на `product.template` и `product.product`, расширенный backend-поиск товаров и сервис `ai_search_products()` для AI-ассистента.
+- `post_init_hook` для включения `pg_trgm` и создания GIN trigram-индексов на `product_template.x_search_name` и `product_product.x_search_name`.
+- README и Odoo tests для сценариев поиска `кран шаровый Ду50`, `кран ду50`, `шаровый ду 50`, `ДУ50`.
+
+### Изменено
+- Поиск `product.product.name_search()` расширен совместимым с Odoo 19 способом: стандартный поиск Odoo выполняется первым, затем применяется fallback по `default_code`, `barcode`, `name`, `x_search_name`, `product_tmpl_id.x_search_name` и токенам нормализованного запроса.
+
 ## [2026-03-31] - fix: fallback-логика _search_docs (ai_assistant)
 ### Изменено
 - `services/knowledge_provider_v2.py` — убран fallback `scored[:3]` в `_search_docs`: при отсутствии секций с `score > 0` теперь возвращается пустая строка вместо нерелевантных секций. Это предотвращает ложный отказ модели отвечать из-за попадания в промпт контента из чужих модулей (purchase/sale).
