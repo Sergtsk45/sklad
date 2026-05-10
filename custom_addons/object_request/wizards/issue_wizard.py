@@ -49,7 +49,7 @@ class ObjectRequestIssueWizard(models.TransientModel):
             lambda ln: ln.qty_to_issue > 0 and ln.product_id
         )
         res['line_ids'] = [(6, 0, lines.ids)]
-        warehouse = self.env['stock.warehouse'].search(
+        warehouse = request.warehouse_id or self.env['stock.warehouse'].search(
             [('company_id', '=', request.company_id.id)], limit=1,
         )
         if warehouse:

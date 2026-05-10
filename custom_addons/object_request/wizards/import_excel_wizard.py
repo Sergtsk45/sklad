@@ -68,6 +68,20 @@ class ObjectRequestImportWizard(models.TransientModel):
         string='Приоритет', default='1', required=True,
     )
     comment = fields.Text(string='Комментарий')
+    company_id = fields.Many2one(
+        'res.company',
+        default=lambda self: self.env.company,
+        readonly=True,
+    )
+    warehouse_id = fields.Many2one(
+        'stock.warehouse',
+        string='Склад',
+        required=True,
+        domain="[('company_id', '=', company_id)]",
+        default=lambda self: self.env['stock.warehouse'].search(
+            [('company_id', '=', self.env.company.id)], limit=1,
+        ),
+    )
 
     # --- Результаты парсинга ---
     preview_line_ids = fields.One2many(
@@ -213,11 +227,6 @@ class ObjectRequestImportWizard(models.TransientModel):
 
     # --- Публичные методы ---
 
-    @api.model
-    def default_get(self, fields_list):
-        res = super().default_get(fields_list)
-        return res
-
     def action_validate(self):
         """Загружает файл, валидирует структуру, строит предпросмотр."""
         self.ensure_one()
@@ -307,6 +316,7 @@ class ObjectRequestImportWizard(models.TransientModel):
             'need_date': self.need_date,
             'priority': self.priority,
             'comment': self.comment,
+            'warehouse_id': self.warehouse_id.id,
             'source_file_name': self.file_name or '',
             'imported_at': fields.Datetime.now(),
             'imported_by_user_id': self.env.uid,

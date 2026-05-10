@@ -123,12 +123,16 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
 
     def _create_single_po(self, vendor, req_lines):
         """Создать один draft purchase.order для поставщика."""
-        po = self.env['purchase.order'].create({
+        warehouse = self.request_id.warehouse_id
+        po_vals = {
             'partner_id': vendor.id,
             'origin': self.request_id.name,
             'is_object_request_purchase': True,
             'object_request_project_id': self.request_id.project_id.id,
-        })
+        }
+        if warehouse and warehouse.in_type_id:
+            po_vals['picking_type_id'] = warehouse.in_type_id.id
+        po = self.env['purchase.order'].create(po_vals)
         date_planned = (
             datetime.combine(self.request_id.need_date, dt_time.min)
             if self.request_id.need_date

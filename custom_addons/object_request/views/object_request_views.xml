@@ -120,6 +120,7 @@
                 />
                 <field name="matching_state" column_invisible="1"/>
                 <field name="create_date" string="Дата создания" optional="hide"/>
+                <field name="warehouse_id" string="Склад" optional="hide"/>
                 <field name="buyer_user_id" string="Снабженец" optional="hide"/>
             </list>
         </field>
@@ -312,6 +313,23 @@
                                 name="priority"
                                 readonly="state != 'draft'"
                             />
+                            <field
+                                name="warehouse_id"
+                                readonly="state != 'draft'"
+                            />
+                            <field
+                                name="check_warehouse_ids"
+                                widget="many2many_tags"
+                                readonly="state != 'draft'"
+                                placeholder="Не выбрано — используется склад документа"
+                                options="{'color_field': 'id'}"
+                            />
+                            <field
+                                name="stock_check_confirmed"
+                                widget="boolean_toggle"
+                                readonly="1"
+                                invisible="not stock_check_confirmed"
+                            />
                         </group>
                         <group string="Ответственные">
                             <field name="buyer_user_id"/>
@@ -397,7 +415,7 @@
                                         string="Остаток (склад)"
                                         optional="hide"
                                         readonly="1"
-                                        title="Заполняется автоматически на Этапе 2 кнопкой «Рассчитать наличие»"
+                                        title="Сумма остатков по всем складам проверки (обновляется кнопкой «Рассчитать наличие»)"
                                     />
                                     <!-- Оригинальные данные из файла → поле выбора (Поставщик) -->
                                     <field name="supplier_raw" string="Поставщик (файл)" optional="show"/>

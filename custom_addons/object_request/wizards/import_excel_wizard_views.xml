@@ -23,6 +23,7 @@
                             <field name="project_id"/>
                             <field name="foreman_user_id"/>
                             <field name="need_date"/>
+                            <field name="warehouse_id"/>
                         </group>
                         <group>
                             <field name="priority"/>

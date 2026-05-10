@@ -40,6 +40,7 @@
         'views/purchase_order_inherit_views.xml',
         'views/object_request_project_views.xml',
         'views/object_request_line_views.xml',
+        'wizards/stock_check_wizard_views.xml',
         'views/object_request_views.xml',
         'views/object_request_analytics_views.xml',
         'views/object_request_menu.xml',

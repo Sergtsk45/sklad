@@ -104,6 +104,7 @@ class TestPilotScenarios(TransactionCase):
             'need_date': '2026-04-15',
             'priority': '2',
             'comment': 'Нужно срочно',
+            'warehouse_id': self.warehouse.id,
         })
         env['object.request.line'].create({
             'request_id': request.id,

@@ -122,6 +122,27 @@ class ObjectRequest(models.Model):
         'res.company', string='Компания', required=True,
         default=lambda self: self.env.company, index=True,
     )
+    warehouse_id = fields.Many2one(
+        'stock.warehouse',
+        string='Склад',
+        required=True,
+        tracking=True,
+        index=True,
+        domain="[('company_id', '=', company_id)]",
+        default=lambda self: self.env['stock.warehouse'].search(
+            [('company_id', '=', self.env.company.id)], limit=1,
+        ),
+    )
+    check_warehouse_ids = fields.Many2many(
+        'stock.warehouse',
+        'object_request_check_warehouse_rel',
+        'request_id', 'warehouse_id',
+        string='Склады для проверки наличия',
+        domain="[('company_id', '=', company_id)]",
+    )
+    stock_check_confirmed = fields.Boolean(
+        string='Наличие подтверждено', default=False,
+    )
     currency_id = fields.Many2one(
         'res.currency', related='company_id.currency_id', store=True,
     )
@@ -455,35 +476,56 @@ class ObjectRequest(models.Model):
             )
 
     def action_check_stock(self):
-        """Запросить qty_available со склада для каждой строки с product_id."""
+        """Проверить остатки по складам.
+
+        Если check_warehouse_ids пуст — режим прораба: проверяется склад объекта
+        (warehouse_id). При наличии остатков открывается wizard с предупреждением.
+
+        Если check_warehouse_ids заполнен — режим снабженца: проверяется по всем
+        указанным складам, результат — toast-уведомление с числом найденных позиций.
+        """
         self.ensure_one()
-        warehouse = self.env['stock.warehouse'].search(
-            [('company_id', '=', self.company_id.id)], limit=1,
-        )
-        location = warehouse.lot_stock_id if warehouse else False
-        lines = self.line_ids.filtered(
-            lambda ln: ln.product_id and not ln.is_cancelled
-        )
+        is_foreman_check = not self.check_warehouse_ids
+        warehouses = self.check_warehouse_ids or self.warehouse_id
+        locations = warehouses.mapped('lot_stock_id').filtered(bool)
+        lines = self.line_ids.filtered(lambda ln: ln.product_id and not ln.is_cancelled)
         if not lines:
-            raise UserError(
-                'Нет строк с сопоставленным товаром для проверки наличия.'
-            )
+            raise UserError('Нет строк с сопоставленным товаром для проверки наличия.')
         now = fields.Datetime.now()
         for line in lines:
-            product = line.product_id
-            qty = (
-                product.with_context(location=location.id).qty_available
-                if location
-                else product.qty_available
-            )
+            if locations:
+                qty = sum(
+                    line.product_id.with_context(location=loc.id).qty_available
+                    for loc in locations
+                )
+            else:
+                qty = line.product_id.qty_available
             line.write({'stock_qty_on_hand': qty, 'stock_check_date': now})
+        lines_with_stock = lines.filtered(lambda ln: ln.stock_qty_on_hand > 0)
+        if is_foreman_check and lines_with_stock:
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Проверка актуальности требования',
+                'res_model': 'object.request.stock.check.wizard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {'default_request_id': self.id},
+            }
+        found = len(lines_with_stock)
+        total = len(lines)
+        if found:
+            msg = f'Найдено {found} из {total} позиций.'
+            ntype = 'success'
+        else:
+            msg = f'Ни одна из {total} позиций не найдена на выбранных складах.'
+            ntype = 'warning'
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': 'Расчёт наличия выполнен',
-                'message': f'Проверено строк: {len(lines)}.',
-                'type': 'success',
+                'message': msg,
+                'type': ntype,
                 'sticky': False,
             },
         }
