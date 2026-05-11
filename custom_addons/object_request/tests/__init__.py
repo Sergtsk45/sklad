@@ -18,3 +18,4 @@ from . import test_obr022_approval  # noqa: F401
 from . import test_obr023_reports  # noqa: F401
 from . import test_obr024_warehouse  # noqa: F401
 from . import test_obr025_multiwarehouse_check  # noqa: F401
+from . import test_obr026_project_warehouse  # noqa: F401

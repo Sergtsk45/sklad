@@ -14,11 +14,9 @@ class TestOBR023Reports(TransactionCase):
 
         cls.project1 = cls.env['object.request.project'].create({
             'name': 'Объект Аналитика 1',
-            'code': 'ANA-001',
         })
         cls.project2 = cls.env['object.request.project'].create({
             'name': 'Объект Аналитика 2',
-            'code': 'ANA-002',
         })
         cls.user = cls.env.ref('base.user_admin')
         cls.product = cls.env['product.product'].create({

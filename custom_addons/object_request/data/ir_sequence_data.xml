@@ -9,5 +9,13 @@
             <field name="number_next">1</field>
             <field name="number_increment">1</field>
         </record>
+        <record id="seq_object_request_project_code" model="ir.sequence">
+            <field name="name">Object Request Project Code</field>
+            <field name="code">object.request.project.code</field>
+            <field name="prefix">O</field>
+            <field name="padding">3</field>
+            <field name="number_next">1</field>
+            <field name="number_increment">1</field>
+        </record>
     </data>
 </odoo>

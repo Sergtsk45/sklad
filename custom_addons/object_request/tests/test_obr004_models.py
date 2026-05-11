@@ -10,28 +10,27 @@ class TestObjectRequestProject(TransactionCase):
         super().setUp()
         self.project = self.env['object.request.project'].create({
             'name': 'Тестовый объект',
-            'code': 'TEST-OBR004',
         })
 
     def test_create_project(self):
         self.assertEqual(self.project.name, 'Тестовый объект')
-        self.assertEqual(self.project.code, 'TEST-OBR004')
+        self.assertTrue(self.project.code)
+        self.assertTrue(self.project.code.startswith('O'))
         self.assertTrue(self.project.active)
 
     def test_request_count(self):
         self.assertEqual(self.project.request_count, 0)
 
     def test_unique_code_constraint(self):
+        manual_project = self.env['object.request.project'].create({
+            'name': 'Ручной код',
+            'code': 'O777',
+        })
         with self.assertRaises(ValidationError):
             self.env['object.request.project'].create({
                 'name': 'Другой объект',
-                'code': 'TEST-OBR004',
+                'code': manual_project.code,
             })
-
-    def test_empty_code_allowed_duplicated(self):
-        p1 = self.env['object.request.project'].create({'name': 'P1', 'code': False})
-        p2 = self.env['object.request.project'].create({'name': 'P2', 'code': False})
-        self.assertTrue(p1 and p2)
 
 
 @tagged('post_install', '-at_install')

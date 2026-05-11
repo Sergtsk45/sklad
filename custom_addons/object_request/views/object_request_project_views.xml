@@ -11,6 +11,8 @@
             <list string="Объекты">
                 <field name="code" string="Код"/>
                 <field name="name" string="Наименование"/>
+                <field name="warehouse_id" string="Склад" optional="show"/>
+                <field name="company_id" string="Компания" optional="show"/>
                 <field name="partner_id" string="Контрагент" optional="show"/>
                 <field name="address" string="Адрес" optional="show"/>
                 <field name="request_count" string="Документов" optional="show"/>
@@ -45,15 +47,23 @@
                     </div>
                     <div class="oe_title">
                         <label for="name" string="Наименование объекта"/>
-                        <h1><field name="name"/></h1>
+                        <h1>
+                            <field name="name"/>
+                        </h1>
                     </div>
                     <group>
                         <group>
-                            <field name="code" string="Код объекта"/>
+                            <field
+                                name="code"
+                                string="Код объекта"
+                                readonly="1"
+                            />
                             <field name="partner_id" string="Контрагент"/>
+                            <field name="company_id" string="Компания"/>
                         </group>
                         <group>
                             <field name="active"/>
+                            <field name="warehouse_id" string="Склад объекта" readonly="1"/>
                         </group>
                     </group>
                     <group>
