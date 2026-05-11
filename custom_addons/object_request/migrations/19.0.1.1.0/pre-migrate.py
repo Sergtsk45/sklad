@@ -36,7 +36,7 @@ def migrate(cr, version):
         """
     )
 
-    if _column_exists(cr, 'object_request', 'warehouse_id'):
+    if _column_exists(cr, "object_request", "warehouse_id"):
         cr.execute(
             """
             INSERT INTO _legacy_object_request_warehouse
@@ -47,17 +47,17 @@ def migrate(cr, version):
             """
         )
 
-    rel_table = 'object_request_check_warehouse_rel'
+    rel_table = "object_request_check_warehouse_rel"
     if _table_exists(cr, rel_table):
         request_col = (
-            'object_request_id'
-            if _column_exists(cr, rel_table, 'object_request_id')
-            else 'request_id'
+            "object_request_id"
+            if _column_exists(cr, rel_table, "object_request_id")
+            else "request_id"
         )
         warehouse_col = (
-            'stock_warehouse_id'
-            if _column_exists(cr, rel_table, 'stock_warehouse_id')
-            else 'warehouse_id'
+            "stock_warehouse_id"
+            if _column_exists(cr, rel_table, "stock_warehouse_id")
+            else "warehouse_id"
         )
         cr.execute(
             f"""

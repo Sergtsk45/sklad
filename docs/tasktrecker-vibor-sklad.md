@@ -214,7 +214,13 @@
 ## Метрика готовности
 
 - [x] Все тесты модуля `object_request` зелёные (`docker exec odoo19-local odoo --test-enable --test-tags /object_request -u object_request -d odoo19_local --stop-after-init --http-port=8071`).
-- [ ] flake8 чистый (`docker exec odoo19-local python -m flake8 /mnt/extra-addons/object_request`).
+- [x] flake8 чистый (`docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request`).
+  - [x] `E501` в миграции: `migrations/19.0.1.1.0/post-migrate.py`.
+  - [x] `E501` в моделях: `object_request.py`, `object_request_line.py`, `object_request_line_stock.py`, `object_request_project.py`, `stock_picking_inherit.py`.
+  - [x] `E501` в wizard: `assign_lines_wizard.py`, `issue_preview_wizard.py`, `purchase_wizard.py`, `stock_check_wizard.py`.
+  - [x] `E501` в тестах: `test_obr004_models.py`, `test_obr006_wizard.py`, `test_obr008_matching_ui.py`, `test_obr009_mass_actions.py`, `test_obr010_qty_management.py`, `test_obr012_confirm_issue.py`, `test_obr014_report.py`, `test_obr015_state_machine.py`, `test_obr017_security.py`, `test_obr018_pilot_scenarios.py`, `test_obr021_purchase.py`, `test_obr024_warehouse.py`, `test_obr025_multiwarehouse_check.py`, `test_obr026_project_warehouse.py`.
+  - [x] `F401`: удалить неиспользуемые импорты в `test_obr018_pilot_scenarios.py` и `import_excel_wizard.py`.
+  - [x] `E741`: переименовать неоднозначные переменные `l` в `test_obr018_pilot_scenarios.py`.
 - [ ] Smoke-сценарий вручную:
   1. Создать объект «Тест» — склад «Тест склад» создан автоматически.
   2. Прораб создаёт требование (поля «Склад» нет).

@@ -2,7 +2,7 @@ from odoo.tests.common import TransactionCase
 from odoo.tests import tagged
 
 
-@tagged('post_install', '-at_install')
+@tagged("post_install", "-at_install")
 class TestOBR020Reservation(TransactionCase):
     """OBR-020: Резервирование товаров под требование."""
 
@@ -11,57 +11,74 @@ class TestOBR020Reservation(TransactionCase):
         super().setUpClass()
         cls.env = cls.env(context=dict(cls.env.context, tracking_disable=True))
 
-        cls.project = cls.env['object.request.project'].create({
-            'name': 'Тест резервирования',
-        })
-        cls.user = cls.env.ref('base.user_admin')
+        cls.project = cls.env["object.request.project"].create(
+            {
+                "name": "Тест резервирования",
+            }
+        )
+        cls.user = cls.env.ref("base.user_admin")
 
         # Продукт и склад
-        cls.product = cls.env['product.product'].create({
-            'name': 'Тестовый товар резерв',
-            'type': 'consu',
-            'is_storable': True,
-        })
-        cls.warehouse = cls.env['stock.warehouse'].search(
-            [('company_id', '=', cls.env.company.id)], limit=1,
+        cls.product = cls.env["product.product"].create(
+            {
+                "name": "Тестовый товар резерв",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        cls.warehouse = cls.env["stock.warehouse"].search(
+            [("company_id", "=", cls.env.company.id)],
+            limit=1,
         )
         cls.location = cls.warehouse.lot_stock_id
 
         # Добавим остаток на склад
-        cls.env['stock.quant'].with_context(inventory_mode=True).create({
-            'product_id': cls.product.id,
-            'location_id': cls.location.id,
-            'quantity': 50.0,
-        })
+        cls.env["stock.quant"].with_context(inventory_mode=True).create(
+            {
+                "product_id": cls.product.id,
+                "location_id": cls.location.id,
+                "quantity": 50.0,
+            }
+        )
 
     def _create_request_with_line(self, qty_to_issue=10.0):
-        request = self.env['object.request'].create({
-            'project_id': self.project.id,
-            'foreman_user_id': self.user.id,
-            'need_date': '2026-04-01',
-        })
-        line = self.env['object.request.line'].create({
-            'request_id': request.id,
-            'name_raw': 'Тестовая позиция',
-            'product_id': self.product.id,
-            'uom_id': self.product.uom_id.id,
-            'qty_requested': qty_to_issue,
-        })
-        self.env['object.request.line.stock'].with_context(
+        request = self.env["object.request"].create(
+            {
+                "project_id": self.project.id,
+                "foreman_user_id": self.user.id,
+                "need_date": "2026-04-01",
+            }
+        )
+        line = self.env["object.request.line"].create(
+            {
+                "request_id": request.id,
+                "name_raw": "Тестовая позиция",
+                "product_id": self.product.id,
+                "uom_id": self.product.uom_id.id,
+                "qty_requested": qty_to_issue,
+            }
+        )
+        self.env["object.request.line.stock"].with_context(
             auto_stock_distribution=True,
-        ).create({
-            'line_id': line.id,
-            'warehouse_id': self.warehouse.id,
-            'qty_on_hand': qty_to_issue,
-            'qty_to_issue': qty_to_issue,
-        })
-        request.write({'state': 'in_progress'})
+        ).create(
+            {
+                "line_id": line.id,
+                "warehouse_id": self.warehouse.id,
+                "qty_on_hand": qty_to_issue,
+                "qty_to_issue": qty_to_issue,
+            }
+        )
+        request.write({"state": "in_progress"})
         return request, line
 
     def _create_issue(self, request):
-        wizard = self.env['object.request.issue.preview.wizard'].with_context(
-            default_request_id=request.id,
-        ).create({})
+        wizard = (
+            self.env["object.request.issue.preview.wizard"]
+            .with_context(
+                default_request_id=request.id,
+            )
+            .create({})
+        )
         return wizard.action_create_issues()
 
     def test_reservation_created_on_picking(self):
@@ -94,33 +111,35 @@ class TestOBR020Reservation(TransactionCase):
         self.assertEqual(line.qty_reserved, 0.0)
         self.assertFalse(line.issue_reserved)
         # Picking должен быть unreserved (не assigned)
-        self.assertNotEqual(picking.state, 'assigned')
+        self.assertNotEqual(picking.state, "assigned")
 
     def test_qty_total_reserved_computed(self):
         """qty_total_reserved на документе пересчитывается по строкам."""
         request, line = self._create_request_with_line(qty_to_issue=7.0)
 
         # Вручную устанавливаем qty_reserved
-        line.write({'qty_reserved': 7.0})
+        line.write({"qty_reserved": 7.0})
         request.invalidate_recordset()
 
         self.assertEqual(request.qty_total_reserved, 7.0)
 
         # Добавим вторую строку с резервом
-        line2 = self.env['object.request.line'].create({
-            'request_id': request.id,
-            'name_raw': 'Вторая позиция',
-            'product_id': self.product.id,
-            'uom_id': self.product.uom_id.id,
-            'qty_requested': 3.0,
-            'qty_to_issue': 3.0,
-            'qty_reserved': 3.0,
-        })
+        line2 = self.env["object.request.line"].create(
+            {
+                "request_id": request.id,
+                "name_raw": "Вторая позиция",
+                "product_id": self.product.id,
+                "uom_id": self.product.uom_id.id,
+                "qty_requested": 3.0,
+                "qty_to_issue": 3.0,
+                "qty_reserved": 3.0,
+            }
+        )
         request.invalidate_recordset()
         self.assertEqual(request.qty_total_reserved, 10.0)
 
         # Убираем резерв со второй строки
-        line2.write({'qty_reserved': 0.0})
+        line2.write({"qty_reserved": 0.0})
         request.invalidate_recordset()
         self.assertEqual(request.qty_total_reserved, 7.0)
 
@@ -129,37 +148,45 @@ class TestOBR020Reservation(TransactionCase):
         request, _line = self._create_request_with_line(qty_to_issue=5.0)
         # Отменяем без создания picking
         request.action_cancel()
-        self.assertEqual(request.state, 'cancelled')
+        self.assertEqual(request.state, "cancelled")
 
     def test_issue_reserved_false_when_no_stock(self):
         """Если стока нет — issue_reserved=False, qty_reserved=0."""
         # Продукт без остатка
-        product_no_stock = self.env['product.product'].create({
-            'name': 'Товар без остатка',
-            'type': 'consu',
-            'is_storable': True,
-        })
-        request = self.env['object.request'].create({
-            'project_id': self.project.id,
-            'foreman_user_id': self.user.id,
-            'need_date': '2026-04-01',
-        })
-        line = self.env['object.request.line'].create({
-            'request_id': request.id,
-            'name_raw': 'Позиция без стока',
-            'product_id': product_no_stock.id,
-            'uom_id': product_no_stock.uom_id.id,
-            'qty_requested': 5.0,
-        })
-        self.env['object.request.line.stock'].with_context(
+        product_no_stock = self.env["product.product"].create(
+            {
+                "name": "Товар без остатка",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        request = self.env["object.request"].create(
+            {
+                "project_id": self.project.id,
+                "foreman_user_id": self.user.id,
+                "need_date": "2026-04-01",
+            }
+        )
+        line = self.env["object.request.line"].create(
+            {
+                "request_id": request.id,
+                "name_raw": "Позиция без стока",
+                "product_id": product_no_stock.id,
+                "uom_id": product_no_stock.uom_id.id,
+                "qty_requested": 5.0,
+            }
+        )
+        self.env["object.request.line.stock"].with_context(
             auto_stock_distribution=True,
-        ).create({
-            'line_id': line.id,
-            'warehouse_id': self.warehouse.id,
-            'qty_on_hand': 0.0,
-            'qty_to_issue': 5.0,
-        })
-        request.write({'state': 'in_progress'})
+        ).create(
+            {
+                "line_id": line.id,
+                "warehouse_id": self.warehouse.id,
+                "qty_on_hand": 0.0,
+                "qty_to_issue": 5.0,
+            }
+        )
+        request.write({"state": "in_progress"})
 
         self._create_issue(request)
         line.invalidate_recordset()

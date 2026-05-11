@@ -28,20 +28,29 @@ def _table_exists(cr, table):
 
 def migrate(cr, version):
     env = api.Environment(cr, SUPERUSER_ID, {})
-    projects = env['object.request.project'].with_context(active_test=False).search([
-        ('warehouse_id', '=', False),
-    ])
-    sequence = env['ir.sequence'].sudo()
+    projects = (
+        env["object.request.project"]
+        .with_context(active_test=False)
+        .search(
+            [
+                ("warehouse_id", "=", False),
+            ]
+        )
+    )
+    sequence = env["ir.sequence"].sudo()
     for project in projects:
         if not project.code:
-            project.write({
-                'code': sequence.next_by_code('object.request.project.code'),
-            })
+            project.write(
+                {
+                    "code": sequence.next_by_code(
+                        "object.request.project.code"
+                    ),
+                }
+            )
         project._ensure_project_warehouse()
 
-    if (
-        _column_exists(cr, 'object_request', 'warehouse_id')
-        and _column_exists(cr, 'object_request_line', 'stock_qty_on_hand')
+    if _column_exists(cr, "object_request", "warehouse_id") and _column_exists(
+        cr, "object_request_line", "stock_qty_on_hand"
     ):
         cr.execute(
             """
@@ -84,9 +93,11 @@ def migrate(cr, version):
             """
         )
 
-    if _column_exists(cr, 'object_request', 'warehouse_id'):
-        cr.execute('ALTER TABLE object_request DROP COLUMN warehouse_id')
-    if _column_exists(cr, 'object_request', 'stock_check_confirmed'):
-        cr.execute('ALTER TABLE object_request DROP COLUMN stock_check_confirmed')
-    if _table_exists(cr, 'object_request_check_warehouse_rel'):
-        cr.execute('DROP TABLE object_request_check_warehouse_rel')
+    if _column_exists(cr, "object_request", "warehouse_id"):
+        cr.execute("ALTER TABLE object_request DROP COLUMN warehouse_id")
+    if _column_exists(cr, "object_request", "stock_check_confirmed"):
+        cr.execute(
+            "ALTER TABLE object_request DROP COLUMN stock_check_confirmed"
+        )
+    if _table_exists(cr, "object_request_check_warehouse_rel"):
+        cr.execute("DROP TABLE object_request_check_warehouse_rel")
