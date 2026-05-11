@@ -14,7 +14,6 @@ class TestOBR022Approval(TransactionCase):
 
         cls.project = cls.env['object.request.project'].create({
             'name': 'Тест согласования',
-            'code': 'APPR-001',
         })
         cls.user = cls.env.ref('base.user_admin')
 

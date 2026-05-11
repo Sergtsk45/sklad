@@ -14,7 +14,6 @@ class TestObr009MassActions(TransactionCase):
         super().setUp()
         self.project = self.env['object.request.project'].create({
             'name': 'Тестовый объект OBR-009',
-            'code': 'TST-009',
         })
         self.foreman = self.env['res.users'].create({
             'name': 'Прораб Тест OBR009',

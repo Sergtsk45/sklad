@@ -58,13 +58,21 @@ class StockPickingInherit(models.Model):
     def _sync_qty_issued_to_request_lines(self):
         """Обновить qty_issued в строках объектного требования на основе done-количества."""
         for picking in self:
-            request_lines = self.env['object.request.line'].search([
+            stock_lines = self.env['object.request.line.stock'].search([
+                ('picking_id', '=', picking.id),
+            ])
+            request_lines = stock_lines.mapped('line_id') or self.env[
+                'object.request.line'
+            ].search([
                 ('issue_picking_id', '=', picking.id),
             ])
             for line in request_lines:
-                if not line.issue_move_id:
+                issue_moves = line.stock_ids.mapped('move_id').filtered(
+                    lambda move: move.exists()
+                ) or line.issue_move_id
+                if not issue_moves:
                     continue
-                qty_done = line.issue_move_id.quantity
+                qty_done = sum(issue_moves.mapped('quantity'))
                 line.write({'qty_issued': qty_done})
             for request in picking.object_request_ids:
                 request._notify_if_all_lines_supplied()

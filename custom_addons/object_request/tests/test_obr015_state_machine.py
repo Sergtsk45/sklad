@@ -10,7 +10,6 @@ class TestStateMachine(TransactionCase):
         super().setUp()
         self.project = self.env['object.request.project'].create({
             'name': 'Тест OBR-015',
-            'code': 'OBR015',
         })
         self.user = self.env.user
         self.product = self.env['product.product'].create({

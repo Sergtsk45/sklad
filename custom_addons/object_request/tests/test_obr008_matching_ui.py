@@ -12,7 +12,6 @@ class TestObr008MatchingUI(TransactionCase):
         super().setUp()
         self.project = self.env['object.request.project'].create({
             'name': 'Тестовый объект',
-            'code': 'TST-001',
         })
         self.foreman = self.env['res.users'].create({
             'name': 'Прораб Тест',

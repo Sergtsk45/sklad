@@ -89,7 +89,6 @@ class TestImportWizardOBR007(TransactionCase):
         super().setUp()
         self.project = self.env['object.request.project'].create({
             'name': 'Тестовый объект OBR-007',
-            'code': 'OBR007-TEST',
         })
         self.wizard_model = self.env['object.request.import.wizard']
 

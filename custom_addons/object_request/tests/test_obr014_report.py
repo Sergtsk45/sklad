@@ -13,7 +13,6 @@ class TestObjectRequestIssuePickingReport(TransactionCase):
         super().setUp()
         self.project = self.env['object.request.project'].create({
             'name': 'Тестовый объект OBR014',
-            'code': 'TEST-OBR014',
         })
         self.product = self.env['product.product'].create({
             'name': 'Кирпич рядовой OBR014',
@@ -31,7 +30,6 @@ class TestObjectRequestIssuePickingReport(TransactionCase):
             'request_id': self.request.id,
             'name_raw': 'Кирпич рядовой',
             'qty_requested': 500.0,
-            'qty_to_issue': 300.0,
             'product_id': self.product.id,
             'uom_id': self.uom.id,
             'zone': 'Б',
@@ -39,19 +37,20 @@ class TestObjectRequestIssuePickingReport(TransactionCase):
             'section': 'С2',
             'comment': 'Первая партия',
         })
-        self.request.action_in_progress()
-        customer_loc = self.env.ref('stock.stock_location_customers')
-        wizard = self.env['object.request.issue.wizard'].create({
-            'request_id': self.request.id,
-            'line_ids': [(6, 0, [self.line.id])],
+        self.env['object.request.line.stock'].with_context(
+            auto_stock_distribution=True,
+        ).create({
+            'line_id': self.line.id,
             'warehouse_id': self.warehouse.id,
-            'picking_type_id': self.warehouse.int_type_id.id,
-            'source_location_id': self.warehouse.lot_stock_id.id,
-            'destination_location_id': customer_loc.id,
-            'scheduled_date': datetime.datetime.now(),
+            'qty_on_hand': 300.0,
+            'qty_to_issue': 300.0,
         })
-        result = wizard.action_create_issue()
-        self.picking = self.env['stock.picking'].browse(result['res_id'])
+        self.request.action_in_progress()
+        wizard = self.env['object.request.issue.preview.wizard'].with_context(
+            default_request_id=self.request.id,
+        ).create({})
+        result = wizard.action_create_issues()
+        self.picking = self.env['stock.picking'].search(result['domain'], limit=1)
 
     def _render_html(self):
         report_name = 'object_request.report_issue_picking'

@@ -14,7 +14,6 @@ class TestObr010QtyManagement(TransactionCase):
         super().setUp()
         self.project = self.env['object.request.project'].create({
             'name': 'Тестовый объект OBR-010',
-            'code': 'TST-010',
         })
         self.foreman = self.env['res.users'].create({
             'name': 'Прораб Тест OBR010',

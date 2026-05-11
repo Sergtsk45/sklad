@@ -1,3 +1,11 @@
+## [2026-05-11] — OBR: чистка тестов multi-warehouse
+### Добавлено
+- Multi-warehouse сценарии в `test_obr011_issue_picking.py` и `test_obr012_confirm_issue.py`: одна строка требования может создавать выдачи по нескольким складам, а синхронизация `qty_issued` суммирует движения по всем выдачам строки.
+### Изменено
+- Тестовые фабрики `object_request` очищены от старого шапочного `warehouse_id` в `object.request.create()`.
+- `test_obr024_warehouse.py` и `test_obr025_multiwarehouse_check.py` переписаны под новую схему `object.request.line.stock` и расчёт по всем активным складам.
+- `object.request.line.stock` хранит ссылку на `stock.move`, чтобы multi-picking выдача корректно синхронизировала фактически выданное количество.
+
 ## [2026-05-11] — OBR: закупка, UX распределения и миграция складов
 ### Добавлено
 - `purchase_wizard`: явный `picking_type_id` для склада приёмки; по умолчанию берётся `request.project_id.warehouse_id.in_type_id`, при отсутствии склада объекта используется fallback на входящий тип операции компании.

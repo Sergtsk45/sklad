@@ -164,10 +164,10 @@
 - [x] Smoke-тест миграции на копии текущей dev-БД `odoo19_local`.
 
 ### Этап 11. Чистка тестов и фабрик
-- [ ] Все тесты, использующие `'warehouse_id': self.warehouse.id` в `object.request.create()`, переписать.
-- [ ] Удалить `test_obr024_warehouse.py` (или заменить на `test_obr024_project_warehouse.py`).
-- [ ] Удалить `test_obr025_multiwarehouse_check.py` или переписать под новую модель `line.stock`.
-- [ ] Дополнить `test_obr011_issue_picking.py`, `test_obr012_confirm_issue.py` сценариями multi-warehouse.
+- [x] Все тесты, использующие `'warehouse_id': self.warehouse.id` в `object.request.create()`, переписаны.
+- [x] `test_obr024_warehouse.py` заменён тестами новой схемы: склад на объекте + `object.request.line.stock`.
+- [x] `test_obr025_multiwarehouse_check.py` переписан под расчёт по всем активным складам и новую модель `line.stock`.
+- [x] `test_obr011_issue_picking.py`, `test_obr012_confirm_issue.py` дополнены сценариями multi-warehouse.
 
 ### Этап 12. Документация
 - [ ] Обновить `docs/datamodelspecobjectrequest.md`: новая модель `object.request.line.stock`, склад на объекте.
@@ -186,7 +186,7 @@
 | Существующие объекты без склада | Миграцией создаём склад; `code` догенерируем через тот же sequence |
 | Видимость распределения для прораба | Только **итог** (`qty_requested`, `qty_to_issue`, `qty_to_buy`, `qty_issued`); `stock_ids` скрыт ACL |
 | Резервы (`qty_reserved`) | Использовать `free_qty` (`qty_available - reserved_quantity`) из `stock.quant` как «доступно к выдаче» |
-| Wizard `stock_check_wizard` | **Остаётся** как предупреждение; после кнопки «ОК, ознакомлен» ставится `stock_check_confirmed=True` |
+| Wizard `stock_check_wizard` | **Остаётся** как предупреждение; после кнопки «ОК, ознакомлен» закрывается без сохранения `stock_check_confirmed` (поле удалено) |
 | Перерасчёт авто-разбивки | Если есть `manual_plan_override` — открывается **подтверждающий wizard** перед перезаписью |
 | AI knowledge pack | **Отдельная задача** после завершения этой; в её рамках регенерация не делается |
 
@@ -213,7 +213,7 @@
 
 ## Метрика готовности
 
-- [ ] Все тесты модуля `object_request` зелёные (`docker exec odoo19-local odoo --test-enable -u object_request -d odoo19_local --stop-after-init`).
+- [x] Все тесты модуля `object_request` зелёные (`docker exec odoo19-local odoo --test-enable --test-tags /object_request -u object_request -d odoo19_local --stop-after-init --http-port=8071`).
 - [ ] flake8 чистый (`docker exec odoo19-local python -m flake8 /mnt/extra-addons/object_request`).
 - [ ] Smoke-сценарий вручную:
   1. Создать объект «Тест» — склад «Тест склад» создан автоматически.

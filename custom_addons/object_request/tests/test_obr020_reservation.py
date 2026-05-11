@@ -13,7 +13,6 @@ class TestOBR020Reservation(TransactionCase):
 
         cls.project = cls.env['object.request.project'].create({
             'name': 'Тест резервирования',
-            'code': 'RES-001',
         })
         cls.user = cls.env.ref('base.user_admin')
 
@@ -47,26 +46,29 @@ class TestOBR020Reservation(TransactionCase):
             'product_id': self.product.id,
             'uom_id': self.product.uom_id.id,
             'qty_requested': qty_to_issue,
+        })
+        self.env['object.request.line.stock'].with_context(
+            auto_stock_distribution=True,
+        ).create({
+            'line_id': line.id,
+            'warehouse_id': self.warehouse.id,
+            'qty_on_hand': qty_to_issue,
             'qty_to_issue': qty_to_issue,
         })
         request.write({'state': 'in_progress'})
         return request, line
 
+    def _create_issue(self, request):
+        wizard = self.env['object.request.issue.preview.wizard'].with_context(
+            default_request_id=request.id,
+        ).create({})
+        return wizard.action_create_issues()
+
     def test_reservation_created_on_picking(self):
         """При создании picking резервирование выполняется автоматически."""
         request, line = self._create_request_with_line(qty_to_issue=10.0)
 
-        wizard = self.env['object.request.issue.wizard'].with_context(
-            default_request_id=request.id,
-        ).create({
-            'request_id': request.id,
-            'line_ids': [(6, 0, [line.id])],
-            'warehouse_id': self.warehouse.id,
-            'picking_type_id': self.warehouse.int_type_id.id,
-            'source_location_id': self.location.id,
-            'destination_location_id': self.warehouse.lot_stock_id.id,
-        })
-        wizard.action_create_issue()
+        self._create_issue(request)
 
         line.invalidate_recordset()
         # При наличии стока (50 ед) должно зарезервироваться 10
@@ -77,17 +79,7 @@ class TestOBR020Reservation(TransactionCase):
         """При отмене документа резерв снимается: qty_reserved=0."""
         request, line = self._create_request_with_line(qty_to_issue=5.0)
 
-        wizard = self.env['object.request.issue.wizard'].with_context(
-            default_request_id=request.id,
-        ).create({
-            'request_id': request.id,
-            'line_ids': [(6, 0, [line.id])],
-            'warehouse_id': self.warehouse.id,
-            'picking_type_id': self.warehouse.int_type_id.id,
-            'source_location_id': self.location.id,
-            'destination_location_id': self.warehouse.lot_stock_id.id,
-        })
-        wizard.action_create_issue()
+        self._create_issue(request)
         line.invalidate_recordset()
 
         # Убеждаемся что зарезервировано
@@ -158,21 +150,18 @@ class TestOBR020Reservation(TransactionCase):
             'product_id': product_no_stock.id,
             'uom_id': product_no_stock.uom_id.id,
             'qty_requested': 5.0,
+        })
+        self.env['object.request.line.stock'].with_context(
+            auto_stock_distribution=True,
+        ).create({
+            'line_id': line.id,
+            'warehouse_id': self.warehouse.id,
+            'qty_on_hand': 0.0,
             'qty_to_issue': 5.0,
         })
         request.write({'state': 'in_progress'})
 
-        wizard = self.env['object.request.issue.wizard'].with_context(
-            default_request_id=request.id,
-        ).create({
-            'request_id': request.id,
-            'line_ids': [(6, 0, [line.id])],
-            'warehouse_id': self.warehouse.id,
-            'picking_type_id': self.warehouse.int_type_id.id,
-            'source_location_id': self.location.id,
-            'destination_location_id': self.warehouse.lot_stock_id.id,
-        })
-        wizard.action_create_issue()
+        self._create_issue(request)
         line.invalidate_recordset()
 
         self.assertEqual(line.qty_reserved, 0.0)

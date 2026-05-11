@@ -9,7 +9,6 @@ class TestObjectRequestReport(TransactionCase):
         super().setUp()
         self.project = self.env['object.request.project'].create({
             'name': 'Тестовый объект OBR013',
-            'code': 'TEST-OBR013',
         })
         self.request = self.env['object.request'].create({
             'project_id': self.project.id,

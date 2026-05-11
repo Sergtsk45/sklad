@@ -13,7 +13,6 @@ class TestObr012ConfirmIssue(TransactionCase):
         super().setUp()
         self.project = self.env['object.request.project'].create({
             'name': 'Тестовый объект OBR-012',
-            'code': 'TST-012',
         })
         self.foreman = self.env['res.users'].create({
             'name': 'Прораб OBR012',
@@ -44,21 +43,29 @@ class TestObr012ConfirmIssue(TransactionCase):
         })
         self.request.write({'state': 'in_progress'})
         self.line = self.request.line_ids[0]
-        self.line.write({'qty_to_issue': 6.0})
+        self.env['object.request.line.stock'].with_context(
+            auto_stock_distribution=True,
+        ).create({
+            'line_id': self.line.id,
+            'warehouse_id': self.warehouse.id,
+            'qty_on_hand': 6.0,
+            'qty_to_issue': 6.0,
+        })
+
+    def _create_warehouse(self, suffix):
+        return self.env['stock.warehouse'].sudo().create({
+            'name': f'Склад OBR012-{suffix}',
+            'code': f'12{suffix}',
+            'company_id': self.env.company.id,
+        })
 
     def _create_picking(self):
-        """Создать picking через wizard."""
-        wiz = self.env['object.request.issue.wizard'].create({
-            'request_id': self.request.id,
-            'line_ids': [(6, 0, [self.line.id])],
-            'warehouse_id': self.warehouse.id,
-            'picking_type_id': self.warehouse.int_type_id.id,
-            'source_location_id': self.warehouse.lot_stock_id.id,
-            'destination_location_id': self.customer_loc.id,
-            'scheduled_date': datetime.datetime.now(),
-        })
-        result = wiz.action_create_issue()
-        return self.env['stock.picking'].browse(result['res_id'])
+        """Создать picking через wizard предпросмотра."""
+        wiz = self.env['object.request.issue.preview.wizard'].with_context(
+            default_request_id=self.request.id,
+        ).create({})
+        result = wiz.action_create_issues()
+        return self.env['stock.picking'].search(result['domain'], limit=1)
 
     def _add_stock(self, qty=100.0):
         """Добавить товар на склад."""
@@ -66,6 +73,16 @@ class TestObr012ConfirmIssue(TransactionCase):
             'product_id': self.product.id,
             'location_id': self.warehouse.lot_stock_id.id,
             'quantity': qty,
+        })
+
+    def _add_stock_distribution(self, warehouse, qty):
+        return self.env['object.request.line.stock'].with_context(
+            auto_stock_distribution=True,
+        ).create({
+            'line_id': self.line.id,
+            'warehouse_id': warehouse.id,
+            'qty_on_hand': qty,
+            'qty_to_issue': qty,
         })
 
     # --- Unit tests: _sync_qty_issued_to_request_lines ---
@@ -78,6 +95,24 @@ class TestObr012ConfirmIssue(TransactionCase):
         picking._sync_qty_issued_to_request_lines()
         self.line.invalidate_recordset()
         self.assertEqual(self.line.qty_issued, 6.0)
+
+    def test_sync_sums_done_quantities_from_multiwarehouse_moves(self):
+        """Синхронизация суммирует выдачу одной строки из нескольких складов."""
+        warehouse2 = self._create_warehouse('B')
+        self._add_stock_distribution(warehouse2, 4.0)
+
+        wizard = self.env['object.request.issue.preview.wizard'].with_context(
+            default_request_id=self.request.id,
+        ).create({})
+        result = wizard.action_create_issues()
+        pickings = self.env['stock.picking'].search(result['domain'])
+        for stock in self.line.stock_ids:
+            stock.move_id.write({'quantity': stock.qty_to_issue})
+
+        pickings._sync_qty_issued_to_request_lines()
+
+        self.line.invalidate_recordset()
+        self.assertEqual(self.line.qty_issued, 10.0)
 
     def test_sync_partial_quantity(self):
         """Частичная синхронизация: qty_issued < qty_to_issue."""

@@ -65,7 +65,6 @@ class TestPilotScenarios(TransactionCase):
         # Объект
         self.project = self.env['object.request.project'].create({
             'name': 'Жилой комплекс OBR-018',
-            'code': 'JK-018',
         })
 
         # Товары
@@ -91,6 +90,24 @@ class TestPilotScenarios(TransactionCase):
         self.warehouse = self.env['stock.warehouse'].search([], limit=1)
         self.customer_loc = self.env.ref('stock.stock_location_customers')
 
+    def _add_stock_distribution(self, line, qty, warehouse=None):
+        warehouse = warehouse or self.warehouse
+        return self.env['object.request.line.stock'].with_context(
+            auto_stock_distribution=True,
+        ).create({
+            'line_id': line.id,
+            'warehouse_id': warehouse.id,
+            'qty_on_hand': qty,
+            'qty_to_issue': qty,
+        })
+
+    def _create_issue_from_distribution(self, request):
+        wizard = self.env['object.request.issue.preview.wizard'].with_context(
+            default_request_id=request.id,
+        ).create({})
+        result = wizard.action_create_issues()
+        return self.env['stock.picking'].search(result['domain'], limit=1)
+
     # ─────────────────────────────────────────────────────────────────────────
     # Сценарий 1: Прораб создаёт документ вручную
     # ─────────────────────────────────────────────────────────────────────────
@@ -104,7 +121,6 @@ class TestPilotScenarios(TransactionCase):
             'need_date': '2026-04-15',
             'priority': '2',
             'comment': 'Нужно срочно',
-            'warehouse_id': self.warehouse.id,
         })
         env['object.request.line'].create({
             'request_id': request.id,
@@ -218,31 +234,19 @@ class TestPilotScenarios(TransactionCase):
             'request_id': request.id,
             'name_raw': 'Цемент',
             'qty_requested': 20.0,
-            'qty_to_issue': 10.0,
             'product_id': self.cement.id,
             'uom_id': self.cement.uom_id.id,
         })
+        self._add_stock_distribution(line, 10.0)
         request.write({'state': 'in_progress'})
 
         # Добавить товар на склад
-        self.env['stock.quant'].create({
-            'product_id': self.cement.id,
-            'location_id': self.warehouse.lot_stock_id.id,
-            'quantity': 100.0,
-        })
+        self.env['stock.quant']._update_available_quantity(
+            self.cement, self.warehouse.lot_stock_id, 100.0,
+        )
 
         # Снабженец создаёт выдачу
-        wiz = self.env['object.request.issue.wizard'].create({
-            'request_id': request.id,
-            'line_ids': [(6, 0, [line.id])],
-            'warehouse_id': self.warehouse.id,
-            'picking_type_id': self.warehouse.int_type_id.id,
-            'source_location_id': self.warehouse.lot_stock_id.id,
-            'destination_location_id': self.customer_loc.id,
-            'scheduled_date': datetime.datetime.now(),
-        })
-        result = wiz.action_create_issue()
-        picking = self.env['stock.picking'].browse(result['res_id'])
+        picking = self._create_issue_from_distribution(request)
         self.assertTrue(picking.exists())
         self.assertIn(picking, request.issue_picking_ids)
 
@@ -291,22 +295,12 @@ class TestPilotScenarios(TransactionCase):
             'request_id': request.id,
             'name_raw': 'Цемент',
             'qty_requested': 5.0,
-            'qty_to_issue': 5.0,
             'product_id': self.cement.id,
             'uom_id': self.cement.uom_id.id,
         })
+        self._add_stock_distribution(line, 5.0)
         request.write({'state': 'in_progress'})
-        wiz = self.env['object.request.issue.wizard'].create({
-            'request_id': request.id,
-            'line_ids': [(6, 0, [line.id])],
-            'warehouse_id': self.warehouse.id,
-            'picking_type_id': self.warehouse.int_type_id.id,
-            'source_location_id': self.warehouse.lot_stock_id.id,
-            'destination_location_id': self.customer_loc.id,
-            'scheduled_date': datetime.datetime.now(),
-        })
-        result = wiz.action_create_issue()
-        picking = self.env['stock.picking'].browse(result['res_id'])
+        picking = self._create_issue_from_distribution(request)
 
         report = self.env.ref('object_request.action_report_issue_picking')
         html, _ = self.env['ir.actions.report']._render_qweb_html(
@@ -396,31 +390,19 @@ class TestPilotScenarios(TransactionCase):
             'request_id': request.id,
             'name_raw': 'Арматура',
             'qty_requested': 20.0,
-            'qty_to_issue': 20.0,
             'product_id': self.rebar.id,
             'uom_id': self.rebar.uom_id.id,
         })
+        self._add_stock_distribution(line, 20.0)
         request.write({'state': 'in_progress'})
 
         # Добавить остаток на склад
-        self.env['stock.quant'].create({
-            'product_id': self.rebar.id,
-            'location_id': self.warehouse.lot_stock_id.id,
-            'quantity': 200.0,
-        })
+        self.env['stock.quant']._update_available_quantity(
+            self.rebar, self.warehouse.lot_stock_id, 200.0,
+        )
 
         # Создать picking для 20 единиц
-        wiz = self.env['object.request.issue.wizard'].create({
-            'request_id': request.id,
-            'line_ids': [(6, 0, [line.id])],
-            'warehouse_id': self.warehouse.id,
-            'picking_type_id': self.warehouse.int_type_id.id,
-            'source_location_id': self.warehouse.lot_stock_id.id,
-            'destination_location_id': self.customer_loc.id,
-            'scheduled_date': datetime.datetime.now(),
-        })
-        result = wiz.action_create_issue()
-        picking1 = self.env['stock.picking'].browse(result['res_id'])
+        picking1 = self._create_issue_from_distribution(request)
         picking1.action_confirm()
         picking1.action_assign()
 
@@ -454,23 +436,17 @@ class TestPilotScenarios(TransactionCase):
             'request_id': request.id,
             'name_raw': 'Цемент',
             'qty_requested': 5.0,
-            'qty_to_issue': 5.0,
             'product_id': self.cement.id,
             'uom_id': self.cement.uom_id.id,
         })
+        self._add_stock_distribution(line, 5.0)
         request.write({'state': 'in_progress'})
 
         env_foreman = self.env(user=self.foreman)
         with self.assertRaises(AccessError):
-            env_foreman['object.request.issue.wizard'].create({
-                'request_id': request.id,
-                'line_ids': [(6, 0, [line.id])],
-                'warehouse_id': self.warehouse.id,
-                'picking_type_id': self.warehouse.int_type_id.id,
-                'source_location_id': self.warehouse.lot_stock_id.id,
-                'destination_location_id': self.customer_loc.id,
-                'scheduled_date': datetime.datetime.now(),
-            })
+            env_foreman['object.request.issue.preview.wizard'].with_context(
+                default_request_id=request.id,
+            ).create({})
 
     def test_scenario_9_storekeeper_cannot_create_request(self):
         """Кладовщик не может создавать документы требований."""

@@ -160,14 +160,23 @@ class ObjectRequestIssuePreviewGroup(models.TransientModel):
                 'product_uom': uom.id,
                 'location_id': self.source_location_id.id,
                 'location_dest_id': self.destination_location_id.id,
-                'name': line.name_raw or line.product_id.display_name,
             })
         moves = self.env['stock.move'].create(move_vals)
         for stock_line, move in zip(stock_lines, moves):
-            stock_line.write({'picking_id': picking.id})
+            stock_line.write({
+                'picking_id': picking.id,
+                'move_id': move.id,
+            })
             stock_line.line_id.write({
                 'issue_picking_id': picking.id,
                 'issue_move_id': move.id,
             })
         picking.action_assign()
+        for stock_line, move in zip(stock_lines, moves):
+            qty_reserved = sum(ml.quantity for ml in move.move_line_ids)
+            stock_line.write({'qty_reserved': qty_reserved})
+            stock_line.line_id.write({
+                'qty_reserved': qty_reserved,
+                'issue_reserved': qty_reserved > 0,
+            })
         return picking

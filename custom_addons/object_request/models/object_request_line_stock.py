@@ -30,6 +30,7 @@ class ObjectRequestLineStock(models.Model):
     )
     last_check_date = fields.Datetime(string='Дата проверки')
     picking_id = fields.Many2one('stock.picking', string='Выдача', index=True)
+    move_id = fields.Many2one('stock.move', string='Движение выдачи', index=True)
 
     _object_request_line_stock_unique = models.Constraint(
         'UNIQUE(line_id, warehouse_id)',

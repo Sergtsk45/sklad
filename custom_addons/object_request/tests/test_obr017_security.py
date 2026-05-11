@@ -36,9 +36,6 @@ class TestACLForeman(TransactionCase):
         self.product = self.env['product.product'].create({
             'name': 'Товар ACL', 'type': 'consu',
         })
-        self.warehouse = self.env['stock.warehouse'].search(
-            [('company_id', '=', self.env.company.id)], limit=1,
-        )
 
     # --- Создание ---
 
@@ -49,7 +46,6 @@ class TestACLForeman(TransactionCase):
             'project_id': self.project.id,
             'foreman_user_id': self.foreman.id,
             'need_date': '2026-04-01',
-            'warehouse_id': self.warehouse.id,
         })
         self.assertTrue(request.id)
         self.assertEqual(request.state, 'draft')
@@ -132,7 +128,6 @@ class TestACLForeman(TransactionCase):
             'foreman_user_id': self.foreman.id,
             'need_date': '2026-04-01',
             'priority': '1',
-            'warehouse_id': self.warehouse.id,
         })
         self.assertTrue(wizard.id)
 
@@ -160,9 +155,6 @@ class TestACLSupplyManager(TransactionCase):
         self.product = self.env['product.product'].create({
             'name': 'Товар снабженца', 'type': 'consu',
         })
-        self.warehouse = self.env['stock.warehouse'].search(
-            [('company_id', '=', self.env.company.id)], limit=1,
-        )
 
     def _make_request(self, foreman_id=None):
         return self.env['object.request'].create({
@@ -193,7 +185,6 @@ class TestACLSupplyManager(TransactionCase):
             'project_id': self.project.id,
             'foreman_user_id': self.supply.id,
             'need_date': '2026-04-01',
-            'warehouse_id': self.warehouse.id,
         })
         self.assertTrue(request.id)
 
@@ -260,7 +251,6 @@ class TestACLSupplyManager(TransactionCase):
             'foreman_user_id': self.supply.id,
             'need_date': '2026-04-01',
             'priority': '1',
-            'warehouse_id': self.warehouse.id,
         })
         self.assertTrue(wizard.id)
 
