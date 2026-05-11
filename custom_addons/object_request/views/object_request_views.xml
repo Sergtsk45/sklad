@@ -120,7 +120,6 @@
                 />
                 <field name="matching_state" column_invisible="1"/>
                 <field name="create_date" string="Дата создания" optional="hide"/>
-                <field name="warehouse_id" string="Склад" optional="hide"/>
                 <field name="buyer_user_id" string="Снабженец" optional="hide"/>
             </list>
         </field>
@@ -313,23 +312,7 @@
                                 name="priority"
                                 readonly="state != 'draft'"
                             />
-                            <field
-                                name="warehouse_id"
-                                readonly="state != 'draft'"
-                            />
-                            <field
-                                name="check_warehouse_ids"
-                                widget="many2many_tags"
-                                readonly="state != 'draft'"
-                                placeholder="Не выбрано — используется склад документа"
-                                options="{'color_field': 'id'}"
-                            />
-                            <field
-                                name="stock_check_confirmed"
-                                widget="boolean_toggle"
-                                readonly="1"
-                                invisible="not stock_check_confirmed"
-                            />
+                            <!-- складовые поля убраны на уровне шапки -->
                         </group>
                         <group string="Ответственные">
                             <field name="buyer_user_id"/>
@@ -364,10 +347,66 @@
 
                         <!-- Вкладка: Строки -->
                         <page string="Строки" name="page_lines">
+                            <group groups="object_request.group_supply_manager">
+                                <div>
+                                    <button
+                                        name="action_lines_buy_all"
+                                        string="Закупить всё"
+                                        type="object"
+                                        class="btn-secondary me-2"
+                                    />
+                                    <button
+                                        name="action_lines_issue_max"
+                                        string="Выдать максимум"
+                                        type="object"
+                                        class="btn-secondary me-2"
+                                    />
+                                    <button
+                                        name="action_lines_reset_split"
+                                        string="Сбросить разбивку"
+                                        type="object"
+                                        class="btn-secondary"
+                                    />
+                                </div>
+                            </group>
+                            <field
+                                name="line_ids"
+                                readonly="1"
+                                groups="object_request.group_foreman"
+                            >
+                                <list
+                                    decoration-danger="matching_required == True"
+                                    decoration-warning="(manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued'"
+                                    decoration-success="line_state == 'fully_supplied'"
+                                    create="0"
+                                    delete="0"
+                                >
+                                    <field name="sequence" string="№"/>
+                                    <field name="name_raw" string="Наименование (файл)"/>
+                                    <field name="product_id" string="Товар"/>
+                                    <field name="uom_id" string="Ед. изм." optional="show"/>
+                                    <field name="qty_requested" string="Запрошено"/>
+                                    <field name="qty_to_issue" string="К выдаче"/>
+                                    <field name="qty_to_buy" string="К закупке"/>
+                                    <field name="qty_issued" string="Выдано"/>
+                                    <field name="stock_qty_on_hand" string="Остаток" optional="show"/>
+                                    <field
+                                        name="line_state"
+                                        string="Статус строки"
+                                        widget="badge"
+                                        decoration-danger="line_state == 'requires_mapping'"
+                                        decoration-warning="line_state == 'partially_issued'"
+                                        decoration-success="line_state == 'fully_supplied'"
+                                    />
+                                    <field name="matching_required" column_invisible="1"/>
+                                    <field name="manual_vendor_required" column_invisible="1"/>
+                                </list>
+                            </field>
                             <field
                                 name="line_ids"
                                 readonly="state in ('closed', 'cancelled')"
                                 context="{'default_request_id': id}"
+                                groups="object_request.group_supply_manager,object_request.group_storekeeper"
                             >
                                 <list
                                     editable="bottom"
@@ -441,6 +480,43 @@
                                     <field name="matching_required" column_invisible="1"/>
                                     <field name="manual_vendor_required" column_invisible="1"/>
                                     <field name="comment" string="Комментарий" optional="hide"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <page
+                            string="Размещение по складам"
+                            name="page_stock_distribution"
+                            groups="object_request.group_supply_manager,object_request.group_storekeeper"
+                        >
+                            <field
+                                name="line_stock_ids"
+                                readonly="state in ('closed', 'cancelled')"
+                                groups="object_request.group_supply_manager"
+                            >
+                                <list editable="bottom">
+                                    <field name="line_id" readonly="1"/>
+                                    <field name="warehouse_id" readonly="1"/>
+                                    <field name="qty_on_hand" readonly="1"/>
+                                    <field name="qty_to_issue"/>
+                                    <field name="qty_reserved" readonly="1"/>
+                                    <field name="last_check_date" readonly="1"/>
+                                    <field name="picking_id" readonly="1"/>
+                                </list>
+                            </field>
+                            <field
+                                name="line_stock_ids"
+                                readonly="1"
+                                groups="object_request.group_storekeeper"
+                            >
+                                <list>
+                                    <field name="line_id" readonly="1"/>
+                                    <field name="warehouse_id" readonly="1"/>
+                                    <field name="qty_on_hand" readonly="1"/>
+                                    <field name="qty_to_issue" readonly="1"/>
+                                    <field name="qty_reserved" readonly="1"/>
+                                    <field name="last_check_date" readonly="1"/>
+                                    <field name="picking_id" readonly="1"/>
                                 </list>
                             </field>
                         </page>

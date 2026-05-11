@@ -1,5 +1,5 @@
 from odoo import models, fields, api
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
 
 class ObjectRequestLine(models.Model):
@@ -89,10 +89,16 @@ class ObjectRequestLine(models.Model):
     qty_issued = fields.Float(string='Выдано', digits='Product Unit of Measure')
 
     # --- Технические поля склада ---
+    stock_ids = fields.One2many(
+        'object.request.line.stock', 'line_id', string='Распределение по складам',
+    )
     stock_qty_on_hand = fields.Float(
         string='Остаток на складе', digits='Product Unit of Measure',
     )
     stock_check_date = fields.Datetime(string='Дата проверки остатка')
+    manual_plan_override = fields.Boolean(
+        string='План изменён вручную', default=False, index=True,
+    )
 
     # --- Статус строки (computed + writeable для ручной отмены) ---
     is_cancelled = fields.Boolean(
@@ -231,3 +237,122 @@ class ObjectRequestLine(models.Model):
                 raise ValidationError(
                     'Сумма к выдаче и к закупке не может превышать запрошенное количество.'
                 )
+
+    def _sync_stock_totals_from_stock_ids(self):
+        for line in self:
+            stock_ids = line.stock_ids
+            last_check_dates = stock_ids.mapped('last_check_date')
+            vals = {
+                'stock_qty_on_hand': sum(stock_ids.mapped('qty_on_hand')),
+                'stock_check_date': max(last_check_dates) if last_check_dates else False,
+                'qty_reserved': sum(stock_ids.mapped('qty_reserved')),
+            }
+            if not self.env.context.get('stock_check_only'):
+                qty_to_issue = sum(stock_ids.mapped('qty_to_issue'))
+                qty_to_buy = max(
+                    line.qty_requested - line.qty_issued - qty_to_issue, 0.0,
+                )
+                if qty_to_issue > 0 and qty_to_buy > 0:
+                    mode = 'mixed'
+                elif qty_to_issue > 0:
+                    mode = 'issue'
+                elif qty_to_buy > 0:
+                    mode = 'buy'
+                else:
+                    mode = 'manual'
+                vals.update({
+                    'qty_to_issue': qty_to_issue,
+                    'qty_to_buy': qty_to_buy,
+                    'procurement_mode': mode,
+                })
+            line.write(vals)
+
+    def action_buy_all(self):
+        self._check_supply_manager_mass_action()
+        stock_context = {'auto_stock_distribution': True}
+        for line in self.filtered(lambda ln: not ln.is_cancelled):
+            line.stock_ids.with_context(**stock_context).write({'qty_to_issue': 0.0})
+            qty_to_buy = max(line.qty_requested - line.qty_issued, 0.0)
+            line.write({
+                'qty_to_issue': 0.0,
+                'qty_to_buy': qty_to_buy,
+                'procurement_mode': 'buy' if qty_to_buy else 'manual',
+                'manual_plan_override': True,
+            })
+        return True
+
+    def action_issue_max(self):
+        self._check_supply_manager_mass_action()
+        stock_context = {'auto_stock_distribution': True}
+        for line in self.filtered(lambda ln: ln.product_id and not ln.is_cancelled):
+            requested = max(line.qty_requested - line.qty_issued, 0.0)
+            stock_ids = line.stock_ids.sorted(
+                key=lambda stock: stock.qty_on_hand,
+                reverse=True,
+            )
+            stock_ids.with_context(**stock_context).write({'qty_to_issue': 0.0})
+            remaining = requested
+            single_stock = next(
+                (stock for stock in stock_ids if stock.qty_on_hand >= requested),
+                False,
+            )
+            if single_stock:
+                single_stock.with_context(**stock_context).write({
+                    'qty_to_issue': requested,
+                })
+                remaining = 0.0
+            else:
+                for stock in stock_ids:
+                    if remaining <= 0:
+                        break
+                    qty = min(max(stock.qty_on_hand, 0.0), remaining)
+                    if qty <= 0:
+                        continue
+                    stock.with_context(**stock_context).write({'qty_to_issue': qty})
+                    remaining -= qty
+            qty_to_issue = sum(line.stock_ids.mapped('qty_to_issue'))
+            qty_to_buy = max(requested - qty_to_issue, 0.0)
+            if qty_to_issue > 0 and qty_to_buy > 0:
+                mode = 'mixed'
+            elif qty_to_issue > 0:
+                mode = 'issue'
+            elif qty_to_buy > 0:
+                mode = 'buy'
+            else:
+                mode = 'manual'
+            line.write({
+                'qty_to_issue': qty_to_issue,
+                'qty_to_buy': qty_to_buy,
+                'procurement_mode': mode,
+                'manual_plan_override': False,
+            })
+        return True
+
+    def action_reset_split(self):
+        self._check_supply_manager_mass_action()
+        stock_context = {'auto_stock_distribution': True}
+        for line in self:
+            line.stock_ids.with_context(**stock_context).write({'qty_to_issue': 0.0})
+            line.write({
+                'qty_to_issue': 0.0,
+                'qty_to_buy': 0.0,
+                'procurement_mode': 'manual',
+                'manual_plan_override': False,
+            })
+        return True
+
+    def _check_supply_manager_mass_action(self):
+        if not self.env.user.has_group('object_request.group_supply_manager'):
+            if self.env.user.has_group('base.group_system'):
+                return
+            raise UserError(
+                'Массовые действия с распределением доступны только снабженцу.'
+            )
+
+    def _get_stock_breakdown_label(self):
+        self.ensure_one()
+        parts = [
+            f'{stock.warehouse_id.display_name}: {stock.qty_on_hand:g}'
+            for stock in self.stock_ids.filtered(lambda item: item.qty_on_hand > 0)
+        ]
+        return ', '.join(parts)

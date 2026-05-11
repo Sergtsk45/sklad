@@ -17,6 +17,17 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
         'object_request_purchase_wizard_line_rel', 'wizard_id', 'line_id',
         string='Строки к закупке',
     )
+    picking_type_id = fields.Many2one(
+        'stock.picking.type',
+        string='Склад приёмки',
+        domain="[('code', '=', 'incoming'), ('company_id', 'in', [False, company_id])]",
+        help='Тип операции поступления для создаваемых закупок.',
+    )
+    company_id = fields.Many2one(
+        'res.company',
+        related='request_id.company_id',
+        readonly=True,
+    )
     group_by_vendor = fields.Boolean(
         string='Группировать по поставщику', default=True,
     )
@@ -53,6 +64,9 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             lambda ln: ln.qty_to_buy > 0 and ln.product_id
         )
         res['line_ids'] = [(6, 0, lines.ids)]
+        picking_type = self._get_default_picking_type(request)
+        if picking_type:
+            res['picking_type_id'] = picking_type.id
         return res
 
     def action_create_purchase(self):
@@ -66,6 +80,11 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             )
         lines_with_vendor = lines.filtered('preferred_vendor_id')
         lines_no_vendor = lines - lines_with_vendor
+
+        if not self.picking_type_id:
+            raise UserError(
+                'Выберите склад приёмки для создаваемых закупок.'
+            )
 
         if not lines_with_vendor:
             raise UserError(
@@ -123,15 +142,14 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
 
     def _create_single_po(self, vendor, req_lines):
         """Создать один draft purchase.order для поставщика."""
-        warehouse = self.request_id.warehouse_id
         po_vals = {
             'partner_id': vendor.id,
             'origin': self.request_id.name,
             'is_object_request_purchase': True,
             'object_request_project_id': self.request_id.project_id.id,
         }
-        if warehouse and warehouse.in_type_id:
-            po_vals['picking_type_id'] = warehouse.in_type_id.id
+        if self.picking_type_id:
+            po_vals['picking_type_id'] = self.picking_type_id.id
         po = self.env['purchase.order'].create(po_vals)
         date_planned = (
             datetime.combine(self.request_id.need_date, dt_time.min)
@@ -158,3 +176,13 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                 'purchase_order_line_id': pol.id,
             })
         return po
+
+    def _get_default_picking_type(self, request):
+        """Return project warehouse receipt type, or a company incoming fallback."""
+        warehouse = request.project_id.warehouse_id
+        if warehouse and warehouse.in_type_id:
+            return warehouse.in_type_id
+        return self.env['stock.picking.type'].search([
+            ('code', '=', 'incoming'),
+            ('company_id', 'in', [False, request.company_id.id]),
+        ], limit=1)

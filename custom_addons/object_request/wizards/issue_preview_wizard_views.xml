@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_object_request_issue_preview_wizard_form" model="ir.ui.view">
+        <field name="name">object.request.issue.preview.wizard.form</field>
+        <field name="model">object.request.issue.preview.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Предпросмотр выдач по складам">
+                <sheet>
+                    <group>
+                        <field name="request_id" readonly="1"/>
+                        <field name="group_count" readonly="1"/>
+                    </group>
+                    <field name="group_ids">
+                        <list editable="bottom">
+                            <field name="included" widget="boolean_toggle"/>
+                            <field name="warehouse_id" readonly="1"/>
+                            <field name="picking_type_id"/>
+                            <field name="source_location_id"/>
+                            <field name="destination_location_id"/>
+                            <field name="scheduled_date"/>
+                            <field name="line_count" readonly="1"/>
+                            <field name="qty_total" readonly="1"/>
+                            <field name="comment"/>
+                        </list>
+                        <form>
+                            <sheet>
+                                <group>
+                                    <field name="included"/>
+                                    <field name="warehouse_id" readonly="1"/>
+                                    <field name="picking_type_id"/>
+                                    <field name="source_location_id"/>
+                                    <field name="destination_location_id"/>
+                                    <field name="scheduled_date"/>
+                                    <field name="comment"/>
+                                </group>
+                                <field name="stock_line_ids" readonly="1">
+                                    <list>
+                                        <field name="line_id"/>
+                                        <field name="warehouse_id"/>
+                                        <field name="qty_on_hand"/>
+                                        <field name="qty_to_issue"/>
+                                        <field name="qty_reserved"/>
+                                    </list>
+                                </field>
+                            </sheet>
+                        </form>
+                    </field>
+                </sheet>
+                <footer>
+                    <button
+                        name="action_create_issues"
+                        string="Создать выдачи"
+                        type="object"
+                        class="btn-primary"
+                    />
+                    <button string="Отмена" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

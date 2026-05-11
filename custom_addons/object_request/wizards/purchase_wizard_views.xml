@@ -13,6 +13,8 @@
 
                     <group string="Параметры">
                         <group>
+                            <field name="company_id" invisible="1"/>
+                            <field name="picking_type_id"/>
                             <field name="group_by_vendor"/>
                             <field name="create_draft_only"/>
                         </group>

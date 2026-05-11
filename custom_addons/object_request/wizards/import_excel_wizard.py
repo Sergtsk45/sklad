@@ -73,15 +73,6 @@ class ObjectRequestImportWizard(models.TransientModel):
         default=lambda self: self.env.company,
         readonly=True,
     )
-    warehouse_id = fields.Many2one(
-        'stock.warehouse',
-        string='Склад',
-        required=True,
-        domain="[('company_id', '=', company_id)]",
-        default=lambda self: self.env['stock.warehouse'].search(
-            [('company_id', '=', self.env.company.id)], limit=1,
-        ),
-    )
 
     # --- Результаты парсинга ---
     preview_line_ids = fields.One2many(
@@ -316,7 +307,6 @@ class ObjectRequestImportWizard(models.TransientModel):
             'need_date': self.need_date,
             'priority': self.priority,
             'comment': self.comment,
-            'warehouse_id': self.warehouse_id.id,
             'source_file_name': self.file_name or '',
             'imported_at': fields.Datetime.now(),
             'imported_by_user_id': self.env.uid,

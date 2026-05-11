@@ -35,7 +35,10 @@ class ObjectRequestStockCheckWizard(models.TransientModel):
     @api.depends('request_id')
     def _compute_warehouse_names(self):
         for wiz in self:
-            warehouses = wiz.request_id.check_warehouse_ids or wiz.request_id.warehouse_id
+            warehouses = self.env['stock.warehouse'].search([
+                ('company_id', '=', wiz.request_id.company_id.id),
+                ('active', '=', True),
+            ])
             wiz.warehouse_names = ', '.join(warehouses.mapped('name'))
 
     @api.model
@@ -53,13 +56,13 @@ class ObjectRequestStockCheckWizard(models.TransientModel):
             'name_raw': ln.name_raw,
             'qty_requested': ln.qty_requested,
             'stock_qty_on_hand': ln.stock_qty_on_hand,
+            'stock_breakdown': ln._get_stock_breakdown_label(),
             'uom_id': ln.uom_id.id if ln.uom_id else False,
         }) for ln in lines_with_stock]
         return res
 
     def action_confirm(self):
         self.ensure_one()
-        self.request_id.write({'stock_check_confirmed': True})
         return {'type': 'ir.actions.act_window_close'}
 
     def action_recheck(self):
@@ -79,4 +82,5 @@ class ObjectRequestStockCheckWizardLine(models.TransientModel):
     name_raw = fields.Char(string='Наименование (из файла)', readonly=True)
     qty_requested = fields.Float(string='Запрошено', readonly=True)
     stock_qty_on_hand = fields.Float(string='Остаток на складе', readonly=True)
+    stock_breakdown = fields.Char(string='Раскладка по складам', readonly=True)
     uom_id = fields.Many2one('uom.uom', string='Ед. изм.', readonly=True)

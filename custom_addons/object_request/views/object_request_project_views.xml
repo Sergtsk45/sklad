@@ -48,7 +48,7 @@
                     <div class="oe_title">
                         <label for="name" string="Наименование объекта"/>
                         <h1>
-                            <field name="name"/>
+                            <field name="name" readonly="id != False"/>
                         </h1>
                     </div>
                     <group>

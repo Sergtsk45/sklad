@@ -120,4 +120,53 @@
         <field name="search_view_id" ref="view_object_request_line_search"/>
     </record>
 
+    <record id="view_object_request_line_stock_list" model="ir.ui.view">
+        <field name="name">object.request.line.stock.list</field>
+        <field name="model">object.request.line.stock</field>
+        <field name="arch" type="xml">
+            <list string="Распределение по складам" editable="bottom">
+                <field name="line_id"/>
+                <field name="warehouse_id"/>
+                <field name="qty_on_hand" readonly="1"/>
+                <field name="qty_to_issue"/>
+                <field name="qty_reserved" readonly="1"/>
+                <field name="last_check_date" readonly="1"/>
+                <field name="picking_id" readonly="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_object_request_line_stock" model="ir.actions.act_window">
+        <field name="name">Распределение по складам</field>
+        <field name="res_model">object.request.line.stock</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <record id="server_action_object_request_line_buy_all" model="ir.actions.server">
+        <field name="name">Закупить всё</field>
+        <field name="model_id" ref="model_object_request_line"/>
+        <field name="binding_model_id" ref="model_object_request_line"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">records.action_buy_all()</field>
+    </record>
+
+    <record id="server_action_object_request_line_issue_max" model="ir.actions.server">
+        <field name="name">Выдать максимум</field>
+        <field name="model_id" ref="model_object_request_line"/>
+        <field name="binding_model_id" ref="model_object_request_line"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">records.action_issue_max()</field>
+    </record>
+
+    <record id="server_action_object_request_line_reset_split" model="ir.actions.server">
+        <field name="name">Сбросить разбивку</field>
+        <field name="model_id" ref="model_object_request_line"/>
+        <field name="binding_model_id" ref="model_object_request_line"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">records.action_reset_split()</field>
+    </record>
+
 </odoo>

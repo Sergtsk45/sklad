@@ -14,7 +14,6 @@ class TestObr019StockCheck(TransactionCase):
         super().setUp()
         self.project = self.env['object.request.project'].create({
             'name': 'Тестовый объект OBR-019',
-            'code': 'TST-019',
         })
         self.foreman = self.env['res.users'].create({
             'name': 'Прораб Тест OBR019',
@@ -193,3 +192,38 @@ class TestObr019StockCheck(TransactionCase):
         self.request.action_check_stock()
         date2 = self.line_a.stock_check_date
         self.assertGreaterEqual(date2, date1)
+
+    def test_line_action_buy_all_moves_remaining_qty_to_purchase(self):
+        """Массовое действие «Закупить всё» обнуляет план выдачи."""
+        self.request.action_check_stock()
+        stock = self.line_a.stock_ids[:1]
+        stock.write({'qty_to_issue': 10.0})
+
+        self.line_a.action_buy_all()
+
+        self.assertAlmostEqual(self.line_a.qty_to_issue, 0.0)
+        self.assertAlmostEqual(self.line_a.qty_to_buy, 100.0)
+        self.assertEqual(self.line_a.procurement_mode, 'buy')
+        self.assertTrue(self.line_a.manual_plan_override)
+
+    def test_line_action_reset_split_clears_plan(self):
+        """Массовое действие «Сбросить разбивку» очищает выдачу и закупку."""
+        self.request.action_check_stock()
+        self.line_a.write({'qty_to_issue': 4.0, 'qty_to_buy': 6.0})
+
+        self.line_a.action_reset_split()
+
+        self.assertAlmostEqual(self.line_a.qty_to_issue, 0.0)
+        self.assertAlmostEqual(self.line_a.qty_to_buy, 0.0)
+        self.assertEqual(self.line_a.procurement_mode, 'manual')
+
+    def test_line_action_issue_max_uses_available_stock(self):
+        """Массовое действие «Выдать максимум» повторяет авто-разбивку строки."""
+        self._add_stock(self.product_a, 60.0)
+        self.request.action_check_stock()
+
+        self.line_a.action_issue_max()
+
+        self.assertAlmostEqual(self.line_a.qty_to_issue, 60.0)
+        self.assertAlmostEqual(self.line_a.qty_to_buy, 40.0)
+        self.assertEqual(self.line_a.procurement_mode, 'mixed')

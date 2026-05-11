@@ -49,6 +49,11 @@ class ObjectRequest(models.Model):
     line_ids = fields.One2many(
         'object.request.line', 'request_id', string='Строки', copy=True,
     )
+    line_stock_ids = fields.Many2many(
+        'object.request.line.stock',
+        compute='_compute_line_stock_ids',
+        string='Распределение по складам',
+    )
 
     # --- Поля импорта ---
     source_file_name = fields.Char(string='Имя файла')
@@ -122,27 +127,6 @@ class ObjectRequest(models.Model):
         'res.company', string='Компания', required=True,
         default=lambda self: self.env.company, index=True,
     )
-    warehouse_id = fields.Many2one(
-        'stock.warehouse',
-        string='Склад',
-        required=True,
-        tracking=True,
-        index=True,
-        domain="[('company_id', '=', company_id)]",
-        default=lambda self: self.env['stock.warehouse'].search(
-            [('company_id', '=', self.env.company.id)], limit=1,
-        ),
-    )
-    check_warehouse_ids = fields.Many2many(
-        'stock.warehouse',
-        'object_request_check_warehouse_rel',
-        'request_id', 'warehouse_id',
-        string='Склады для проверки наличия',
-        domain="[('company_id', '=', company_id)]",
-    )
-    stock_check_confirmed = fields.Boolean(
-        string='Наличие подтверждено', default=False,
-    )
     currency_id = fields.Many2one(
         'res.currency', related='company_id.currency_id', store=True,
     )
@@ -167,6 +151,11 @@ class ObjectRequest(models.Model):
     def _compute_line_count(self):
         for rec in self:
             rec.line_count = len(rec.line_ids)
+
+    @api.depends('line_ids.stock_ids')
+    def _compute_line_stock_ids(self):
+        for rec in self:
+            rec.line_stock_ids = rec.line_ids.mapped('stock_ids')
 
     @api.depends('line_ids.matching_required', 'line_ids.product_id')
     def _compute_matching_state(self):
@@ -404,6 +393,33 @@ class ObjectRequest(models.Model):
             'domain': [('id', 'in', self.purchase_order_ids.ids)],
         }
 
+    def action_lines_buy_all(self):
+        self.ensure_one()
+        self.line_ids.action_buy_all()
+        return self._line_mass_action_notification('Закупить всё')
+
+    def action_lines_issue_max(self):
+        self.ensure_one()
+        self.line_ids.action_issue_max()
+        return self._line_mass_action_notification('Выдать максимум')
+
+    def action_lines_reset_split(self):
+        self.ensure_one()
+        self.line_ids.action_reset_split()
+        return self._line_mass_action_notification('Сбросить разбивку')
+
+    def _line_mass_action_notification(self, title):
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': title,
+                'message': f'Обработано строк: {len(self.line_ids)}.',
+                'type': 'success',
+                'sticky': False,
+            },
+        }
+
     def action_rematch_lines(self):
         """Повторно запустить автосопоставление по несопоставленным строкам."""
         self.ensure_one()
@@ -476,33 +492,51 @@ class ObjectRequest(models.Model):
             )
 
     def action_check_stock(self):
-        """Проверить остатки по складам.
-
-        Если check_warehouse_ids пуст — режим прораба: проверяется склад объекта
-        (warehouse_id). При наличии остатков открывается wizard с предупреждением.
-
-        Если check_warehouse_ids заполнен — режим снабженца: проверяется по всем
-        указанным складам, результат — toast-уведомление с числом найденных позиций.
-        """
+        """Проверить остатки по всем активным складам компании."""
         self.ensure_one()
-        is_foreman_check = not self.check_warehouse_ids
-        warehouses = self.check_warehouse_ids or self.warehouse_id
-        locations = warehouses.mapped('lot_stock_id').filtered(bool)
+        warehouses = self.env['stock.warehouse'].search([
+            ('company_id', '=', self.company_id.id),
+            ('active', '=', True),
+        ])
         lines = self.line_ids.filtered(lambda ln: ln.product_id and not ln.is_cancelled)
         if not lines:
             raise UserError('Нет строк с сопоставленным товаром для проверки наличия.')
+        qty_by_product_warehouse = self._get_stock_qty_by_product_warehouse(
+            lines.mapped('product_id'), warehouses,
+        )
         now = fields.Datetime.now()
+        stock_model = self.env['object.request.line.stock'].with_context(
+            auto_stock_distribution=True,
+            stock_check_only=True,
+        )
         for line in lines:
-            if locations:
-                qty = sum(
-                    line.product_id.with_context(location=loc.id).qty_available
-                    for loc in locations
+            existing_by_warehouse = {
+                stock.warehouse_id.id: stock for stock in line.stock_ids
+            }
+            for warehouse in warehouses:
+                qty = qty_by_product_warehouse.get(
+                    (line.product_id.id, warehouse.id), 0.0,
                 )
-            else:
-                qty = line.product_id.qty_available
-            line.write({'stock_qty_on_hand': qty, 'stock_check_date': now})
+                stock = existing_by_warehouse.get(warehouse.id)
+                vals = {'qty_on_hand': qty, 'last_check_date': now}
+                if stock:
+                    stock.with_context(
+                        auto_stock_distribution=True,
+                        stock_check_only=True,
+                    ).write(vals)
+                else:
+                    stock_model.create({
+                        'line_id': line.id,
+                        'warehouse_id': warehouse.id,
+                        **vals,
+                    })
+            stale_stock_ids = line.stock_ids.filtered(
+                lambda stock: stock.warehouse_id not in warehouses
+            )
+            if stale_stock_ids:
+                stale_stock_ids.with_context(auto_stock_distribution=True).unlink()
         lines_with_stock = lines.filtered(lambda ln: ln.stock_qty_on_hand > 0)
-        if is_foreman_check and lines_with_stock:
+        if lines_with_stock:
             return {
                 'type': 'ir.actions.act_window',
                 'name': 'Проверка актуальности требования',
@@ -530,8 +564,56 @@ class ObjectRequest(models.Model):
             },
         }
 
+    def _get_stock_qty_by_product_warehouse(self, products, warehouses):
+        locations_by_warehouse = self._get_stock_locations_by_warehouse(warehouses)
+        all_locations = self.env['stock.location'].browse()
+        for locations in locations_by_warehouse.values():
+            all_locations |= locations
+        if not products or not all_locations:
+            return {}
+
+        result = {}
+        location_to_warehouse = {}
+        for warehouse_id, locations in locations_by_warehouse.items():
+            for location in locations:
+                location_to_warehouse[location.id] = warehouse_id
+
+        groups = self.env['stock.quant'].read_group(
+            [
+                ('product_id', 'in', products.ids),
+                ('location_id', 'in', all_locations.ids),
+            ],
+            ['product_id', 'location_id', 'quantity:sum', 'reserved_quantity:sum'],
+            ['product_id', 'location_id'],
+            lazy=False,
+        )
+        for group in groups:
+            product_id = group['product_id'][0]
+            location_id = group['location_id'][0]
+            warehouse_id = location_to_warehouse.get(location_id)
+            if not warehouse_id:
+                continue
+            qty = group.get('quantity', 0.0) - group.get('reserved_quantity', 0.0)
+            key = (product_id, warehouse_id)
+            result[key] = result.get(key, 0.0) + max(qty, 0.0)
+        return result
+
+    def _get_stock_locations_by_warehouse(self, warehouses):
+        locations_by_warehouse = {}
+        location_model = self.env['stock.location'].with_context(active_test=False)
+        for warehouse in warehouses:
+            root = warehouse.view_location_id or warehouse.lot_stock_id
+            if not root:
+                locations_by_warehouse[warehouse.id] = location_model.browse()
+                continue
+            locations_by_warehouse[warehouse.id] = location_model.search([
+                ('id', 'child_of', root.id),
+                ('usage', '=', 'internal'),
+            ])
+        return locations_by_warehouse
+
     def action_auto_split(self):
-        """Авто-разбивка: qty_to_issue = min(stock, requested), qty_to_buy — остаток."""  # noqa: E501
+        """Авто-разбивка по складам с минимизацией числа складов."""
         self.ensure_one()
         lines = self.line_ids.filtered(
             lambda ln: ln.product_id and not ln.is_cancelled
@@ -546,10 +628,47 @@ class ObjectRequest(models.Model):
                 'Сначала выполните расчёт наличия '
                 '(кнопка «Рассчитать наличие»).'
             )
+        manual_lines = lines.filtered('manual_plan_override')
+        if manual_lines and not self.env.context.get('force_auto_split'):
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Перезаписать распределение?',
+                'res_model': 'object.request.auto.split.confirm.wizard',
+                'view_mode': 'form',
+                'target': 'new',
+                'context': {
+                    'default_request_id': self.id,
+                    'default_manual_line_count': len(manual_lines),
+                },
+            }
+        stock_context = {'auto_stock_distribution': True}
         for line in lines:
-            on_hand = line.stock_qty_on_hand
-            requested = line.qty_requested
-            qty_to_issue = min(max(on_hand, 0.0), requested)
+            requested = max(line.qty_requested - line.qty_issued, 0.0)
+            stock_ids = line.stock_ids.sorted(
+                key=lambda stock: stock.qty_on_hand,
+                reverse=True,
+            )
+            stock_ids.with_context(**stock_context).write({'qty_to_issue': 0.0})
+            remaining = requested
+            single_stock = next(
+                (stock for stock in stock_ids if stock.qty_on_hand >= requested),
+                False,
+            )
+            if single_stock:
+                single_stock.with_context(**stock_context).write({
+                    'qty_to_issue': requested,
+                })
+                remaining = 0.0
+            else:
+                for stock in stock_ids:
+                    if remaining <= 0:
+                        break
+                    qty = min(max(stock.qty_on_hand, 0.0), remaining)
+                    if qty <= 0:
+                        continue
+                    stock.with_context(**stock_context).write({'qty_to_issue': qty})
+                    remaining -= qty
+            qty_to_issue = sum(line.stock_ids.mapped('qty_to_issue'))
             qty_to_buy = requested - qty_to_issue
             if qty_to_issue > 0 and qty_to_buy > 0:
                 mode = 'mixed'
@@ -563,6 +682,7 @@ class ObjectRequest(models.Model):
                 'qty_to_issue': qty_to_issue,
                 'qty_to_buy': qty_to_buy,
                 'procurement_mode': mode,
+                'manual_plan_override': False,
             })
         return {
             'type': 'ir.actions.client',
@@ -578,18 +698,18 @@ class ObjectRequest(models.Model):
     def action_open_issue_wizard(self):
         """Открыть wizard создания выдачи со склада."""
         self.ensure_one()
-        lines_to_issue = self.line_ids.filtered(
-            lambda ln: ln.qty_to_issue > 0 and ln.product_id
+        stock_to_issue = self.line_ids.mapped('stock_ids').filtered(
+            lambda stock: stock.qty_to_issue > 0 and stock.line_id.product_id
         )
-        if not lines_to_issue:
+        if not stock_to_issue:
             raise UserError(
                 'Нет строк с заполненным количеством к выдаче. '
-                'Заполните поле "К выдаче" в строках документа.'
+                'Заполните распределение по складам.'
             )
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Создать выдачу',
-            'res_model': 'object.request.issue.wizard',
+            'name': 'Создать выдачи',
+            'res_model': 'object.request.issue.preview.wizard',
             'view_mode': 'form',
             'target': 'new',
             'context': {

@@ -14,7 +14,6 @@ class TestOBR021Purchase(TransactionCase):
 
         cls.project = cls.env['object.request.project'].create({
             'name': 'Тест закупки',
-            'code': 'PO-TEST',
         })
         cls.user = cls.env.ref('base.user_admin')
 
@@ -85,6 +84,7 @@ class TestOBR021Purchase(TransactionCase):
         self.assertEqual(len(po.order_line), 2)
         self.assertTrue(po.is_object_request_purchase)
         self.assertEqual(po.object_request_project_id, self.project)
+        self.assertEqual(po.picking_type_id, self.project.warehouse_id.in_type_id)
 
     def test_create_po_grouped_by_vendor(self):
         """Строки группируются по поставщику — создаётся PO на каждого."""
@@ -214,6 +214,30 @@ class TestOBR021Purchase(TransactionCase):
 
         self.assertIn(request, po.object_request_ids)
         self.assertEqual(po.object_request_count, 1)
+
+    def test_purchase_wizard_defaults_project_receipt_type(self):
+        """Wizard по умолчанию принимает на склад объекта."""
+        request = self._create_request()
+        self._add_line(request, self.product1, 3.0, self.vendor1)
+        request.write({'state': 'in_progress'})
+
+        wizard = self._open_wizard(request)
+
+        self.assertEqual(
+            wizard.picking_type_id,
+            self.project.warehouse_id.in_type_id,
+        )
+
+    def test_purchase_wizard_fallback_receipt_type_without_project_warehouse(self):
+        """Если у объекта нет склада, wizard требует явный тип приёмки."""
+        request = self._create_request()
+        self._add_line(request, self.product1, 3.0, self.vendor1)
+        self.project.write({'warehouse_id': False})
+        request.write({'state': 'in_progress'})
+
+        wizard = self._open_wizard(request)
+
+        self.assertEqual(wizard.picking_type_id.code, 'incoming')
 
     def test_default_get_prefills_lines(self):
         """default_get заполняет line_ids строками с qty_to_buy > 0."""

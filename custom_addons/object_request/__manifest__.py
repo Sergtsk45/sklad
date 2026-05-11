@@ -1,6 +1,6 @@
 {
     'name': 'Object Request — Требование на комплектацию объекта',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.1.0',
     'category': 'Inventory/Inventory',
     'summary': 'Управление требованиями на комплектацию строительных объектов',
     'description': """
@@ -34,6 +34,8 @@
         'wizards/import_excel_wizard_views.xml',
         'wizards/assign_lines_wizard_views.xml',
         'wizards/issue_wizard_views.xml',
+        'wizards/issue_preview_wizard_views.xml',
+        'wizards/auto_split_confirm_wizard_views.xml',
         'wizards/confirm_state_wizard_views.xml',
         'wizards/purchase_wizard_views.xml',
         'views/stock_picking_inherit_views.xml',

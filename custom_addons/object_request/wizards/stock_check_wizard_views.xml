@@ -27,6 +27,7 @@
                                 decoration-success="stock_qty_on_hand >= qty_requested"
                                 decoration-warning="stock_qty_on_hand &gt; 0 and stock_qty_on_hand &lt; qty_requested"
                             />
+                            <field name="stock_breakdown" string="Склады"/>
                             <field name="uom_id" string="Ед. изм."/>
                         </list>
                     </field>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_auto_split_confirm_wizard_form" model="ir.ui.view">
+        <field name="name">object.request.auto.split.confirm.wizard.form</field>
+        <field name="model">object.request.auto.split.confirm.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Перезаписать распределение?">
+                <sheet>
+                    <group>
+                        <field name="request_id" readonly="1"/>
+                        <field name="manual_line_count" readonly="1"/>
+                        <field name="message" readonly="1" nolabel="1"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button
+                        name="action_confirm"
+                        string="Перезаписать"
+                        type="object"
+                        class="btn-primary"
+                    />
+                    <button string="Отмена" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

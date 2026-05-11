@@ -74,13 +74,13 @@
   - удаление объекта с остатками → `UserError`.
 
 ### Этап 2. Удаление шапочных полей склада из требования
-- [ ] Удалить из `object.request`: `warehouse_id`, `check_warehouse_ids`, `stock_check_confirmed`.
+- [x] Удалить из `object.request`: `warehouse_id`, `check_warehouse_ids`, `stock_check_confirmed`.
 - [ ] Перенести зависимые методы (см. этапы 3–6).
 - [ ] Удалить эти поля из всех XML-вью, wizard-форм и тестовых фабрик.
 - [ ] Удалить таблицу M2M `object_request_check_warehouse_rel` (миграция).
 
 ### Этап 3. Модель распределения по складам в строке
-- [ ] Создать `object.request.line.stock`:
+- [x] Создать `object.request.line.stock`:
   ```
   line_id (M2O object.request.line, required, ondelete=cascade, index)
   warehouse_id (M2O stock.warehouse, required, index)
@@ -89,69 +89,69 @@
   qty_reserved (Float, default=0)   # резерв (этап 2)
   last_check_date (Datetime)
   picking_id (M2O stock.picking)    # созданная выдача
-  _sql_constraints UNIQUE(line_id, warehouse_id)
+  UNIQUE(line_id, warehouse_id)
   ```
-- [ ] В `object.request.line` добавить `stock_ids = One2many('object.request.line.stock', 'line_id')`.
-- [ ] Перевести `stock_qty_on_hand`, `qty_to_issue` на **сумму по `stock_ids`** (compute, store, depends).
-- [ ] `stock_check_date` → `compute = max(stock_ids.last_check_date)`.
-- [ ] Добавить ACL и record rules в `ir.model.access.csv` / `*_security.xml` для прораба/снабженца/кладовщика.
+- [x] В `object.request.line` добавить `stock_ids = One2many('object.request.line.stock', 'line_id')`.
+- [x] Перевести `stock_qty_on_hand`, `qty_to_issue` на **сумму по `stock_ids`** (stored sync при изменении распределения).
+- [x] `stock_check_date` → `max(stock_ids.last_check_date)` через stored sync.
+- [x] Добавить ACL и record rules в `ir.model.access.csv` / `*_security.xml` для прораба/снабженца/кладовщика.
 
 ### Этап 4. Расчёт наличия по всем складам компании
-- [ ] Переписать `action_check_stock`:
+- [x] Переписать `action_check_stock`:
   - получить `warehouses = env['stock.warehouse'].search([('company_id', '=', request.company_id.id), ('active', '=', True)])`;
   - для каждой строки c `product_id` для каждого склада посчитать `qty_available` через `read_group` по `stock.quant` (одним запросом по всем (product_id, location_id) парам — избегаем N×M обращений);
   - upsert строк `object.request.line.stock` (создать/обновить `qty_on_hand`, `last_check_date`);
   - удалить `line.stock_ids`, ссылающиеся на неактивные/удалённые склады;
-  - проставить `stock_check_confirmed = False` для повторного предупреждения.
-- [ ] `stock_check_wizard` оставить как предупреждение:
+  - повторно показывать предупреждение при наличии остатков (без `stock_check_confirmed`, поле удалено в этапе 2).
+- [x] `stock_check_wizard` оставить как предупреждение:
   - открывается, если хотя бы одна строка с `sum(stock_ids.qty_on_hand) > 0`;
   - показывает наименование, товар и **складскую раскладку** (с какого склада сколько);
-  - кнопка «ОК, ознакомлен» → `request.stock_check_confirmed = True`.
+  - кнопка «ОК, ознакомлен» закрывает предупреждение (без сохранения `stock_check_confirmed`, поле удалено в этапе 2).
 - [ ] Тесты: 1 склад / N складов / товар без остатков / товар не сопоставлен / wizard открывается при наличии и не открывается без.
 
 ### Этап 5. Авто-разбивка с минимизацией числа складов
-- [ ] Переписать `action_auto_split` по строке:
+- [x] Переписать `action_auto_split` по строке:
   1. отсортировать `stock_ids` по убыванию `qty_on_hand`;
   2. найти **первый** склад, где `qty_on_hand >= qty_requested - qty_issued` → выдать всё с него;
   3. иначе жадно сверху: брать `min(qty_on_hand, остаток_к_выдаче)` пока не закроем требование или не закончатся склады;
   4. остаток → `qty_to_buy` (на уровне строки, без склада; склад приёмки = склад объекта).
-- [ ] Защита ручных правок: если у требования есть строки c `manual_plan_override = True` (новое булево на строке, ставится при ручной правке `qty_to_issue` в `stock_ids`), запускать `auto_split` через **подтверждающий wizard** `object.request.auto.split.confirm.wizard`:
+- [x] Защита ручных правок: если у требования есть строки c `manual_plan_override = True` (новое булево на строке, ставится при ручной правке `qty_to_issue` в `stock_ids`), запускать `auto_split` через **подтверждающий wizard** `object.request.auto.split.confirm.wizard`:
   - текст: «План распределения был отредактирован вручную для N строк. Перезаписать?»
   - кнопки «Перезаписать» / «Отмена»; при перезаписи флаг `manual_plan_override` сбрасывается.
 - [ ] Алгоритм игнорирует склад объекта (`project.warehouse_id`), если на нём **нулевые** остатки (но включает его, если на нём есть), чтобы остатки на «своём» складе использовались в первую очередь — open для подтверждения после реализации.
 - [ ] Тесты: хватает на одном складе; нужно с двух; не хватает суммарно (часть в закупку); требование уже частично выдано; ручная правка → wizard предупреждения.
 
 ### Этап 6. Wizard выдачи с группировкой по складам
-- [ ] Новый transient `object.request.issue.preview.wizard`:
+- [x] Новый transient `object.request.issue.preview.wizard`:
   - поля: `request_id`, `group_ids = One2many('object.request.issue.preview.group')`;
   - дочерняя `object.request.issue.preview.group`: `(wizard_id, warehouse_id, picking_type_id, source_location_id, dest_location_id, scheduled_date, comment, line_ids, included)`;
   - default_get: разложить `request.line_ids.stock_ids.filtered(qty_to_issue > 0)` по складам, заполнить параметры из `warehouse`.
-- [ ] Кнопка `Создать выдачи`: для каждой включённой группы → один `stock.picking` + moves; результат — действие открыть список созданных pickings.
-- [ ] Сохранить `picking_id` в каждой `object.request.line.stock` строке группы.
+- [x] Кнопка `Создать выдачи`: для каждой включённой группы → один `stock.picking` + moves; результат — действие открыть список созданных pickings.
+- [x] Сохранить `picking_id` в каждой `object.request.line.stock` строке группы.
 - [ ] Тесты: 1 склад → 1 picking; 2 склада → 2 picking; исключение группы; пустой план.
 
 ### Этап 7. Wizard закупки
-- [ ] В `purchase_wizard` склад приёмки = `request.project_id.warehouse_id.in_type_id`; при отсутствии — fallback (предложить snabzhenec выбрать склад приёмки в самом wizard).
-- [ ] Тесты: PO создан с правильным `picking_type_id` объекта; fallback при отсутствии склада объекта.
+- [x] В `purchase_wizard` склад приёмки = `request.project_id.warehouse_id.in_type_id`; при отсутствии — fallback (предложить snabzhenec выбрать склад приёмки в самом wizard).
+- [x] Тесты: PO создан с правильным `picking_type_id` объекта; fallback при отсутствии склада объекта.
 
 ### Этап 8. Массовые UX-действия для снабженца
-- [ ] На вкладке «Строки» (или «Размещение по складам») добавить **серверные кнопки** над списком строк:
+- [x] На вкладке «Строки» (или «Размещение по складам») добавить **серверные кнопки** над списком строк:
   - «Закупить всё» (выбранные строки): обнулить `qty_to_issue` во всех `stock_ids`, выставить `qty_to_buy = qty_requested - qty_issued`.
   - «Выдать максимум»: re-запустить алгоритм авто-разбивки только для выбранных строк.
   - «Сбросить разбивку»: обнулить `qty_to_issue`/`qty_to_buy` для выбранных.
-- [ ] Inline-редактирование `stock_ids`: снабженец может править `qty_to_issue` по складам вручную (с валидацией суммы ≤ `qty_requested - qty_issued`).
-- [ ] Видимость кнопок и редактирования — по группам безопасности (`group_supply_manager`).
+- [x] Inline-редактирование `stock_ids`: снабженец может править `qty_to_issue` по складам вручную (с валидацией суммы ≤ `qty_requested - qty_issued`).
+- [x] Видимость кнопок и редактирования — по группам безопасности (`group_supply_manager`).
 
 ### Этап 9. UI прораба vs снабженца
-- [ ] **Прораб**: в строках видит только **итоги** (`qty_requested`, `qty_to_issue`, `qty_to_buy`, `qty_issued`, `stock_qty_on_hand_total`). Вложенный список `stock_ids` **скрыт** через `groups="object_request.group_supply_manager"` на полях/таблице.
-- [ ] **Снабженец**: полный доступ к `stock_ids` (inline-таблица в expand row или отдельный таб «Размещение по складам»), массовые кнопки, ручное редактирование `qty_to_issue` по складам.
-- [ ] **Кладовщик**: просмотр распределения по складам без правки (`readonly="1"`).
-- [ ] Поле объекта `code` и `name` — readonly после `create()` в form view; sequence-код виден в read-only.
+- [x] **Прораб**: в строках видит только **итоги** (`qty_requested`, `qty_to_issue`, `qty_to_buy`, `qty_issued`, `stock_qty_on_hand_total`). Вложенный список `stock_ids` **скрыт** через `groups="object_request.group_supply_manager"` на полях/таблице.
+- [x] **Снабженец**: полный доступ к `stock_ids` (inline-таблица в expand row или отдельный таб «Размещение по складам»), массовые кнопки, ручное редактирование `qty_to_issue` по складам.
+- [x] **Кладовщик**: просмотр распределения по складам без правки (`readonly="1"`).
+- [x] Поле объекта `code` и `name` — readonly после `create()` в form view; sequence-код виден в read-only.
 
 ### Этап 10. Миграция БД
-- [ ] `pre-migrate.py`:
+- [x] `pre-migrate.py`:
   - забэкапить в noupdate-таблицу `_legacy_object_request_warehouse` пары `(request_id, warehouse_id)` и `(request_id, check_warehouse_id)` — для возможного отката.
-- [ ] `post-migrate.py`:
+- [x] `post-migrate.py`:
   - для каждого существующего объекта без `warehouse_id`:
     - если у объекта **не задан** `code` — сгенерировать через новый sequence (`O001` и далее);
     - создать `stock.warehouse` с `name = f"{project.name} склад"`, `code = project.code`;
@@ -159,7 +159,9 @@
   - для каждой существующей строки требования с `stock_qty_on_hand > 0`:
     - создать одну `object.request.line.stock` (warehouse = старый `request.warehouse_id`, `qty_on_hand` из строки, `qty_to_issue` = текущее значение строки).
 - [ ] DROP колонок `object_request.warehouse_id`, M2M-таблицы `object_request_check_warehouse_rel`, поля `stock_qty_on_hand`/`stock_check_date` на строке (после переноса).
-- [ ] Smoke-тест миграции на копии текущей dev-БД `odoo19_local`.
+  - [x] `object_request.warehouse_id`, `object_request.stock_check_confirmed` и `object_request_check_warehouse_rel` удаляются post-migrate.
+  - [ ] `stock_qty_on_hand`/`stock_check_date` пока оставлены как агрегатные поля текущей модели; удалить после перевода их в computed/store или замены во всех view/tests.
+- [x] Smoke-тест миграции на копии текущей dev-БД `odoo19_local`.
 
 ### Этап 11. Чистка тестов и фабрик
 - [ ] Все тесты, использующие `'warehouse_id': self.warehouse.id` в `object.request.create()`, переписать.

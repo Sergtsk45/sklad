@@ -63,7 +63,6 @@ class TestObjectRequestProjectWarehouse(TransactionCase):
             'project_id': self.project.id,
             'foreman_user_id': self.foreman.id,
             'need_date': fields.Date.today(),
-            'warehouse_id': self.project.warehouse_id.id,
         })
         with self.assertRaises(UserError):
             self.project.unlink()
