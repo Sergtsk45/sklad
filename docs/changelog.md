@@ -1,3 +1,10 @@
+## [2026-05-12] — OBR: устойчивость wizard предпросмотра выдачи в веб-клиенте
+### Изменено
+- `object.request.issue.preview.group`: поле «Склад» вычисляется из привязанных строк распределения (`warehouse_id`).
+- Перед созданием выдач `action_create_issues` восстанавливает `stock_line_ids` включённых групп из строк требования (на случай, если UI обнулил M2m при переключении «Создать»).
+### Добавлено
+- Тест `test_issue_preview_relinks_cleared_stock_lines_on_create` в `test_obr011_issue_picking.py`.
+
 ## [2026-05-11] — OBR: чистка тестов multi-warehouse
 ### Добавлено
 - Multi-warehouse сценарии в `test_obr011_issue_picking.py` и `test_obr012_confirm_issue.py`: одна строка требования может создавать выдачи по нескольким складам, а синхронизация `qty_issued` суммирует движения по всем выдачам строки.

@@ -214,6 +214,31 @@ class TestObr011IssuePicking(TransactionCase):
         ).mapped("picking_id")
         self.assertNotIn(pickings, excluded_pickings)
 
+    def test_issue_preview_excluded_group_keeps_warehouse_from_lines(self):
+        """Склад группы выводится из распределений; снятие «Создать» не ломает склад."""
+        warehouse2 = self._create_warehouse("D")
+        self._add_stock_distribution(self.line, 4.0, warehouse=warehouse2)
+        wizard = self._create_wizard()
+        group = wizard.group_ids.filtered(lambda g: g.warehouse_id == warehouse2)
+        self.assertEqual(len(group), 1)
+        group.write({"included": False})
+        group.invalidate_recordset()
+        self.assertEqual(group.warehouse_id, warehouse2)
+
+    def test_issue_preview_relinks_cleared_stock_lines_on_create(self):
+        """Пустые stock_line_ids на группе (как у веб-клиента при правках) восстанавливаются перед выдачей."""
+        warehouse2 = self._create_warehouse("E")
+        self._add_stock_distribution(self.line, 4.0, warehouse=warehouse2)
+        wizard = self._create_wizard()
+        g2 = wizard.group_ids.filtered(lambda g: g.warehouse_id == warehouse2)
+        g2.write({"stock_line_ids": [(5,)]})
+        g2.invalidate_recordset()
+        self.assertFalse(g2.stock_line_ids)
+
+        _result, pickings = self._create_issue(wizard)
+
+        self.assertEqual(len(pickings), 2)
+
     def test_picking_project_linked(self):
         """Picking содержит ссылку на объект проекта."""
         _result, picking = self._create_issue()

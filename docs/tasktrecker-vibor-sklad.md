@@ -30,11 +30,18 @@
 | 12 | Wizard «есть на складе» (`stock_check_wizard`) | **Оставляем как предупреждение**; после «ОК» закрывается без сохранения флага в требовании (`stock_check_confirmed` удалён) |
 | 13 | Перерасчёт авто-разбивки при ручных правках | **Предупреждать** снабженца перед перезаписью `qty_to_issue` (модальное окно «План был отредактирован вручную — перезаписать?») |
 | 14 | Регенерация AI knowledge pack | **Отдельная задача**, не блокирует эту |
+| 15 | `stock_qty_on_hand` / `stock_check_date` | **Оставить** как агрегаты строки: они полезны для UI и отчётов, а источник правды уже перенесён в `object.request.line.stock` |
+
+Принятое решение по `stock_qty_on_hand` / `stock_check_date`: поля пока ещё нужны как совместимые итоговые поля.
+
+- `views` / tests / reporting уже используют итог по строке;
+- прорабу удобно видеть общий остаток без складской детализации;
+- удаление потребовало бы переименования на новые computed-поля и отдельной миграции UI/отчётов.
 
 ## Затронутые сущности и файлы
 
 - `custom_addons/object_request/models/object_request.py` — удалить `warehouse_id`, `check_warehouse_ids`, `stock_check_confirmed`; переписать `action_check_stock`, `action_auto_split`, `action_open_issue_wizard`, `action_open_purchase_wizard`.
-- `custom_addons/object_request/models/object_request_line.py` — заменить `stock_qty_on_hand`/`stock_check_date` на агрегаты по дочерней модели; добавить `stock_ids` (One2many).
+- `custom_addons/object_request/models/object_request_line.py` — оставить `stock_qty_on_hand`/`stock_check_date` как агрегаты по дочерней модели; добавить `stock_ids` (One2many).
 - `custom_addons/object_request/models/object_request_project.py` — добавить `warehouse_id` (M2O, авто-создание), хук `create()`/`write()` для имени склада.
 - **Новая модель** `custom_addons/object_request/models/object_request_line_stock.py` — `(line_id, warehouse_id, qty_on_hand, qty_to_issue, qty_reserved, last_check_date)`.
 - `custom_addons/object_request/wizards/issue_wizard.py` + views — переделать в **multi-picking preview wizard** (группы по складам).
@@ -158,9 +165,9 @@
     - привязать `project.warehouse_id`.
   - для каждой существующей строки требования с `stock_qty_on_hand > 0`:
     - создать одну `object.request.line.stock` (warehouse = старый `request.warehouse_id`, `qty_on_hand` из строки, `qty_to_issue` = текущее значение строки).
-- [ ] DROP колонок `object_request.warehouse_id`, M2M-таблицы `object_request_check_warehouse_rel`, поля `stock_qty_on_hand`/`stock_check_date` на строке (после переноса).
+- [x] DROP колонок `object_request.warehouse_id`, M2M-таблицы `object_request_check_warehouse_rel`; `stock_qty_on_hand`/`stock_check_date` на строке оставить как агрегаты.
   - [x] `object_request.warehouse_id`, `object_request.stock_check_confirmed` и `object_request_check_warehouse_rel` удаляются post-migrate.
-  - [ ] `stock_qty_on_hand`/`stock_check_date` пока оставлены как агрегатные поля текущей модели; удалить после перевода их в computed/store или замены во всех view/tests.
+  - [x] `stock_qty_on_hand`/`stock_check_date` оставлены как совместимые итоговые поля текущей модели, синхронизируемые из `object.request.line.stock`.
 - [x] Smoke-тест миграции на копии текущей dev-БД `odoo19_local`.
 
 ### Этап 11. Чистка тестов и фабрик
@@ -222,13 +229,22 @@
   - [x] `F401`: удалить неиспользуемые импорты в `test_obr018_pilot_scenarios.py` и `import_excel_wizard.py`.
   - [x] `E741`: переименовать неоднозначные переменные `l` в `test_obr018_pilot_scenarios.py`.
 - [ ] Smoke-сценарий вручную:
-  1. Создать объект «Тест» — склад «Тест склад» создан автоматически.
-  2. Прораб создаёт требование (поля «Склад» нет).
-  3. «Рассчитать наличие» — по строкам видны остатки по нескольким складам.
-  4. «Авто-разбивка» — план выдачи распределён, остаток в закупку.
-  5. Снабженец нажимает «Закупить всё» по одной строке — `qty_to_issue` обнуляется.
-  6. «Создать выдачи» — wizard показывает 2 группы (по складам), создаёт 2 `stock.picking`.
-  7. «Подготовить закупку» — PO с приёмкой на склад объекта.
+  - Прогон 2026-05-12 через browser MCP: PASS 8, FAIL 0, BLOCKED/PARTIAL 6.
+  - Созданные записи: объект `SMOKE Object 20260512-u1` (`object.request.project` id 15485, код/склад O1898), товар `SMOKE Cement 20260512-u1` (`product.template` id 14305), требование `OR/2026/05/14165` (`object.request` id 14020), выдачи `O1898/INT/00001` и `WH/INT/02433`.
+  - [x] Создать объект — склад объекта создан автоматически, код склада O1898 совпадает с кодом объекта.
+  - [x] Требование без склада в шапке — в форме `OR/2026/05/14165` поле «Склад» отсутствует.
+  - [x] «Рассчитать наличие» — общий остаток 8.0; склад объекта O1898 = 3.0; WH = 5.0.
+  - [x] «Авто-разбивка» — `qty_to_issue=7`, `qty_to_buy=0`; приоритет склада объекта: O1898 = 3.0, WH = 4.0.
+  - [x] Предупреждение ручного плана — `object.request.auto.split.confirm.wizard`, заголовок «Перезаписать распределение?».
+  - [x] Preview выдач — 2 группы по складам: WH = 4.0, O1898 = 3.0.
+  - [x] Создание выдач — созданы 2 `stock.picking`: `WH/INT/02433` qty 4 и `O1898/INT/00001` qty 3, оба `is_object_request_issue=True`.
+  - [x] Связь выдач с требованием — `origin` равен номеру требования, `object_request_project_id` заполнен.
+  - [ ] Закупка на склад объекта — PARTIAL/BLOCKED: повторить на новом требовании до создания выдач или после восстановления остатков.
+  - [ ] UI прораба — BLOCKED: вход только под прорабом не выполнялся; админ имел смешанные группы.
+  - [x] UI снабженца — частично подтверждён: видны вкладки/кнопки массовых действий (`Закупить всё`, `Выдать максимум`, `Сбросить разбивку`), серверные действия отработали.
+  - [ ] UI кладовщика — BLOCKED: вход под кладовщиком не выполнялся.
+  - [ ] Пустой план выдачи блокируется — BLOCKED: не выполнялось в UI после выдачи.
+  - [ ] Исключённая группа preview пропускается — BLOCKED: галочка «Создать» не проверялась в браузере.
 - [x] Документация (`changelog`, `project`, `datamodelspec`, `functionalspec`) обновлена.
 
 ## Связанные задачи
