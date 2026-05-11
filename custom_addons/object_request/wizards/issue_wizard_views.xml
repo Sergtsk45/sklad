@@ -11,17 +11,6 @@
                         <field name="request_id" readonly="1"/>
                     </group>
 
-                    <group string="Параметры выдачи">
-                        <group>
-                            <field name="warehouse_id"/>
-                            <field name="picking_type_id"/>
-                        </group>
-                        <group>
-                            <field name="source_location_id"/>
-                            <field name="destination_location_id"/>
-                        </group>
-                    </group>
-
                     <group>
                         <field name="scheduled_date"/>
                         <field name="comment" placeholder="Комментарий к выдаче..."/>

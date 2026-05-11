@@ -34,6 +34,39 @@ flowchart TD
     AISearch --> OpenRouter[AI assistant tool layer]
 ```
 
+## object_request
+
+Модуль ведёт требования на комплектацию объектов. Склад не выбирается в шапке требования: при создании объекта автоматически создаётся связанный `stock.warehouse`, который используется как склад приёмки закупок. Выдача планируется на уровне строки требования через распределение `object.request.line.stock` по всем активным складам компании.
+
+```mermaid
+flowchart TD
+    Project[Объект object.request.project] --> ProjectWh[Склад объекта stock.warehouse]
+    Foreman[Прораб] --> Request[Требование object.request]
+    Request --> Lines[Строки object.request.line]
+    Lines --> Check[Рассчитать наличие]
+    Check --> StockRows[Распределение object.request.line.stock]
+    StockRows --> Split[Авто-разбивка / ручная правка]
+    Split --> IssuePlan[К выдаче по складам]
+    Split --> BuyPlan[К закупке]
+    IssuePlan --> Preview[Wizard предпросмотра выдач]
+    Preview --> PickA[stock.picking склад A]
+    Preview --> PickB[stock.picking склад B]
+    PickA --> Reserve[Резерв / факт выдачи]
+    PickB --> Reserve
+    Reserve --> SyncIssued[Синхронизация qty_reserved / qty_issued]
+    BuyPlan --> PurchaseWizard[Wizard закупки]
+    ProjectWh --> PurchaseWizard
+    PurchaseWizard --> PO[purchase.order с приёмкой на склад объекта]
+```
+
+Ключевые правила:
+
+- `object.request` не хранит `warehouse_id`, `check_warehouse_ids`, `stock_check_confirmed`.
+- `action_check_stock` создаёт/обновляет `object.request.line.stock` по всем активным складам компании.
+- `action_auto_split` использует положительный остаток склада объекта первым, затем остальные склады по доступному остатку; дефицит переносится в закупку.
+- `object.request.issue.preview.wizard` создаёт по одному `stock.picking` на каждый включённый склад.
+- `object.request.purchase.wizard` по умолчанию принимает закупку на `project.warehouse_id.in_type_id`.
+
 ## Правила безопасности
 
 - Кастомные addon не меняют Odoo core.

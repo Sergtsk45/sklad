@@ -284,19 +284,37 @@ class ObjectRequestLine(models.Model):
     def action_issue_max(self):
         self._check_supply_manager_mass_action()
         stock_context = {'auto_stock_distribution': True}
-        for line in self.filtered(lambda ln: ln.product_id and not ln.is_cancelled):
+        for line in self.filtered(
+            lambda ln: ln.product_id and not ln.is_cancelled
+        ):
             requested = max(line.qty_requested - line.qty_issued, 0.0)
-            stock_ids = line.stock_ids.sorted(
+            project_warehouse = line.request_id.project_id.warehouse_id
+            project_stock = line.stock_ids.filtered(
+                lambda stock: (
+                    stock.warehouse_id == project_warehouse
+                    and stock.qty_on_hand > 0
+                )
+            )[:1]
+            other_stock_ids = (line.stock_ids - project_stock).sorted(
                 key=lambda stock: stock.qty_on_hand,
                 reverse=True,
             )
-            stock_ids.with_context(**stock_context).write({'qty_to_issue': 0.0})
+            stock_ids = project_stock | other_stock_ids
+            stock_ids.with_context(**stock_context).write({
+                'qty_to_issue': 0.0,
+            })
             remaining = requested
             single_stock = next(
-                (stock for stock in stock_ids if stock.qty_on_hand >= requested),
+                (
+                    stock for stock in stock_ids
+                    if (
+                        stock.qty_on_hand >= requested
+                        and stock.id not in project_stock.ids
+                    )
+                ),
                 False,
             )
-            if single_stock:
+            if single_stock and not project_stock:
                 single_stock.with_context(**stock_context).write({
                     'qty_to_issue': requested,
                 })

@@ -59,6 +59,18 @@ class TestObr019StockCheck(TransactionCase):
             product, self.stock_loc, qty,
         )
 
+    def _create_warehouse(self, suffix):
+        return self.env['stock.warehouse'].sudo().create({
+            'name': f'Склад OBR019-{suffix}',
+            'code': f'19{suffix}',
+            'company_id': self.env.company.id,
+        })
+
+    def _put_stock(self, product, warehouse, qty):
+        self.env['stock.quant']._update_available_quantity(
+            product, warehouse.lot_stock_id, qty,
+        )
+
     # ── action_check_stock ──────────────────────────────────────────────────
 
     def test_check_stock_fills_stock_check_date(self):
@@ -146,6 +158,76 @@ class TestObr019StockCheck(TransactionCase):
         self.assertAlmostEqual(self.line_a.qty_to_buy, 40.0)
         self.assertEqual(self.line_a.procurement_mode, 'mixed')
 
+    def test_auto_split_uses_two_warehouses_when_one_is_not_enough(self):
+        """Если одного склада не хватает, план берётся с нескольких."""
+        warehouse2 = self._create_warehouse('B')
+        self._put_stock(self.product_a, self.warehouse, 60.0)
+        self._put_stock(self.product_a, warehouse2, 50.0)
+
+        self.request.action_check_stock()
+        self.request.action_auto_split()
+
+        planned = self.line_a.stock_ids.filtered(
+            lambda stock: stock.qty_to_issue > 0
+        )
+        self.assertEqual(len(planned), 2)
+        self.assertAlmostEqual(sum(planned.mapped('qty_to_issue')), 100.0)
+        self.assertAlmostEqual(self.line_a.qty_to_buy, 0.0)
+
+    def test_auto_split_uses_remaining_qty_after_partial_issue(self):
+        """Уже выданное количество уменьшает остаток к обеспечению."""
+        self.line_a.write({'qty_issued': 20.0})
+        self._add_stock(self.product_a, 200.0)
+
+        self.request.action_check_stock()
+        self.request.action_auto_split()
+
+        self.assertAlmostEqual(self.line_a.qty_to_issue, 80.0)
+        self.assertAlmostEqual(self.line_a.qty_to_buy, 0.0)
+
+    def test_auto_split_warns_before_overwriting_manual_plan(self):
+        """Ручная правка распределения открывает wizard подтверждения."""
+        self._add_stock(self.product_a, 60.0)
+        self.request.action_check_stock()
+        self.line_a.stock_ids[:1].write({'qty_to_issue': 10.0})
+
+        result = self.request.action_auto_split()
+
+        self.assertEqual(result['type'], 'ir.actions.act_window')
+        self.assertEqual(
+            result['res_model'],
+            'object.request.auto.split.confirm.wizard',
+        )
+
+    def test_auto_split_skips_zero_project_warehouse_stock(self):
+        """Склад объекта с нулём не получает план выдачи."""
+        other_warehouse = self._create_warehouse('C')
+        self._put_stock(self.product_a, other_warehouse, 100.0)
+
+        self.request.action_check_stock()
+        self.request.action_auto_split()
+
+        project_stock = self.line_a.stock_ids.filtered(
+            lambda stock: stock.warehouse_id == self.project.warehouse_id
+        )
+        self.assertAlmostEqual(project_stock.qty_to_issue, 0.0)
+
+    def test_auto_split_prioritizes_project_warehouse_when_it_has_stock(self):
+        """Положительный остаток на складе объекта используется первым."""
+        other_warehouse = self._create_warehouse('D')
+        self._put_stock(self.product_a, self.project.warehouse_id, 5.0)
+        self._put_stock(self.product_a, other_warehouse, 100.0)
+
+        self.request.action_check_stock()
+        self.request.action_auto_split()
+
+        project_stock = self.line_a.stock_ids.filtered(
+            lambda stock: stock.warehouse_id == self.project.warehouse_id
+        )
+        self.assertAlmostEqual(project_stock.qty_to_issue, 5.0)
+        self.assertAlmostEqual(self.line_a.qty_to_issue, 100.0)
+        self.assertAlmostEqual(self.line_a.qty_to_buy, 0.0)
+
     def test_auto_split_exact_stock_issues_all(self):
         """Остаток равен запрошенному — всё выдаётся, ничего не закупается."""
         self._add_stock(self.product_a, 100.0)
@@ -218,7 +300,7 @@ class TestObr019StockCheck(TransactionCase):
         self.assertEqual(self.line_a.procurement_mode, 'manual')
 
     def test_line_action_issue_max_uses_available_stock(self):
-        """Массовое действие «Выдать максимум» повторяет авто-разбивку строки."""
+        """«Выдать максимум» повторяет авто-разбивку строки."""
         self._add_stock(self.product_a, 60.0)
         self.request.action_check_stock()
 

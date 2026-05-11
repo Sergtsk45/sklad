@@ -110,10 +110,11 @@ scope: Odoo 19, models, fields, relations, constraints
 2. `object.request` - шапка документа требования
 3. `object.request.line` - строки документа
 4. `object.request.import.wizard` - transient wizard для Excel
-5. `object.request.issue.wizard` - transient wizard для подготовки выдачи
-6. `object.request.purchase.wizard` - transient wizard для подготовки закупки
-7. расширение `stock.picking`
-8. расширение `purchase.order`
+5. `object.request.line.stock` - распределение строки по складам
+6. `object.request.issue.preview.wizard` - transient wizard предпросмотра выдач по складам
+7. `object.request.purchase.wizard` - transient wizard для подготовки закупки
+8. расширение `stock.picking`
+9. расширение `purchase.order`
 
 ## Модель 1. `object.request.project`
 
@@ -133,7 +134,10 @@ scope: Odoo 19, models, fields, relations, constraints
 - `name = fields.Char(required=True, tracking=True)`
   - отображаемое наименование объекта
 - `code = fields.Char(index=True, tracking=True)`
-  - внутренний код объекта
+  - внутренний код объекта; генерируется sequence `object.request.project.code` в формате `O001`, `O002`, ...
+- `company_id = fields.Many2one('res.company', required=True, default=lambda self: self.env.company, index=True)`
+- `warehouse_id = fields.Many2one('stock.warehouse', readonly=True, copy=False)`
+  - склад объекта, создаётся автоматически при создании объекта
 - `partner_id = fields.Many2one('res.partner')`
   - заказчик / контрагент объекта
 - `address = fields.Char()`
@@ -146,6 +150,18 @@ scope: Odoo 19, models, fields, relations, constraints
 ### Required fields в MVP
 
 - `name`
+
+### Склад объекта
+
+При создании объекта модуль создаёт связанный `stock.warehouse`:
+
+- `name = "{object.name} склад"`
+- `code = object.code`
+- `company_id = object.company_id`
+
+Склад объекта используется как склад приёмки закупок, создаваемых из требования. При архивации объекта архивируется и склад; при разархивации активность склада восстанавливается.
+
+Переименование `name` и изменение `code` после создания запрещены для обычных пользователей. Администратор может изменить `name`; в этом случае имя связанного склада синхронизируется.
 
 ### SQL constraints
 
@@ -197,6 +213,16 @@ scope: Odoo 19, models, fields, relations, constraints
     ('closed', 'Закрыто'),
     ('cancelled', 'Отменено')
   ], default='draft', required=True, tracking=True, index=True)`
+
+### Склад в шапке
+
+В актуальной multi-warehouse схеме у `object.request` нет полей:
+
+- `warehouse_id`
+- `check_warehouse_ids`
+- `stock_check_confirmed`
+
+Прораб не выбирает склад при создании требования. Расчёт наличия выполняется автоматически по всем активным складам компании, а план выдачи хранится на уровне `object.request.line.stock`.
 
 ### Поля источника импорта
 
@@ -507,28 +533,84 @@ Transient model для загрузки Excel и создания докумен
 Wizard является UI-моделью и не должен хранить результат как бизнес-истину.  
 После завершения импорта данные должны жить только в `object.request` и `object.request.line`.
 
-## Модель 5. `object.request.issue.wizard`
+## Модель 4a. `object.request.line.stock`
 
 ### Назначение
 
-Transient model для подготовки выдачи.
+Хранит рассчитанный остаток, план выдачи, резерв и созданные складские документы по паре строка требования / склад.
+
+### Технические параметры
+
+- `_name = 'object.request.line.stock'`
+- `_description = 'Object Request Line Stock'`
+- `_order = 'line_id, id'`
+
+### Поля
+
+- `line_id = fields.Many2one('object.request.line', required=True, ondelete='cascade', index=True)`
+- `warehouse_id = fields.Many2one('stock.warehouse', required=True, index=True)`
+- `company_id = fields.Many2one('res.company', related='line_id.company_id', store=True)`
+- `qty_on_hand = fields.Float(digits='Product Unit of Measure')`
+  - доступный остаток на складе на момент последней проверки
+- `qty_to_issue = fields.Float(digits='Product Unit of Measure')`
+  - план выдачи с конкретного склада
+- `qty_reserved = fields.Float(digits='Product Unit of Measure')`
+  - зарезервированное количество по созданному picking
+- `last_check_date = fields.Datetime()`
+- `picking_id = fields.Many2one('stock.picking', index=True)`
+- `move_id = fields.Many2one('stock.move', index=True)`
+
+### Constraints
+
+- `UNIQUE(line_id, warehouse_id)`
+- сумма `qty_to_issue` по всем складам строки не может превышать `qty_requested - qty_issued`.
+
+### Синхронизация с `object.request.line`
+
+После create/write/unlink распределения строка требования пересчитывает:
+
+- `stock_qty_on_hand = sum(stock_ids.qty_on_hand)`
+- `stock_check_date = max(stock_ids.last_check_date)`
+- `qty_to_issue = sum(stock_ids.qty_to_issue)`
+- `qty_reserved = sum(stock_ids.qty_reserved)`
+- `qty_to_buy = max(qty_requested - qty_issued - qty_to_issue, 0)`
+- `procurement_mode`
+
+Ручная правка `qty_to_issue` в распределении ставит `manual_plan_override=True` на строке.
+
+## Модель 5. `object.request.issue.preview.wizard`
+
+### Назначение
+
+Transient model для предпросмотра и создания выдач по складам.
 
 ### Поля
 
 - `request_id = fields.Many2one('object.request', required=True)`
-- `line_ids = fields.Many2many('object.request.line')`
-- `warehouse_id = fields.Many2one('stock.warehouse')`
-- `source_location_id = fields.Many2one('stock.location')`
-- `destination_location_id = fields.Many2one('stock.location')`
-- `scheduled_date = fields.Datetime()`
+- `group_ids = fields.One2many('object.request.issue.preview.group', 'wizard_id')`
+- `group_count = fields.Integer(compute='_compute_group_count')`
+
+### Группа выдачи `object.request.issue.preview.group`
+
+- `wizard_id = fields.Many2one('object.request.issue.preview.wizard', required=True, ondelete='cascade')`
+- `warehouse_id = fields.Many2one('stock.warehouse', required=True, readonly=True)`
+- `picking_type_id = fields.Many2one('stock.picking.type', required=True)`
+- `source_location_id = fields.Many2one('stock.location', required=True)`
+- `destination_location_id = fields.Many2one('stock.location', required=True)`
+- `scheduled_date = fields.Datetime(required=True)`
 - `comment = fields.Text()`
+- `included = fields.Boolean(default=True)`
+- `stock_line_ids = fields.Many2many('object.request.line.stock')`
+- `line_count = fields.Integer(compute='_compute_totals')`
+- `qty_total = fields.Float(compute='_compute_totals')`
 
 ### Использование
 
-В MVP wizard может быть очень тонким:
-
-- взять строки с `qty_to_issue > 0`
-- создать `stock.picking`
+- `default_get` группирует `object.request.line.stock` с `qty_to_issue > 0` по складам.
+- пользователь может исключить группу склада через `included=False`.
+- `action_create_issues()` создаёт по одному `stock.picking` на каждую включённую группу.
+- для каждой строки распределения сохраняются `picking_id` и `move_id`.
+- после `action_assign()` синхронизируются `qty_reserved` и `issue_reserved`.
 
 ## Модель 6. `object.request.purchase.wizard`
 
@@ -546,8 +628,7 @@ Transient model для подготовки черновиков закупки 
 
 ### Использование
 
-В MVP можно оставить как UI-заглушку.  
-На этапе 2 wizard реально создает `purchase.order`.
+Wizard создаёт draft `purchase.order` по строкам с `qty_to_buy > 0`, группируя строки по поставщику. Тип приёмки (`picking_type_id`) по умолчанию берётся из `request.project_id.warehouse_id.in_type_id`; если у объекта нет склада, снабженец должен выбрать тип приёмки вручную.
 
 ## Расширение `stock.picking`
 
@@ -741,4 +822,3 @@ Transient model для подготовки черновиков закупки 
 2. `wizard spec` для Excel-импорта
 3. `state machine spec`
 4. затем каркас Python-моделей и XML views
-

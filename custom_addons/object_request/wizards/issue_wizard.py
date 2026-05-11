@@ -7,7 +7,10 @@ class ObjectRequestIssueWizard(models.TransientModel):
     _description = 'Wizard создания выдачи со склада'
 
     request_id = fields.Many2one(
-        'object.request', string='Требование', required=True, ondelete='cascade',
+        'object.request',
+        string='Требование',
+        required=True,
+        ondelete='cascade',
         readonly=True,
     )
     line_ids = fields.Many2many(
@@ -16,22 +19,25 @@ class ObjectRequestIssueWizard(models.TransientModel):
         string='Строки к выдаче',
     )
     warehouse_id = fields.Many2one(
-        'stock.warehouse', string='Склад', required=True,
+        'stock.warehouse', string='Склад',
     )
     picking_type_id = fields.Many2one(
-        'stock.picking.type', string='Тип операции', required=True,
+        'stock.picking.type', string='Тип операции',
     )
     source_location_id = fields.Many2one(
-        'stock.location', string='Откуда (источник)', required=True,
+        'stock.location', string='Откуда (источник)',
     )
     destination_location_id = fields.Many2one(
-        'stock.location', string='Куда (назначение)', required=True,
+        'stock.location', string='Куда (назначение)',
     )
     scheduled_date = fields.Datetime(
         string='Дата выдачи', required=True, default=fields.Datetime.now,
     )
     comment = fields.Text(string='Комментарий')
-    line_count = fields.Integer(compute='_compute_line_count', string='Строк к выдаче')
+    line_count = fields.Integer(
+        compute='_compute_line_count',
+        string='Строк к выдаче',
+    )
 
     @api.depends('line_ids')
     def _compute_line_count(self):
@@ -80,12 +86,20 @@ class ObjectRequestIssueWizard(models.TransientModel):
 
     def action_create_issue(self):
         self.ensure_one()
+        wizard = self.env['object.request.issue.preview.wizard'].with_context(
+            default_request_id=self.request_id.id,
+        ).create({})
+        return wizard.action_create_issues()
+
+    def _legacy_action_create_issue(self):
+        self.ensure_one()
         lines = self.line_ids.filtered(
             lambda ln: ln.qty_to_issue > 0 and ln.product_id
         )
         if not lines:
             raise UserError(
-                'Нет строк с заполненным количеством к выдаче и сопоставленным товаром.'
+                'Нет строк с заполненным количеством к выдаче '
+                'и сопоставленным товаром.'
             )
 
         picking = self.env['stock.picking'].create({

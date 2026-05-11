@@ -644,17 +644,33 @@ class ObjectRequest(models.Model):
         stock_context = {'auto_stock_distribution': True}
         for line in lines:
             requested = max(line.qty_requested - line.qty_issued, 0.0)
-            stock_ids = line.stock_ids.sorted(
+            project_warehouse = line.request_id.project_id.warehouse_id
+            project_stock = line.stock_ids.filtered(
+                lambda stock: (
+                    stock.warehouse_id == project_warehouse
+                    and stock.qty_on_hand > 0
+                )
+            )[:1]
+            other_stock_ids = (line.stock_ids - project_stock).sorted(
                 key=lambda stock: stock.qty_on_hand,
                 reverse=True,
             )
-            stock_ids.with_context(**stock_context).write({'qty_to_issue': 0.0})
+            stock_ids = project_stock | other_stock_ids
+            stock_ids.with_context(**stock_context).write({
+                'qty_to_issue': 0.0,
+            })
             remaining = requested
             single_stock = next(
-                (stock for stock in stock_ids if stock.qty_on_hand >= requested),
+                (
+                    stock for stock in stock_ids
+                    if (
+                        stock.qty_on_hand >= requested
+                        and stock.id not in project_stock.ids
+                    )
+                ),
                 False,
             )
-            if single_stock:
+            if single_stock and not project_stock:
                 single_stock.with_context(**stock_context).write({
                     'qty_to_issue': requested,
                 })
@@ -666,7 +682,9 @@ class ObjectRequest(models.Model):
                     qty = min(max(stock.qty_on_hand, 0.0), remaining)
                     if qty <= 0:
                         continue
-                    stock.with_context(**stock_context).write({'qty_to_issue': qty})
+                    stock.with_context(**stock_context).write({
+                        'qty_to_issue': qty,
+                    })
                     remaining -= qty
             qty_to_issue = sum(line.stock_ids.mapped('qty_to_issue'))
             qty_to_buy = requested - qty_to_issue

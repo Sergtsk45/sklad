@@ -143,7 +143,7 @@ class TestObr011IssuePicking(TransactionCase):
         self.assertEqual(len(picking.move_ids), 2)
 
     def test_multiwarehouse_distribution_creates_picking_per_warehouse(self):
-        """Одна строка, два склада → две выдачи с количеством по распределению."""
+        """Одна строка, два склада → две выдачи."""
         warehouse2 = self._create_warehouse('B')
         self._add_stock_distribution(self.line, 4.0, warehouse=warehouse2)
 
@@ -158,7 +158,28 @@ class TestObr011IssuePicking(TransactionCase):
             set(self.line.stock_ids.mapped('picking_id').ids),
             set(pickings.ids),
         )
-        self.assertEqual(sum(pickings.mapped('move_ids.product_uom_qty')), 10.0)
+        self.assertEqual(
+            sum(pickings.mapped('move_ids.product_uom_qty')),
+            10.0,
+        )
+
+    def test_issue_preview_excluded_group_is_not_created(self):
+        """Исключённая группа склада не создаёт picking."""
+        warehouse2 = self._create_warehouse('C')
+        self._add_stock_distribution(self.line, 4.0, warehouse=warehouse2)
+        wizard = self._create_wizard()
+        wizard.group_ids.filtered(
+            lambda group: group.warehouse_id == warehouse2
+        ).write({'included': False})
+
+        _result, pickings = self._create_issue(wizard)
+
+        self.assertEqual(len(pickings), 1)
+        self.assertEqual(pickings.picking_type_id, self.warehouse.int_type_id)
+        excluded_pickings = self.line.stock_ids.filtered(
+            lambda stock: stock.warehouse_id == warehouse2
+        ).mapped('picking_id')
+        self.assertNotIn(pickings, excluded_pickings)
 
     def test_picking_project_linked(self):
         """Picking содержит ссылку на объект проекта."""
@@ -190,5 +211,8 @@ class TestObr011IssuePicking(TransactionCase):
     def test_action_open_issue_wizard_returns_wizard_action(self):
         """action_open_issue_wizard возвращает действие открытия wizard."""
         action = self.request.action_open_issue_wizard()
-        self.assertEqual(action['res_model'], 'object.request.issue.preview.wizard')
+        self.assertEqual(
+            action['res_model'],
+            'object.request.issue.preview.wizard',
+        )
         self.assertEqual(action['target'], 'new')
