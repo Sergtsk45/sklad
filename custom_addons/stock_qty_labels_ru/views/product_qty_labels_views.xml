@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Списки товаров (вариант / шаблон) -->
+    <record id="view_stock_product_tree_qty_labels_ru" model="ir.ui.view">
+        <field name="name">product.stock.list.qty.labels.ru</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="stock.view_stock_product_tree"/>
+        <field name="arch" type="xml">
+            <field name="qty_available" position="attributes">
+                <attribute name="string">На складе</attribute>
+                <attribute name="sum">Итого на складе</attribute>
+            </field>
+            <field name="virtual_available" position="attributes">
+                <attribute name="string">Доступно</attribute>
+                <attribute name="sum">Итого доступно</attribute>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_stock_product_template_tree_qty_labels_ru" model="ir.ui.view">
+        <field name="name">product.template.stock.list.qty.labels.ru</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="stock.view_stock_product_template_tree"/>
+        <field name="arch" type="xml">
+            <field name="qty_available" position="attributes">
+                <attribute name="string">На складе</attribute>
+                <attribute name="sum">Итого на складе</attribute>
+            </field>
+            <field name="virtual_available" position="attributes">
+                <attribute name="string">Доступно</attribute>
+                <attribute name="sum">Итого доступно</attribute>
+            </field>
+        </field>
+    </record>
+
+    <!-- Отчёт «Наличие» / список со складским виджетом -->
+    <record id="product_product_stock_tree_qty_labels_ru" model="ir.ui.view">
+        <field name="name">product.product.stock.list.qty.labels.ru</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="stock.product_product_stock_tree"/>
+        <field name="arch" type="xml">
+            <field name="qty_available" position="attributes">
+                <attribute name="string">На складе</attribute>
+                <attribute name="sum">Итого на складе</attribute>
+            </field>
+            <field name="virtual_available" position="attributes">
+                <attribute name="string">Доступно</attribute>
+                <attribute name="sum">Итого доступно</attribute>
+            </field>
+        </field>
+    </record>
+
+    <!-- Kanban шаблона -->
+    <record id="product_template_kanban_stock_qty_labels_ru" model="ir.ui.view">
+        <field name="name">product.template.kanban.stock.qty.labels.ru</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="stock.product_template_kanban_stock_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@t-if=&quot;record.show_on_hand_qty_status_button.raw_value&quot;]" position="replace">
+                <div groups="stock.group_stock_user" t-if="record.show_on_hand_qty_status_button.raw_value">
+                    На складе:
+                    <field name="qty_available"/>
+                    <field name="uom_id" groups="uom.group_uom"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Kanban каталога варианта -->
+    <record id="product_view_kanban_catalog_qty_labels_ru" model="ir.ui.view">
+        <field name="name">product.kanban.catalog.stock.qty.labels.ru</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="stock.product_view_kanban_catalog"/>
+        <field name="arch" type="xml">
+            <xpath expr="//span[@class='text-muted small'][contains(., 'Available')]" position="replace">
+                <span class="text-muted small"> Свободно</span>
+            </xpath>
+            <xpath expr="//span[@class='text-muted small'][contains(., 'On Hand')]" position="replace">
+                <span class="text-muted small"> На складе</span>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Кнопка прогноза на форме варианта -->
+    <record id="product_form_procurement_qty_labels_ru" model="ir.ui.view">
+        <field name="name">product.product.procurement.qty.labels.ru</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="stock.product_form_view_procurement_button"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_product_forecast_report']//span[@groups='!uom.group_uom']" position="replace">
+                <span groups="!uom.group_uom">На складе</span>
+            </xpath>
+            <xpath expr="//button[@name='action_product_forecast_report']//span[@class='o_stat_value text-muted']" position="replace">
+                <span class="o_stat_value text-muted">Доступно</span>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Кнопка прогноза на форме шаблона -->
+    <record id="product_template_form_procurement_qty_labels_ru" model="ir.ui.view">
+        <field name="name">product.template.procurement.qty.labels.ru</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="stock.product_template_form_view_procurement_button"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_product_tmpl_forecast_report']//span[@groups='!uom.group_uom']" position="replace">
+                <span groups="!uom.group_uom">На складе</span>
+            </xpath>
+            <xpath expr="//button[@name='action_product_tmpl_forecast_report']//span[@class='o_stat_value text-muted']" position="replace">
+                <span class="o_stat_value text-muted">Доступно</span>
+            </xpath>
+        </field>
+    </record>
+</odoo>
