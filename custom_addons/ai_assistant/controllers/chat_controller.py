@@ -295,6 +295,26 @@ class AiAssistantController(http.Controller):
             if not tool_calls:
                 break
             write_call = self._first_write_tool_call(tool_calls)
+            read_calls = self._read_tool_calls(tool_calls)
+            if write_call and read_calls:
+                # Mixed batch: execute reads first so LLM has full context
+                # before we show a write confirmation. Assistant message only
+                # includes read calls so every tool_call_id gets a result.
+                messages.append(
+                    self._assistant_tool_calls_message(response, read_calls)
+                )
+                for tool_call in read_calls:
+                    result = executor.execute(
+                        tool_call['name'],
+                        tool_call.get('arguments') or {},
+                    )
+                    messages.append({
+                        'role': 'tool',
+                        'tool_call_id': tool_call.get('id'),
+                        'name': tool_call['name'],
+                        'content': self._json_dumps(result),
+                    })
+                continue
             if write_call:
                 args = write_call.get('arguments') or {}
                 pending_key = _pending_actions.put(
@@ -345,6 +365,17 @@ class AiAssistantController(http.Controller):
                 return tool_call
         return None
 
+    def _read_tool_calls(self, tool_calls):
+        reads = []
+        for tool_call in tool_calls:
+            try:
+                tool = default_registry.get(tool_call['name'])
+            except KeyError:
+                continue
+            if not tool.is_write:
+                reads.append(tool_call)
+        return reads
+
     def _idempotency_key(self, tool_name, args):
         try:
             tool = default_registry.get(tool_name)
@@ -360,7 +391,9 @@ class AiAssistantController(http.Controller):
             )
             return None
 
-    def _assistant_tool_calls_message(self, response):
+    def _assistant_tool_calls_message(self, response, tool_calls=None):
+        if tool_calls is None:
+            tool_calls = response.get('tool_calls') or []
         return {
             'role': 'assistant',
             'content': response.get('content') or '',
@@ -375,7 +408,7 @@ class AiAssistantController(http.Controller):
                         ),
                     },
                 }
-                for item in response.get('tool_calls') or []
+                for item in tool_calls
             ],
         }
 
