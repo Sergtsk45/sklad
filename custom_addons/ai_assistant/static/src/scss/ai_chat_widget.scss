@@ -191,6 +191,158 @@
     word-break: break-word;
 }
 
+.o_ai_confirmation_card {
+    margin-top: 8px;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #d8dadd;
+    border-radius: 8px;
+    color: #333;
+    white-space: normal;
+    min-width: 240px;
+}
+
+.o_ai_card_title {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.o_ai_card_fields {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-bottom: 8px;
+
+    th,
+    td {
+        padding: 4px 0;
+        vertical-align: top;
+        border-top: 1px solid #eee;
+    }
+
+    th {
+        width: 42%;
+        padding-right: 8px;
+        color: #666;
+        font-weight: 500;
+        text-align: left;
+    }
+}
+
+.o_ai_card_tool {
+    color: #777;
+    font-size: 11px;
+    margin-bottom: 8px;
+}
+
+.o_ai_card_status {
+    color: #666;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.o_ai_card_actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.o_ai_card_btn {
+    border-radius: 6px;
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.o_ai_card_btn_primary {
+    background: #875a7b;
+    color: #fff;
+
+    &:hover {
+        background: #6b4761;
+    }
+}
+
+.o_ai_card_btn_secondary {
+    background: #fff;
+    color: #555;
+    border-color: #ccc;
+
+    &:hover {
+        background: #f5f5f5;
+    }
+}
+
+.o_ai_result_card {
+    margin-top: 8px;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #d8dadd;
+    border-left-width: 4px;
+    border-radius: 8px;
+    color: #333;
+    white-space: normal;
+    min-width: 240px;
+}
+
+.o_ai_result_success {
+    border-left-color: #2e7d32;
+
+    .o_ai_result_icon {
+        color: #2e7d32;
+    }
+}
+
+.o_ai_result_error {
+    border-left-color: #c62828;
+
+    .o_ai_result_icon {
+        color: #c62828;
+    }
+}
+
+.o_ai_result_header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.o_ai_result_title {
+    font-weight: 600;
+}
+
+.o_ai_result_record {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+
+    a {
+        color: #875a7b;
+        font-weight: 600;
+        text-decoration: none;
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+}
+
+.o_ai_result_model,
+.o_ai_result_hint,
+.o_ai_result_error_message {
+    color: #777;
+    font-size: 11px;
+}
+
+.o_ai_result_hint {
+    margin-top: 8px;
+}
+
 // ─── Typing indicator ────────────────────────────────────────────────────────
 
 .o_ai_typing {

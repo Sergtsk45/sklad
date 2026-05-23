@@ -53,7 +53,27 @@
                     <t t-foreach="state.messages" t-as="msg" t-key="msg.timestamp">
                         <div t-attf-class="o_ai_message o_ai_message_{{ msg.role }}">
                             <div class="o_ai_message_bubble">
-                                <t t-esc="msg.content"/>
+                                <t t-if="msg.content">
+                                    <t t-esc="msg.content"/>
+                                </t>
+                                <t t-if="msg.cards">
+                                    <t t-foreach="msg.cards" t-as="card" t-key="card.pending_key || card.type">
+                                        <ConfirmationCard
+                                            t-if="card.type === 'confirmation'"
+                                            plan="card.plan"
+                                            pendingKey="card.pending_key"
+                                            onConfirm.bind="onConfirmPending"
+                                            onCancel.bind="onCancelPending"
+                                        />
+                                        <ResultCard
+                                            t-if="card.type === 'result'"
+                                            status="card.status"
+                                            record="card.record"
+                                            error="card.error"
+                                            nextHint="card.next_hint"
+                                        />
+                                    </t>
+                                </t>
                             </div>
                         </div>
                     </t>
@@ -105,6 +125,81 @@
                 <i t-attf-class="fa {{ state.isOpen ? 'fa-times' : 'fa-comments' }}"/>
             </button>
 
+        </div>
+    </t>
+
+    <t t-name="ai_assistant.ConfirmationCard">
+        <div t-attf-class="o_ai_confirmation_card {{ props.plan.state ? 'o_ai_card_' + props.plan.state : '' }}">
+            <div class="o_ai_card_title">
+                <t t-esc="props.plan.title"/>
+            </div>
+            <table t-if="props.plan.fields and props.plan.fields.length" class="o_ai_card_fields">
+                <tbody>
+                    <tr t-foreach="props.plan.fields" t-as="field" t-key="field.label">
+                        <th><t t-esc="field.label"/></th>
+                        <td><t t-esc="field.value"/></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div t-if="props.plan.tool_name" class="o_ai_card_tool">
+                <t t-esc="props.plan.tool_name"/>
+            </div>
+            <div t-if="props.plan.state" class="o_ai_card_status">
+                <t t-if="props.plan.state === 'confirmed'">Подтверждено</t>
+                <t t-elif="props.plan.state === 'cancelled'">Отменено</t>
+            </div>
+            <div t-if="!props.plan.state" class="o_ai_card_actions">
+                <button
+                    class="o_ai_card_btn o_ai_card_btn_secondary"
+                    t-on-click="onCancelClick"
+                    title="Отменить действие"
+                >
+                    Отмена
+                </button>
+                <button
+                    class="o_ai_card_btn o_ai_card_btn_primary"
+                    t-on-click="onConfirmClick"
+                    title="Подтвердить действие"
+                >
+                    Подтвердить
+                </button>
+            </div>
+        </div>
+    </t>
+
+    <t t-name="ai_assistant.ResultCard">
+        <div t-attf-class="o_ai_result_card o_ai_result_{{ props.status }}">
+            <div class="o_ai_result_header">
+                <span class="o_ai_result_icon">
+                    <i t-attf-class="fa {{ isSuccess ? 'fa-check-circle' : 'fa-exclamation-circle' }}"/>
+                </span>
+                <span class="o_ai_result_title">
+                    <t t-if="isSuccess">Черновик создан</t>
+                    <t t-else="">Действие не выполнено</t>
+                </span>
+            </div>
+            <div t-if="isSuccess and props.record" class="o_ai_result_record">
+                <a
+                    t-if="recordUrl"
+                    t-att-href="recordUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <t t-esc="props.record.name || props.record.id"/>
+                </a>
+                <span t-if="!recordUrl">
+                    <t t-esc="props.record.name || props.record.id"/>
+                </span>
+                <span t-if="props.record.model" class="o_ai_result_model">
+                    <t t-esc="props.record.model"/>
+                </span>
+            </div>
+            <div t-if="!isSuccess" class="o_ai_result_error_message">
+                <t t-esc="errorMessage"/>
+            </div>
+            <div t-if="props.nextHint" class="o_ai_result_hint">
+                <t t-esc="props.nextHint"/>
+            </div>
         </div>
     </t>
 </templates>

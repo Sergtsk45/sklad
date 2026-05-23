@@ -36,11 +36,17 @@ export const aiChatService = {
         function saveHistory(messages) {
             try {
                 // Никогда не сохраняем скриншоты в историю
-                const clean = messages.map((m) => ({
-                    role: m.role,
-                    content: m.content,
-                    timestamp: m.timestamp,
-                }));
+                const clean = messages.map((m) => {
+                    const msg = {
+                        role: m.role,
+                        content: m.content,
+                        timestamp: m.timestamp,
+                    };
+                    if (Array.isArray(m.cards) && m.cards.length) {
+                        msg.cards = m.cards;
+                    }
+                    return msg;
+                });
 
                 let trimmed =
                     clean.length > MAX_MESSAGES
@@ -68,12 +74,15 @@ export const aiChatService = {
             }
         }
 
-        function addMessage(messages, role, content) {
+        function addMessage(messages, role, content, extra = {}) {
             const newMsg = {
                 role,
                 content,
                 timestamp: new Date().toISOString(),
             };
+            if (Array.isArray(extra.cards) && extra.cards.length) {
+                newMsg.cards = extra.cards;
+            }
             const updated = [...messages, newMsg];
             return saveHistory(updated);
         }
@@ -209,6 +218,32 @@ export const aiChatService = {
             return captureScreen();
         }
 
+        async function confirmAction(pendingKey, decision) {
+            const response = await fetch("/ai_assistant/confirm", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        pending_key: pendingKey,
+                        decision,
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            return data.result || {};
+        }
+
         return {
             loadHistory,
             saveHistory,
@@ -217,6 +252,7 @@ export const aiChatService = {
             collectContext,
             captureScreen,
             maybeCapture,
+            confirmAction,
             needsScreenshot,
         };
     },

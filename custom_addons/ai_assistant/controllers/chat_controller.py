@@ -20,6 +20,9 @@ from odoo.addons.ai_assistant.services.action_tools.executor import (
 from odoo.addons.ai_assistant.services.action_tools.registry import (
     default_registry,
 )
+from odoo.addons.ai_assistant.services.action_tools.base import (
+    AbstractWriteTool,
+)
 from odoo.addons.ai_assistant.services.pending_action import (
     PendingActionStore,
 )
@@ -293,10 +296,15 @@ class AiAssistantController(http.Controller):
                 break
             write_call = self._first_write_tool_call(tool_calls)
             if write_call:
+                args = write_call.get('arguments') or {}
                 pending_key = _pending_actions.put(
                     request.env.uid,
                     write_call['name'],
-                    write_call.get('arguments') or {},
+                    args,
+                    idempotency_key=self._idempotency_key(
+                        write_call['name'],
+                        args,
+                    ),
                 )
                 return {
                     'answer': 'Проверьте план и подтвердите действие.',
@@ -336,6 +344,21 @@ class AiAssistantController(http.Controller):
             if tool.is_write:
                 return tool_call
         return None
+
+    def _idempotency_key(self, tool_name, args):
+        try:
+            tool = default_registry.get(tool_name)
+            if not isinstance(tool, AbstractWriteTool):
+                return None
+            tool.validate_args(args or {})
+            return tool.idempotency_key(args or {})
+        except Exception:
+            _logger.debug(
+                'Failed to build idempotency key for tool=%s',
+                tool_name,
+                exc_info=True,
+            )
+            return None
 
     def _assistant_tool_calls_message(self, response):
         return {

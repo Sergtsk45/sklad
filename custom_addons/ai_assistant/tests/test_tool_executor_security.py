@@ -8,6 +8,7 @@ from odoo.addons.ai_assistant.services.action_tools.base import (
 )
 from odoo.addons.ai_assistant.services.action_tools.executor import (
     ToolExecutor,
+    ToolRateLimiter,
 )
 from odoo.addons.ai_assistant.services.action_tools.registry import (
     ToolRegistry,
@@ -169,3 +170,47 @@ class TestToolExecutorSecurity(TransactionCase):
 
         self.assertFalse(result['success'])
         self.assertEqual(result['error']['code'], 'access_denied')
+
+    def test_rate_limit_blocks_after_5_writes(self):
+        registry = ToolRegistry()
+        registry.register(GroupedWriteTool())
+        executor = ToolExecutor(
+            self.env(user=self.supply_user),
+            registry=registry,
+            rate_limiter=ToolRateLimiter(),
+        )
+
+        for index in range(5):
+            result = executor.execute(
+                'grouped_write_tool',
+                {'value': 'write-%s' % index},
+            )
+            self.assertTrue(result['success'])
+
+        result = executor.execute('grouped_write_tool', {'value': 'blocked'})
+
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error']['code'], 'rate_limited')
+        self.assertGreater(result['error']['retry_after'], 0)
+
+    def test_rate_limit_blocks_after_30_reads(self):
+        registry = ToolRegistry()
+        registry.register(EchoTool())
+        executor = ToolExecutor(
+            self.env,
+            registry=registry,
+            rate_limiter=ToolRateLimiter(),
+        )
+
+        for index in range(30):
+            result = executor.execute(
+                'echo_tool',
+                {'value': 'read-%s' % index},
+            )
+            self.assertTrue(result['success'])
+
+        result = executor.execute('echo_tool', {'value': 'blocked'})
+
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error']['code'], 'rate_limited')
+        self.assertGreater(result['error']['retry_after'], 0)

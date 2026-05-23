@@ -268,6 +268,16 @@ class TestChatController(HttpCase):
         data = result.get('result', {})
         self.assertIn('error', data)
 
+    def test_idempotency_reuses_pending(self):
+        project = self.env['object.request.project'].create({
+            'name': 'Chat Idempotent Object',
+        })
+
+        first_key = self._create_pending_or(project.id)
+        second_key = self._create_pending_or(project.id)
+
+        self.assertEqual(first_key, second_key)
+
     def test_max_iterations_breaks_loop(self):
         response = {
             'type': 'tool_calls',

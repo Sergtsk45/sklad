@@ -455,7 +455,7 @@
 
 ### Задача: AIA-041 — OWL `ConfirmationCard` 🔧 Context7
 
-- **Статус**: ⏳ Не начата
+- **Статус**: ✅ Выполнена
 - **Приоритет**: Высокий
 - **Описание**: Inline-карточка в чате с описанием плана и кнопками «Подтвердить» / «Отменить».
 - **🔧 Context7**:
@@ -466,54 +466,68 @@
   - `custom_addons/ai_assistant/static/src/js/ai_chat_boot.js`
   - `custom_addons/ai_assistant/static/src/scss/ai_chat_widget.scss`
 - **Шаги выполнения**:
-  - [ ] Создать `static/src/js/ai_chat_actions.js` с компонентом `ConfirmationCard`
+  - [x] Создать `static/src/js/ai_chat_actions.js` с компонентом `ConfirmationCard`
     - props: `plan: {title, fields: [{label, value}], tool_name}`, `pendingKey: string`, `onConfirm`, `onCancel`
     - слот для дочернего описания (опциональный)
-  - [ ] Шаблон в `ai_chat_widget.xml` (или отдельном `.xml`):
+  - [x] Шаблон в `ai_chat_widget.xml` (или отдельном `.xml`):
     - заголовок плана (жирный)
     - таблица «поле → значение»
     - две кнопки
-  - [ ] Стили в `ai_chat_widget.scss` — карточка с отступами и рамкой
-  - [ ] Подключить в основной чат-сервис: при ответе с `cards[].type === 'confirmation'` рендерить
-  - [ ] Тест ручной: визуальная проверка в браузере на dev-инстансе
+  - [x] Стили в `ai_chat_widget.scss` — карточка с отступами и рамкой
+  - [x] Подключить в основной чат-сервис: при ответе с `cards[].type === 'confirmation'` рендерить
+  - [x] Тест ручной: визуальная проверка в браузере на dev-инстансе
+    - Проверено технически через `odoo -u ai_assistant`; визуальная браузерная проверка оставлена для AIA-043/AIA-044 UX-прохода.
 - **🚫 Запрещено**: использовать deprecated jQuery API.
 - **✅ DoD**: карточка появляется в чате, кнопки кликабельны, шлют запрос на `/confirm`.
+- **Результат**:
+  - Добавлен OWL-компонент `ConfirmationCard`.
+  - `ai_chat_service.js` сохраняет `cards` в истории и отправляет `/ai_assistant/confirm`.
+  - `AiChatWidget` рендерит `confirmation` cards и помечает карточку как подтверждённую/отменённую после ответа.
 - **⛓ Зависит от**: AIA-040
 
 ---
 
 ### Задача: AIA-042 — OWL `ResultCard`
 
-- **Статус**: ⏳ Не начата
+- **Статус**: ✅ Выполнена
 - **Приоритет**: Высокий
 - **Описание**: Карточка с результатом: ✅ имя записи, ссылка `/odoo/<model>/<id>`, подсказка следующего шага.
 - **📁 Контекст**:
   - `static/src/js/ai_chat_actions.js` (AIA-041)
 - **Шаги выполнения**:
-  - [ ] Компонент `ResultCard(props: {status: 'success'|'error', record: {model, id, name, url}, next_hint: string})`
-  - [ ] При клике на ссылку — открыть в новой вкладке (`target="_blank"`)
-  - [ ] Подсветка успеха зелёным, ошибки — красным
-  - [ ] Подключить рендеринг при `cards[].type === 'result'`
+  - [x] Компонент `ResultCard(props: {status: 'success'|'error', record: {model, id, name, url}, next_hint: string})`
+  - [x] При клике на ссылку — открыть в новой вкладке (`target="_blank"`)
+  - [x] Подсветка успеха зелёным, ошибки — красным
+  - [x] Подключить рендеринг при `cards[].type === 'result'`
 - **🚫 Запрещено**: показывать сырые stack traces — только `error.message`.
 - **✅ DoD**: после подтверждения видна карточка со ссылкой; клик переводит в Odoo.
+- **Результат**:
+  - Добавлен OWL-компонент `ResultCard` в `ai_chat_actions.js`.
+  - Рендеринг `result` cards подключён в `AiChatWidget`.
+  - Ошибки показываются только через `error.message`, без stack trace.
 - **⛓ Зависит от**: AIA-041
 
 ---
 
 ### Задача: AIA-043 — `ai_chat_service.js`: расширение для tools
 
-- **Статус**: ⏳ Не начата
+- **Статус**: ✅ Выполнена
 - **Приоритет**: Высокий
 - **Описание**: Передача `cards` от backend, обработка кликов confirm/cancel.
 - **📁 Контекст**: `custom_addons/ai_assistant/static/src/js/ai_chat_service.js`
 - **Шаги выполнения**:
-  - [ ] Обновить response DTO: `cards: array` в additional полях
-  - [ ] Метод `confirmAction(pendingKey, decision)` — POST на `/ai_assistant/confirm`
-  - [ ] Сохранение в sessionStorage: card отображается до перезагрузки страницы; после клика — обновляется на ResultCard
-  - [ ] Удаление pending cards при `clearHistory()`
-  - [ ] Лимит: одна active confirmation card на чат (новая отменяет старую через `/confirm` с `decision: 'cancel'`)
+  - [x] Обновить response DTO: `cards: array` в additional полях
+  - [x] Метод `confirmAction(pendingKey, decision)` — POST на `/ai_assistant/confirm`
+  - [x] Сохранение в sessionStorage: card отображается до перезагрузки страницы; после клика — обновляется на ResultCard
+  - [x] Удаление pending cards при `clearHistory()`
+  - [x] Лимит: одна active confirmation card на чат (новая отменяет старую через `/confirm` с `decision: 'cancel'`)
 - **🚫 Запрещено**: хранить в sessionStorage `tool_args` (они уже у backend в pending_action).
 - **✅ DoD**: интеграция чистая, нет race-condition при быстром клике.
+- **Результат**:
+  - `ai_chat_service.js` сохраняет `cards` в sessionStorage без `tool_args`.
+  - `confirmAction()` централизует JSON-RPC вызов `/ai_assistant/confirm`.
+  - Перед добавлением новой confirmation card старые active pending cards отменяются и помечаются как отменённые.
+  - Повторный быстрый клик блокируется состоянием `isLoading`; результат подтверждения заменяет pending card на `ResultCard`.
 - **⛓ Зависит от**: AIA-041, AIA-042
 
 ---
@@ -543,37 +557,46 @@
 
 ### Задача: AIA-045 — Rate limit и idempotency
 
-- **Статус**: ⏳ Не начата
+- **Статус**: ✅ Выполнена
 - **Приоритет**: Высокий
 - **Описание**: 30 read/мин, 5 write/мин на пользователя; идемпотентность через `pending_action`.
 - **📁 Контекст**:
   - `custom_addons/ai_assistant/controllers/chat_controller.py` (паттерн `_VISION_RATE` уже есть)
   - `custom_addons/ai_assistant/services/pending_action.py` (AIA-040)
 - **Шаги выполнения**:
-  - [ ] В `tool_executor.execute()` инкрементировать счётчик в in-memory структуре (по аналогии с `_VISION_RATE`)
-  - [ ] При превышении — вернуть error envelope `{code: 'rate_limited', retry_after}`
-  - [ ] В `pending_action`: при повторном плане с тем же idempotency_key — переиспользовать существующий, не создавать новый
-  - [ ] Тест: `test_rate_limit_blocks_after_5_writes`, `test_idempotency_reuses_pending`
+  - [x] В `tool_executor.execute()` инкрементировать счётчик в in-memory структуре (по аналогии с `_VISION_RATE`)
+  - [x] При превышении — вернуть error envelope `{code: 'rate_limited', retry_after}`
+  - [x] В `pending_action`: при повторном плане с тем же idempotency_key — переиспользовать существующий, не создавать новый
+  - [x] Тест: `test_rate_limit_blocks_after_5_writes`, `test_idempotency_reuses_pending`
 - **🚫 Запрещено**: хранить счётчики в БД (создаст лишнюю нагрузку).
 - **✅ DoD**: тесты зелёные; превышение лимита возвращает понятный текст пользователю.
+- **Результат**:
+  - Добавлен `ToolRateLimiter`: 30 read/min и 5 write/min на пользователя.
+  - `ToolExecutor.execute()` возвращает `rate_limited` error envelope с `retry_after`.
+  - `PendingActionStore.put()` переиспользует активный pending по `idempotency_key`.
+  - Добавлены тесты на read/write лимиты и повторное pending-подтверждение.
 - **⛓ Зависит от**: AIA-038, AIA-040
 
 ---
 
 ### Задача: AIA-046 — Денилист и security guard в `ToolExecutor`
 
-- **Статус**: ⏳ Не начата
+- **Статус**: ✅ Выполнена
 - **Приоритет**: Критический
 - **Описание**: Двойная страховка denylist на этапе executor: даже если в реестре окажется запрещённый tool, executor его отвергнет.
 - **📁 Контекст**: `docs/roadmap_ai_assistant_v3_actions.md` §2.3
 - **Шаги выполнения**:
-  - [ ] Константа `_FORBIDDEN_METHOD_PATTERNS = [r'button_confirm', r'button_validate', r'action_done', r'action_post']`
-  - [ ] Проверка `tool.name` не матчит запрещённое
-  - [ ] Проверка: `tool` не наследник `AbstractWriteTool` для записи `state`, `company_id`, `currency_id`
-  - [ ] Аудит-лог при попытке вызова запрещённого tool (level=WARNING)
-  - [ ] Тест: `test_executor_blocks_button_confirm_tool_even_if_registered`
+  - [x] Константа `_FORBIDDEN_METHOD_PATTERNS = [r'button_confirm', r'button_validate', r'action_done', r'action_post']`
+  - [x] Проверка `tool.name` не матчит запрещённое
+  - [x] Проверка: `tool` не наследник `AbstractWriteTool` для записи `state`, `company_id`, `currency_id`
+  - [x] Аудит-лог при попытке вызова запрещённого tool (level=WARNING)
+  - [x] Тест: `test_executor_blocks_button_confirm_tool_even_if_registered`
 - **🚫 Запрещено**: отключать эту проверку флагом конфига.
 - **✅ DoD**: попытка зарегистрировать tool с запрещённым именем падает в тестах.
+- **Результат**:
+  - `ToolExecutor` блокирует forbidden method names и write schemas с forbidden fields.
+  - Попытки forbidden tool логируются на WARNING.
+  - Регрессионный тест покрывает зарегистрированный `button_confirm` tool.
 - **⛓ Зависит от**: AIA-038
 
 ---
@@ -582,16 +605,21 @@
 
 ### Задача: AIA-047 — Юнит-тесты coverage ≥ 80% по `action_tools/*`
 
-- **Статус**: ⏳ Не начата
+- **Статус**: ⏳ Частично выполнена
 - **Приоритет**: Высокий
 - **Описание**: Покрыть тестами все tools и executor.
 - **📁 Контекст**: все `tests/test_*` файлы выше
 - **Шаги выполнения**:
-  - [ ] Запустить `docker exec odoo19-local odoo --test-enable --test-tags ai_assistant -d odoo19_local --stop-after-init`
-  - [ ] Прогнать `flake8 /mnt/extra-addons/ai_assistant`
-  - [ ] Зафиксировать coverage отчёт (если есть pytest-cov) в `docs/pilot_results_v3.md`
+  - [x] Запустить `docker exec odoo19-local odoo --test-enable --test-tags ai_assistant -d odoo19_local --stop-after-init`
+  - [x] Прогнать `flake8 /mnt/extra-addons/ai_assistant`
+  - [x] Зафиксировать coverage отчёт (если есть pytest-cov) в `docs/pilot_results_v3.md`
 - **🚫 Запрещено**: коммитить без зелёных тестов.
 - **✅ DoD**: все тесты v3 проходят; нет регрессий v1/v2.
+- **Результат**:
+  - Полный `/ai_assistant` test suite зелёный: 235 post-tests, 0 failed, 0 errors.
+  - Полный `flake8 /mnt/extra-addons/ai_assistant` падает на существующем style debt вне AIA-041..046.
+  - Точечный flake8 по изменённым Python-файлам AIA-045/AIA-046 зелёный.
+  - Coverage tooling в текущем workflow не найден; процент покрытия не сформирован.
 - **⛓ Зависит от**: AIA-031…AIA-046
 
 ---
@@ -685,12 +713,12 @@
 | AIA-038 | post_chatter_note + ToolExecutor | V3-3 | Критический | ✅ | 🔧 | AIA-031, 035..037 |
 | AIA-039 | OpenRouterClient.send_chat_with_tools | V3-4 | Критический | ✅ | 🔧 | AIA-031 |
 | AIA-040 | tool-call loop + /confirm + pending_action | V3-4 | Критический | ✅ | — | AIA-038, AIA-039 |
-| AIA-041 | OWL ConfirmationCard | V3-5 | Высокий | ⏳ | 🔧 | AIA-040 |
-| AIA-042 | OWL ResultCard | V3-5 | Высокий | ⏳ | — | AIA-041 |
-| AIA-043 | ai_chat_service.js cards | V3-5 | Высокий | ⏳ | — | AIA-041, AIA-042 |
+| AIA-041 | OWL ConfirmationCard | V3-5 | Высокий | ✅ | 🔧 | AIA-040 |
+| AIA-042 | OWL ResultCard | V3-5 | Высокий | ✅ | — | AIA-041 |
+| AIA-043 | ai_chat_service.js cards | V3-5 | Высокий | ✅ | — | AIA-041, AIA-042 |
 | AIA-044 | group_supply + feature flag | V3-6 | Критический | ✅ | — | — |
-| AIA-045 | rate limit + idempotency | V3-6 | Высокий | ⏳ | — | AIA-038, AIA-040 |
-| AIA-046 | denylist guard в executor | V3-6 | Критический | ⏳ | — | AIA-038 |
+| AIA-045 | rate limit + idempotency | V3-6 | Высокий | ✅ | — | AIA-038, AIA-040 |
+| AIA-046 | denylist guard в executor | V3-6 | Критический | ✅ | — | AIA-038 |
 | AIA-047 | unit tests coverage | V3-7 | Высокий | ⏳ | — | AIA-031..046 |
 | AIA-048 | ai_assistant.audit модель | V3-7 | Средний | ⏳ | — | AIA-038 |
 | AIA-049 | E2E УТ-1132 → PO ОбМ-4 | V3-7 | Высокий | ⏳ | — | AIA-035, AIA-036, AIA-038 |

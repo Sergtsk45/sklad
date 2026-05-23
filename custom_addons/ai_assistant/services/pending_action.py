@@ -9,12 +9,21 @@ class PendingActionStore:
         self._items = {}
         self._ttl_seconds = ttl_seconds
 
-    def put(self, uid, tool_name, args):
+    def put(self, uid, tool_name, args, idempotency_key=None):
         self._purge_expired()
+        if idempotency_key:
+            existing_key = self._find_existing(
+                uid,
+                tool_name,
+                idempotency_key,
+            )
+            if existing_key:
+                return existing_key
         key = secrets.token_urlsafe(18)
         self._items[(uid, key)] = {
             'tool_name': tool_name,
             'args': args,
+            'idempotency_key': idempotency_key,
             'expires_at': time.time() + self._ttl_seconds,
         }
         return key
@@ -47,3 +56,13 @@ class PendingActionStore:
         for item_key, item in list(self._items.items()):
             if item['expires_at'] < now:
                 self._items.pop(item_key, None)
+
+    def _find_existing(self, uid, tool_name, idempotency_key):
+        for (item_uid, key), item in self._items.items():
+            if (
+                item_uid == uid and
+                item['tool_name'] == tool_name and
+                item.get('idempotency_key') == idempotency_key
+            ):
+                return key
+        return None

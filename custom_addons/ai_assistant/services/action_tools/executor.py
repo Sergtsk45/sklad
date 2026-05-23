@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 
 from odoo.exceptions import AccessError, UserError, ValidationError
 
@@ -17,14 +18,49 @@ _FORBIDDEN_METHOD_PATTERNS = [
 _FORBIDDEN_WRITE_FIELDS = {'state', 'company_id', 'currency_id'}
 
 
+class ToolRateLimiter:
+    """Small in-memory per-user limiter for action tools."""
+
+    def __init__(self, read_max=30, write_max=5, window_seconds=60):
+        self._limits = {
+            'read': read_max,
+            'write': write_max,
+        }
+        self._window_seconds = window_seconds
+        self._hits = {}
+
+    def check(self, uid, kind):
+        now = time.time()
+        key = (uid, kind)
+        hits = [
+            ts for ts in self._hits.get(key, [])
+            if now - ts < self._window_seconds
+        ]
+        limit = self._limits[kind]
+        if len(hits) >= limit:
+            retry_after = int(self._window_seconds - (now - hits[0])) + 1
+            self._hits[key] = hits
+            return False, max(1, retry_after)
+        hits.append(now)
+        self._hits[key] = hits
+        return True, 0
+
+    def clear(self):
+        self._hits.clear()
+
+
+_TOOL_RATE = ToolRateLimiter()
+
+
 class ToolExecutor:
     """Execute registered action tools with ACL, schema and guard checks."""
 
-    def __init__(self, env, user_id=None, registry=None):
+    def __init__(self, env, user_id=None, registry=None, rate_limiter=None):
         self.env = (
             env(user=env['res.users'].browse(user_id)) if user_id else env
         )
         self.registry = registry or default_registry
+        self.rate_limiter = rate_limiter or _TOOL_RATE
 
     def execute(self, name, args):
         try:
@@ -36,6 +72,13 @@ class ToolExecutor:
             self._check_forbidden_tool(tool)
             self._check_groups(tool)
             tool.validate_args(args or {})
+            rate_ok, retry_after = self._check_rate(tool)
+            if not rate_ok:
+                return self._error(
+                    'rate_limited',
+                    'Слишком много действий. Повторите позже.',
+                    retry_after=retry_after,
+                )
             _logger.info(
                 'AI tool execute: name=%s write=%s',
                 tool.name,
@@ -58,6 +101,11 @@ class ToolExecutor:
     def _check_forbidden_tool(self, tool):
         for pattern in _FORBIDDEN_METHOD_PATTERNS:
             if re.search(pattern, tool.name):
+                _logger.warning(
+                    'AI tool forbidden by name denylist: name=%s pattern=%s',
+                    tool.name,
+                    pattern,
+                )
                 raise AccessError(
                     'Запрещённая операция AI-ассистента: %s.' % tool.name
                 )
@@ -65,6 +113,11 @@ class ToolExecutor:
             properties = (tool.parameters_schema or {}).get('properties', {})
             forbidden = _FORBIDDEN_WRITE_FIELDS & set(properties)
             if forbidden:
+                _logger.warning(
+                    'AI write tool forbidden fields: name=%s fields=%s',
+                    tool.name,
+                    ','.join(sorted(forbidden)),
+                )
                 raise AccessError(
                     'Write tool содержит запрещённые поля: %s.'
                     % ', '.join(sorted(forbidden))
@@ -77,11 +130,17 @@ class ToolExecutor:
                     'Недостаточно прав для выполнения tool: %s.' % tool.name
                 )
 
-    def _error(self, code, message):
+    def _check_rate(self, tool):
+        kind = 'write' if tool.is_write else 'read'
+        return self.rate_limiter.check(self.env.uid, kind)
+
+    def _error(self, code, message, **extra):
+        error = {
+            'code': code,
+            'message': message,
+        }
+        error.update(extra)
         return {
             'success': False,
-            'error': {
-                'code': code,
-                'message': message,
-            },
+            'error': error,
         }

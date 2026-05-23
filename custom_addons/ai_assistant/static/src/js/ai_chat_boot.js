@@ -3,6 +3,7 @@
 import { Component, useState, useRef, onMounted } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
+import { ConfirmationCard, ResultCard } from "./ai_chat_actions";
 
 const SUGGESTED_PROMPTS = [
     "Как пользоваться этим разделом?",
@@ -15,6 +16,7 @@ const SUGGESTED_PROMPTS = [
 export class AiChatWidget extends Component {
     static template = "ai_assistant.AiChatWidget";
     static props = {};
+    static components = { ConfirmationCard, ResultCard };
 
     setup() {
         this.chatService = useService("ai_chat");
@@ -111,11 +113,20 @@ export class AiChatWidget extends Component {
         this._fetchAnswer(text);
     }
 
-    _addMessage(role, content) {
+    async onConfirmPending(pendingKey) {
+        await this._confirmPending(pendingKey, "confirm");
+    }
+
+    async onCancelPending(pendingKey) {
+        await this._confirmPending(pendingKey, "cancel");
+    }
+
+    _addMessage(role, content, extra = {}) {
         this.state.messages = this.chatService.addMessage(
             this.state.messages,
             role,
-            content
+            content,
+            extra
         );
         setTimeout(() => this._scrollToBottom(), 20);
     }
@@ -125,7 +136,10 @@ export class AiChatWidget extends Component {
         this.state.isCapturing = false;
         try {
             const result = await this._callBackend(userMessage);
-            this._addMessage("assistant", result.answer);
+            await this._cancelActiveConfirmations(this._extractCards(result));
+            this._addMessage("assistant", result.answer || "", {
+                cards: this._extractCards(result),
+            });
             this.state.status = "online";
         } catch (_err) {
             this._addMessage(
@@ -136,6 +150,32 @@ export class AiChatWidget extends Component {
         } finally {
             this.state.isLoading = false;
             this.state.isCapturing = false;
+        }
+    }
+
+    async _confirmPending(pendingKey, decision) {
+        if (!pendingKey || this.state.isLoading) {
+            return;
+        }
+        this.state.isLoading = true;
+        this.state.isCapturing = false;
+        try {
+            const result = await this.chatService.confirmAction(pendingKey, decision);
+            this._markPendingCardResolved(
+                pendingKey,
+                decision,
+                this._extractCards(result)
+            );
+            this._addMessage("assistant", result.answer || "");
+            this.state.status = "online";
+        } catch (_err) {
+            this._addMessage(
+                "assistant",
+                "Не удалось выполнить действие. Попробуйте повторить запрос."
+            );
+            this.state.status = "error";
+        } finally {
+            this.state.isLoading = false;
         }
     }
 
@@ -187,6 +227,75 @@ export class AiChatWidget extends Component {
             throw new Error(data.error.message || "Backend error");
         }
         return data.result;
+    }
+
+    _extractCards(result) {
+        return result && Array.isArray(result.cards) ? result.cards : [];
+    }
+
+    async _cancelActiveConfirmations(incomingCards) {
+        if (!this._hasConfirmationCard(incomingCards)) {
+            return;
+        }
+        const pendingKeys = this._activePendingKeys();
+        for (const pendingKey of pendingKeys) {
+            try {
+                await this.chatService.confirmAction(pendingKey, "cancel");
+                this._markPendingCardResolved(pendingKey, "cancel");
+            } catch {
+                this._markPendingCardResolved(pendingKey, "cancel");
+            }
+        }
+    }
+
+    _hasConfirmationCard(cards) {
+        return (cards || []).some((card) => {
+            return card.type === "confirmation" && card.pending_key;
+        });
+    }
+
+    _activePendingKeys() {
+        const pendingKeys = [];
+        for (const message of this.state.messages) {
+            for (const card of message.cards || []) {
+                if (
+                    card.type === "confirmation" &&
+                    card.pending_key &&
+                    !(card.plan && card.plan.state)
+                ) {
+                    pendingKeys.push(card.pending_key);
+                }
+            }
+        }
+        return pendingKeys;
+    }
+
+    _markPendingCardResolved(pendingKey, decision, replacementCards = []) {
+        const replacementCard = replacementCards.find((card) => {
+            return card.type === "result";
+        });
+        const messages = this.state.messages.map((message) => {
+            if (!Array.isArray(message.cards)) {
+                return message;
+            }
+            const cards = message.cards.map((card) => {
+                if (card.pending_key !== pendingKey) {
+                    return card;
+                }
+                if (replacementCard) {
+                    return replacementCard;
+                }
+                return {
+                    ...card,
+                    plan: {
+                        ...card.plan,
+                        state: decision === "confirm" ? "confirmed" : "cancelled",
+                    },
+                };
+            });
+            return { ...message, cards };
+        });
+        this.state.messages = this.chatService.saveHistory(messages);
     }
 
     _buildHistory() {
