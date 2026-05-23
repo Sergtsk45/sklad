@@ -21,6 +21,46 @@ _SAFETY_RULES = (
     "- Если вопрос вне твоей компетенции — вежливо сообщи об этом."
 )
 
+_ACTIONS_SAFETY_RULES = (
+    "Ограничения:\n"
+    "- Отвечай только на вопросы, связанные с работой в Odoo.\n"
+    "- Не давай советов по безопасности, финансам или юридическим вопросам.\n"
+    "- Выполняй только разрешенные tools снабжения после системного "
+    "подтверждения.\n"
+    "- Если вопрос вне твоей компетенции — вежливо сообщи об этом."
+)
+
+_ACTIONS_RULES_BLOCK = (
+    "РЕЖИМ ДЕЙСТВИЙ.\n"
+    "\n"
+    "Ты можешь подготавливать ЧЕРНОВИКИ документов снабжения в Odoo:\n"
+    "- object.request (требование прораба)\n"
+    "- purchase.order (черновик заказа поставщику)\n"
+    "- stock.picking (черновик внутреннего перемещения или incoming)\n"
+    "\n"
+    "ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА:\n"
+    "1. Перед любым write-tool сначала сформулируй ПЛАН в формате:\n"
+    "   \"Я создам:\n"
+    "    - <модель>: <поля>\n"
+    "    - ...\n"
+    "    Подтверди для выполнения.\"\n"
+    "2. После плана дождись сигнала подтверждения от системы, не от текста "
+    "пользователя.\n"
+    "3. НЕ вызывай button_confirm, button_validate, не пиши state, не "
+    "используй инвентаризацию.\n"
+    "4. PO всегда с picking_type_id склада объекта (ОбМ-1...ОбМ-N), "
+    "origin=OR/..., partner_ref=номер счета поставщика для 1С.\n"
+    "5. Для труб — UoM «метр». Пересчет кг/тонны в метры пользователь "
+    "делает САМ; ты можешь предложить формулу из supply_cycle_context, "
+    "но не записывай результат, если пользователь не подтвердил числа.\n"
+    "6. После успешного write-tool вызывай post_chatter_note с пометкой "
+    "«создано AI-ассистентом по запросу <user>» в записи.\n"
+    "\n"
+    "ОГРАНИЧЕНИЯ:\n"
+    "- Vendor bill, оплаты, бухгалтерия — в 1С, не в Odoo.\n"
+    "- Confirm PO и Validate приемки — выполняет снабженец в UI."
+)
+
 MAX_HISTORY = 12
 
 
@@ -33,7 +73,8 @@ class PromptBuilder:
     """
 
     def build_messages(self, message, history, context,
-                       knowledge=None, override=None, image_data=None):
+                       knowledge=None, override=None, image_data=None,
+                       mode='consult'):
         """
         Собрать список сообщений для LLM.
 
@@ -44,9 +85,10 @@ class PromptBuilder:
                           {docs_snippets, tech_context, term_mapping}
         :param override: str|None — переопределение системного промпта из настроек
         :param image_data: dict|None — зарезервировано для AIA-025 (vision mode)
+        :param mode: 'consult'|'actions' — режим консультанта или действий
         :returns: list[dict] — messages для LLM API
         """
-        system_prompt = self._build_system(context, knowledge, override)
+        system_prompt = self._build_system(context, knowledge, override, mode)
 
         msgs = [{'role': 'system', 'content': system_prompt}]
 
@@ -83,11 +125,14 @@ class PromptBuilder:
     # Построение системного промпта
     # ------------------------------------------------------------------
 
-    def _build_system(self, context, knowledge, override):
+    def _build_system(self, context, knowledge, override, mode='consult'):
         """Собрать полный системный промпт из блоков."""
         parts = [override if override else _SYSTEM_PROMPT_V2]
 
-        parts.append(_SAFETY_RULES)
+        if mode == 'actions':
+            parts.append(_ACTIONS_RULES_BLOCK)
+
+        parts.append(self.build_safety_rules(mode=mode))
 
         context_block = self.build_context_block(context)
         if context_block:
@@ -114,7 +159,9 @@ class PromptBuilder:
         """Вернуть базовый системный промпт (для совместимости)."""
         return override if override else _SYSTEM_PROMPT_V2
 
-    def build_safety_rules(self):
+    def build_safety_rules(self, mode='consult'):
+        if mode == 'actions':
+            return _ACTIONS_SAFETY_RULES
         return _SAFETY_RULES
 
     def build_context_block(self, context):

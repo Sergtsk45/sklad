@@ -40,6 +40,13 @@
                         <div class="col-lg-6">
                             <label for="ai_assistant_enabled"/>
                             <field name="ai_assistant_enabled"/>
+                            <label for="ai_assistant_actions_enabled"/>
+                            <field name="ai_assistant_actions_enabled"/>
+                            <p class="text-muted mt-1 mb-2">
+                                Разрешает режим исполнения actions из чата только для
+                                пользователей группы «AI Assistant / Снабжение».
+                                По умолчанию выключено.
+                            </p>
                             <label for="ai_assistant_max_history"/>
                             <field name="ai_assistant_max_history"/>
                         </div>

@@ -10,7 +10,16 @@
     'category': 'Tools',
     'author': 'Custom',
     'license': 'LGPL-3',
-    'depends': ['base', 'web', 'base_setup'],
+    'depends': [
+        'base',
+        'web',
+        'base_setup',
+        'mail',
+        'stock',
+        'purchase',
+        'object_request',
+        'custom_product_search',
+    ],
     'data': [
         'security/security_groups.xml',
         'security/ir.model.access.csv',

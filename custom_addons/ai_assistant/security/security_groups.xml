@@ -16,6 +16,22 @@
         <field name="comment">Пользователь имеет доступ к чату AI-ассистента.</field>
     </record>
 
+    <!-- AI Assistant Supply: доступ к actions снабжения + наследует User -->
+    <record id="group_ai_assistant_supply" model="res.groups">
+        <field name="name">Снабжение</field>
+        <field name="sequence">15</field>
+        <field name="privilege_id" ref="res_groups_privilege_ai_assistant"/>
+        <field name="implied_ids" eval="[
+            (4, ref('group_ai_assistant_user')),
+            (4, ref('purchase.group_purchase_user')),
+            (4, ref('stock.group_stock_user'))
+        ]"/>
+        <field name="comment">
+            Пользователь может подтверждать ограниченные actions AI-ассистента
+            для снабжения и складских черновиков.
+        </field>
+    </record>
+
     <!-- AI Assistant Admin: доступ к настройкам + наследует User -->
     <record id="group_ai_assistant_admin" model="res.groups">
         <field name="name">Администратор</field>

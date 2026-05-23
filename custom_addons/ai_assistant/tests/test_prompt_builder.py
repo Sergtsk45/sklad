@@ -269,6 +269,43 @@ class TestPromptBuilder(TransactionCase):
         self.assertIn('ДОКУМЕНТАЦИЯ', system_content)
         self.assertIn('Инструкция', system_content)
 
+    def test_actions_mode_includes_rules(self):
+        messages = self.builder.build_messages(
+            'Создай PO', [], context=None, mode='actions'
+        )
+        system_content = messages[0]['content']
+        self.assertIn('РЕЖИМ ДЕЙСТВИЙ', system_content)
+        self.assertIn('Я создам', system_content)
+        self.assertIn('post_chatter_note', system_content)
+
+    def test_consult_mode_unchanged(self):
+        default_messages = self.builder.build_messages(
+            'Вопрос', [], context=None
+        )
+        consult_messages = self.builder.build_messages(
+            'Вопрос', [], context=None, mode='consult'
+        )
+        self.assertEqual(default_messages, consult_messages)
+        self.assertNotIn('РЕЖИМ ДЕЙСТВИЙ', consult_messages[0]['content'])
+        self.assertIn(
+            'Не обещай выполнить действия автоматически',
+            consult_messages[0]['content']
+        )
+
+    def test_actions_mode_blocks_inventory_mention(self):
+        messages = self.builder.build_messages(
+            'Создай приход', [], context=None, mode='actions'
+        )
+        system_content = messages[0]['content']
+        self.assertIn('button_confirm', system_content)
+        self.assertIn('button_validate', system_content)
+        self.assertIn('state', system_content)
+        self.assertIn('инвентаризацию', system_content)
+        self.assertNotIn(
+            'Не обещай выполнить действия автоматически',
+            self.builder.build_safety_rules(mode='actions')
+        )
+
     # --- build_technical_context_block ---
 
     def test_build_technical_context_block_with_content(self):

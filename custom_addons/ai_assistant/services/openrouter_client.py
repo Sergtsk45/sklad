@@ -1,3 +1,4 @@
+import json
 import logging
 
 import requests
@@ -92,6 +93,62 @@ class OpenRouterClient:
 
         return self._parse_response(data, mode=mode)
 
+    def send_chat_with_tools(
+        self,
+        messages,
+        tools,
+        tool_choice='auto',
+        max_tokens=1500,
+        model_override=None,
+    ):
+        """Отправить сообщения в OpenRouter с OpenAI-compatible tools."""
+        if not self._api_key:
+            raise ValueError('OpenRouter API key не настроен')
+
+        model = model_override or self._text_model
+        url = self._base_url.rstrip('/') + '/chat/completions'
+        headers = {
+            'Authorization': f'Bearer {self._api_key}',
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'http://localhost:8069',
+        }
+        payload = {
+            'model': model,
+            'messages': messages,
+            'tools': tools,
+            'tool_choice': tool_choice,
+            'max_tokens': max_tokens,
+        }
+
+        _logger.info(
+            'OpenRouter tools request: model=%s tools=%s',
+            model, len(tools or [])
+        )
+
+        try:
+            resp = requests.post(
+                url, json=payload, headers=headers, timeout=self._timeout
+            )
+        except requests.Timeout:
+            raise ConnectionError('OpenRouter: таймаут запроса')
+
+        _logger.info(
+            'OpenRouter tools response: status=%s model=%s',
+            resp.status_code, model
+        )
+
+        if resp.status_code == 429:
+            raise ConnectionError('OpenRouter: превышен лимит запросов')
+        if resp.status_code >= 500:
+            raise ConnectionError('OpenRouter: ошибка сервера')
+
+        try:
+            data = resp.json()
+        except Exception:
+            raise ValueError('OpenRouter: некорректный ответ')
+
+        return self._parse_tools_response(data)
+
     def _parse_response(self, data, mode='text'):
         try:
             choice = data['choices'][0]
@@ -106,3 +163,67 @@ class OpenRouterClient:
             }
         except (KeyError, IndexError):
             raise ValueError('OpenRouter: некорректный ответ')
+
+    def _parse_tools_response(self, data):
+        try:
+            choice = data['choices'][0]
+            message = choice['message']
+        except (KeyError, IndexError):
+            raise ValueError('OpenRouter: некорректный ответ')
+
+        finish_reason = choice.get('finish_reason')
+        model_used = data.get('model', self._text_model)
+        tokens_used = data.get('usage', {}).get('total_tokens', 0)
+        tool_calls = message.get('tool_calls') or []
+
+        if tool_calls:
+            parsed_tool_calls = [
+                self._parse_tool_call(tool_call)
+                for tool_call in tool_calls
+            ]
+            _logger.info(
+                'OpenRouter tool_calls: count=%s names=%s',
+                len(parsed_tool_calls),
+                [item['name'] for item in parsed_tool_calls],
+            )
+            return {
+                'type': 'tool_calls',
+                'content': message.get('content') or '',
+                'tool_calls': parsed_tool_calls,
+                'finish_reason': finish_reason,
+                'model_used': model_used,
+                'tokens_used': tokens_used,
+            }
+
+        return {
+            'type': 'message',
+            'content': message.get('content') or '',
+            'tool_calls': [],
+            'finish_reason': finish_reason,
+            'model_used': model_used,
+            'tokens_used': tokens_used,
+        }
+
+    def _parse_tool_call(self, tool_call):
+        function = tool_call.get('function') or {}
+        arguments, parse_error = self._parse_tool_arguments(
+            function.get('arguments')
+        )
+        result = {
+            'id': tool_call.get('id'),
+            'name': function.get('name'),
+            'arguments': arguments,
+        }
+        if parse_error:
+            result['arguments_error'] = parse_error
+        return result
+
+    def _parse_tool_arguments(self, raw_arguments):
+        if raw_arguments in (None, ''):
+            return {}, None
+        if isinstance(raw_arguments, dict):
+            return raw_arguments, None
+        try:
+            return json.loads(raw_arguments), None
+        except (TypeError, ValueError):
+            return {}, 'invalid_json'

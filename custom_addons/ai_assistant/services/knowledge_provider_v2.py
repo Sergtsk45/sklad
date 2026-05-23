@@ -65,6 +65,13 @@ MODULE_DOCS_FILES = {
     ],
 }
 
+SUPPLY_CYCLE_FILE = 'supply_cycle_context.md'
+SUPPLY_CYCLE_MODULES = {'purchase', 'stock', 'object_request'}
+SUPPLY_CYCLE_KEYWORDS = {
+    'снабжение', 'закупка', 'требование', 'приход', 'обм',
+    'object.request', 'purchase.order', 'stock.picking',
+}
+
 
 class KnowledgeProviderV2:
     """
@@ -260,27 +267,42 @@ class KnowledgeProviderV2:
             if not filename.endswith('.md'):
                 continue
             path = os.path.join(DOCS_DIR, filename)
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-            except Exception:
-                continue
-
-            # Определяем модуль по имени файла (stock_xxx → stock)
             file_module = filename.split('_')[0] if '_' in filename else filename[:-3]
+            self._append_docs_file_to_index(path, filename, [file_module])
 
-            # Разбиваем по заголовкам ## (секции второго уровня)
-            sections = re.split(r'\n(?=## )', content)
-            for section in sections:
-                if section.strip():
-                    self._docs_index.append({
-                        'text': section,
-                        'filename': filename,
-                        'module': file_module,
-                        'keywords': self._extract_keywords(section),
-                    })
+        supply_path = os.path.join(_KNOWLEDGE_DIR, SUPPLY_CYCLE_FILE)
+        self._append_docs_file_to_index(
+            supply_path,
+            SUPPLY_CYCLE_FILE,
+            sorted(SUPPLY_CYCLE_MODULES),
+            extra_keywords=SUPPLY_CYCLE_KEYWORDS,
+        )
 
         return self._docs_index
+
+    def _append_docs_file_to_index(
+        self, path, filename, modules, extra_keywords=None
+    ):
+        """Добавить MD-файл в индекс секций для одного или нескольких модулей."""
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except Exception:
+            return
+
+        sections = re.split(r'\n(?=## )', content)
+        for section in sections:
+            if not section.strip():
+                continue
+            keywords = set(self._extract_keywords(section))
+            keywords.update(extra_keywords or set())
+            for module in modules:
+                self._docs_index.append({
+                    'text': section,
+                    'filename': filename,
+                    'module': module,
+                    'keywords': sorted(keywords),
+                })
 
     def _score_section(self, section, query_lower, query_words, target_module):
         """Подсчитать релевантность секции к запросу."""

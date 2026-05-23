@@ -1,9 +1,15 @@
 from . import test_module_install  # noqa: F401
 from . import test_chat_controller  # noqa: F401
 from . import test_openrouter_client  # noqa: F401
+from . import test_openrouter_tools  # noqa: F401
 from . import test_context_resolver  # noqa: F401
 from . import test_prompt_builder  # noqa: F401
 from . import test_knowledge_provider  # noqa: F401
 from . import test_response_guard  # noqa: F401
 from . import test_knowledge_provider_v2  # noqa: F401
 from . import test_vision_pipeline  # noqa: F401
+from . import test_action_tools_registry  # noqa: F401
+from . import test_validators  # noqa: F401
+from . import test_read_tools  # noqa: F401
+from . import test_write_tools  # noqa: F401
+from . import test_tool_executor_security  # noqa: F401

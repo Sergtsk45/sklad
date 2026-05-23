@@ -1,3 +1,110 @@
+## [2026-05-23] — AIA-038: post_chatter_note и ToolExecutor
+### Добавлено
+- `PostChatterNoteTool` — write tool для внутренних заметок chatter на allowlist моделей `object.request`, `purchase.order`, `stock.picking`.
+- `ToolExecutor` — единая точка исполнения tools с проверкой неизвестных tools, required groups, JSON Schema, базового denylist и error envelope `{success, result|error}`.
+- Логирование tool-вызовов пишет имя tool и write/read признак без аргументов.
+
+### Тесты
+- `tests/test_tool_executor_security.py` покрывает unknown tool, отказ без группы, schema validation, error envelope, allowlist chatter models и блокировку `button_confirm`-подобного tool.
+
+## [2026-05-23] — AIA-037: create_internal_picking_draft
+### Добавлено
+- `CreateInternalPickingDraftTool` — write tool для создания `stock.picking` внутреннего перемещения в `draft` с вложенными `move_ids`.
+- Валидации `picking_type_id.code == 'internal'`, назначения в локацию склада `ОбМ-*`, складируемости товаров и положительных количеств.
+- Chatter-запись в picking с пометкой AI-ассистента и stable `idempotency_key`.
+
+### Тесты
+- `tests/test_write_tools.py` покрывает happy-case внутреннего перемещения, отказ при назначении не на `ОбМ-*` и регистрацию tool.
+
+## [2026-05-23] — AIA-036: create_purchase_order_draft
+### Добавлено
+- `CreatePurchaseOrderDraftTool` — write tool для создания `purchase.order` в `draft` на `picking_type_id` склада объекта `ОбМ-*`.
+- Валидации поставщика (`supplier_rank > 0`), object warehouse picking type, `incoming`, складируемости товаров и предупреждения по UoM труб до TD-002.
+- Создание строк `purchase.order.line` через фактическое поле Odoo 19 `product_uom_id` при внешнем аргументе tool `product_uom`.
+- Chatter-запись в PO с пометкой AI-ассистента и stable `idempotency_key` по `(partner_id, origin, partner_ref, sorted(lines))`.
+
+### Тесты
+- `tests/test_write_tools.py` покрывает happy-case ОбМ-4 / ПроМеталл / УТ-1132 / 6 строк труб, отказ для не-ОбМ picking type, отказ для не складируемого товара и warning для трубы в кг.
+
+## [2026-05-23] — AIA-035: create_object_request_draft
+### Добавлено
+- `CreateObjectRequestDraftTool` — write tool для создания `object.request` в `draft` от имени текущего пользователя без `sudo()`.
+- Whitelist полей шапки (`project_id`, `need_date`, `foreman_user_id`) и строк (`name_raw`, `qty_requested`, `preferred_vendor_id`).
+- Проверки группы `ai_assistant.group_ai_assistant_supply`, непустого списка строк и положительного `qty_requested`.
+- Chatter-запись через `message_post(..., subtype_xmlid='mail.mt_note')` с пометкой AI-ассистента.
+- Stable `idempotency_key` по `(project_id, need_date, sorted(lines))`.
+
+### Тесты
+- `tests/test_write_tools.py` покрывает happy-case, отказ без Supply-группы, chatter note, валидации строк, регистрацию tool и стабильность idempotency key.
+
+## [2026-05-23] — AIA-039: OpenRouter tool-calling client
+### Добавлено
+- `OpenRouterClient.send_chat_with_tools()` — отправка `tools/tool_choice` в OpenRouter Chat Completions и структурированный ответ `message` или `tool_calls`.
+- Безопасный парсинг `tool_calls[].function.arguments`: JSON-строка превращается в dict, битый JSON возвращает `{}` с `arguments_error='invalid_json'`.
+- Логирование tool calls пишет только количество и имена tools, без аргументов.
+- `tests/test_openrouter_tools.py` — мок-тесты payload, tool_calls, битого JSON и обычного `finish_reason='stop'`.
+
+## [2026-05-23] — AIA-034: read tools для складов, остатков и OR
+### Добавлено
+- `search_stock_quants`, `find_warehouse`, `find_picking_type`, `find_object_request`, `read_object_request` в `services/action_tools/read_tools.py`.
+- Тесты happy-case для остатков, склада `ОбМ-*`, типа операции, поиска OR и чтения OR со строками.
+
+## [2026-05-23] — AIA-033: read tools для товаров и поставщиков
+### Добавлено
+- `services/action_tools/read_tools.py` — `search_products`, `find_product_by_id`, `find_partner` с явными JSON Schema и whitelist полей.
+- Регистрация read tools в `default_registry`.
+- `tests/test_read_tools.py` — проверки поиска товара через `ai_search_products`, чтения товара по ID, поиска поставщика по ИНН и регистрации tools.
+
+## [2026-05-23] — AIA-032: pre-condition валидаторы action tools
+### Добавлено
+- `services/action_tools/validators.py` — проверки object warehouse picking type, складируемости товара, статуса записи, кода склада `ОбМ-*`, поставщика `supplier_rank > 0` и предупреждение по UoM труб до TD-002.
+- `tests/test_validators.py` — happy/edge coverage для каждого валидатора.
+
+## [2026-05-23] — AIA-031: базовый слой action tools
+### Добавлено
+- `services/action_tools/base.py` — `AbstractTool`, `AbstractReadTool`, `AbstractWriteTool`, JSON Schema validation через `jsonschema` с ручным fallback.
+- `services/action_tools/registry.py` — `ToolRegistry`, фильтрация tools по группам пользователя и экспорт в OpenRouter/OpenAI-compatible `tools[]`.
+- `tests/test_action_tools_registry.py` — тесты регистрации, групп, формы schema и запрета лишних аргументов.
+
+## [2026-05-23] — AIA-030: PromptBuilder actions mode
+### Изменено
+- `PromptBuilder.build_messages()` получил параметр `mode='consult'|'actions'`; consult остается дефолтным режимом без изменения поведения.
+- В actions-режиме системный prompt дополняется правилами подготовки черновиков OR/PO/picking, требованием UI-подтверждения, запретами `button_confirm`, `button_validate`, прямого `state` и инвентаризации.
+- Safety rules параметризованы: actions-режим больше не запрещает формулировки вида «Я создам», но ограничен разрешенными tools снабжения.
+
+### Тесты
+- `TestPromptBuilder` покрывает наличие actions-правил, неизменность consult-режима и запреты inventory/validate/confirm/state.
+
+## [2026-05-23] — AIA-029: supply-cycle knowledge для actions
+### Добавлено
+- `custom_addons/ai_assistant/static/knowledge/supply_cycle_context.md` — компактный контекст снабжения OR → PO/INT → Validate: роли, склады `ОбМ-*`, пересчёт в метры, denylist и пример плана PO по УТ-1132.
+
+### Изменено
+- `KnowledgeProviderV2` индексирует `supply_cycle_context.md` для модулей `purchase`, `stock`, `object_request` и добавляет триггеры «снабжение», «закупка», «требование», «приход», «ОбМ».
+- `static/knowledge/index.json` регистрирует supply-cycle файл для `purchase`, `stock`, `object_request`.
+- `test_knowledge_provider_v2.py` проверяет подгрузку supply context по запросу про закупку на ОбМ-4.
+
+## [2026-05-23] — AIA-044: группа Supply и feature flag actions
+### Добавлено
+- `ai_assistant.group_ai_assistant_supply` — группа для режима actions снабжения; наследует обычный доступ к AI Assistant, Purchase User и Stock User, без прав администратора Odoo.
+- `ai_assistant.actions_enabled` — выключенный по умолчанию feature flag в настройках AI-консультанта.
+
+### Изменено
+- `custom_addons/ai_assistant/__manifest__.py` — добавлены зависимости `mail`, `stock`, `purchase`, `object_request`, `custom_product_search`.
+- `tests/test_module_install.py` — добавлены проверки зависимостей, supply-группы и дефолтного состояния feature flag.
+
+## [2026-05-23] — Roadmap и tasktracker AI-ассистента v3 (Actions)
+### Добавлено
+- `docs/roadmap_ai_assistant_v3_actions.md` — план развития модуля `ai_assistant` до режима исполнения действий из чата в Odoo: allowlist/denylist tools, архитектура (`action_tools/*`, `ToolExecutor`, `pending_action`), OpenRouter function calling, UX-карточки подтверждения/результата, безопасность (новая группа `group_ai_assistant_supply`, feature flag `ai_assistant.actions_enabled`), границы (без TD-003 — никаких `button_confirm`/`button_validate`).
+- `docs/tasktracker_ai_assistant_v3.md` — детальный трекер задач AIA-029…AIA-050 с разделами «Контекст», «🔧 Context7», «🚫 Запрещено», «✅ DoD» под каждую задачу. Включает рекомендуемый порядок инкрементов и сводную таблицу зависимостей.
+
+### Примечание
+- Реализация ещё не начата; документы предназначены для пошагового исполнения агентом из терминала с понятным контекстом.
+
+## [2026-05-23] — TD-003: примечание о `call_model_method` (без кастомного модуля)
+### Изменено
+- `docs/technical-debt.md` — в TD-003 добавлен блок «Примечание (2026-05-23)» о том, что подзадачу 1 (server-side validate/confirm) можно закрыть без кастомного модуля Odoo через инструмент `call_model_method` пакета `mcp-server-odoo` v0.6.0 (нужны `ODOO_YOLO=true` и `ODOO_MCP_ENABLE_METHOD_CALLS=true` в `~/.cursor/mcp.json` и перезапуск MCP). Согласовано с TD-001.
+
 ## [2026-05-12] — Модуль подписей остатков `stock_qty_labels_ru`
 ### Добавлено
 - Модуль `custom_addons/stock_qty_labels_ru`: подписи **На складе** / **Доступно** для `qty_available` и `virtual_available` в основных списках, отчёте наличия, kanban и кнопке прогноза на форме товара (наследование стандартных представлений `stock`).

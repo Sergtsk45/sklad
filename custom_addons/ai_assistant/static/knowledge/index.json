@@ -32,13 +32,16 @@
     {
       "module": "object_request",
       "label": "Запрос объекта",
-      "docs": [],
+      "docs": [
+        "supply_cycle_context.md"
+      ],
       "generated": "generated/object_request_context.md"
     },
     {
       "module": "purchase",
       "label": "Закупки",
       "docs": [
+        "supply_cycle_context.md",
         "docs/purchase_orders.md",
         "docs/purchase_receipts.md"
       ],
@@ -65,6 +68,7 @@
       "module": "stock",
       "label": "Склад",
       "docs": [
+        "supply_cycle_context.md",
         "docs/stock_inventory.md",
         "docs/stock_operations.md",
         "docs/stock_products.md",
