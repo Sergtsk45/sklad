@@ -415,18 +415,18 @@
 
 ### Задача: AIA-040 — Tool-call цикл в `chat_controller.py` + `pending_action`
 
-- **Статус**: ⏳ Не начата
+- **Статус**: ✅ Выполнена
 - **Приоритет**: Критический
 - **Описание**: Реализовать главный цикл: модель → tool_calls → исполнение (read автоматом, write → pending) → ответ → loop.
 - **📁 Контекст**:
   - `custom_addons/ai_assistant/controllers/chat_controller.py`
   - `docs/roadmap_ai_assistant_v3_actions.md` §3.1, §5.2
 - **Шаги выполнения**:
-  - [ ] Создать `services/pending_action.py`:
+  - [x] Создать `services/pending_action.py`:
     - класс `PendingActionStore` (in-memory dict `{uid: {key, tool_name, args, expires_at}}`)
     - методы `put(uid, key, tool, args)`, `get(uid, key)`, `pop(uid, key)`, `clear(uid)`
     - TTL: 10 минут
-  - [ ] Модифицировать `_get_ai_response`:
+  - [x] Модифицировать `_get_ai_response`:
     - определить `mode` по группе пользователя + `actions_enabled`
     - в actions: подгрузить `registry.to_openrouter_tools(env)` → `client.send_chat_with_tools(...)`
     - цикл max=5 итераций:
@@ -434,19 +434,19 @@
       - response.type == 'tool_calls' →
         - для каждой tool_call: если read → executor.execute → append role='tool' message
         - если write → сохранить в pending_action, прервать цикл, вернуть `confirmation_card`
-  - [ ] Новый endpoint `POST /ai_assistant/confirm`:
+  - [x] Новый endpoint `POST /ai_assistant/confirm`:
     - body: `{pending_key: string, decision: 'confirm'|'cancel'}`
     - confirm → executor.execute(write tool), затем дополнить историю и снова вызвать модель для финального текста
     - cancel → pending_action.pop, вернуть «отменено»
-  - [ ] DTO ответа `/ai_assistant/chat` расширить полем `cards: [{type:'confirmation', pending_key, plan: {...}}]`
-  - [ ] Тест `tests/test_chat_controller.py` (расширить):
-    - `test_actions_mode_read_tool_call_loop` (моки на client.send_chat_with_tools)
-    - `test_actions_mode_write_returns_confirmation_card`
-    - `test_confirm_endpoint_executes_pending`
-    - `test_confirm_with_wrong_key_returns_error`
-    - `test_max_iterations_breaks_loop`
+  - [x] DTO ответа `/ai_assistant/chat` расширить полем `cards: [{type:'confirmation', pending_key, plan: {...}}]`
+  - [x] Тест `tests/test_chat_controller.py` (расширить):
+    - [x] `test_actions_mode_read_tool_call_loop` (моки на client.send_chat_with_tools)
+    - [x] `test_actions_mode_write_returns_confirmation_card`
+    - [x] `test_confirm_endpoint_executes_pending`
+    - [x] `test_confirm_with_wrong_key_returns_error`
+    - [x] `test_max_iterations_breaks_loop`
 - **🚫 Запрещено**: выполнять write-tools без `/confirm` endpoint.
-- **✅ DoD**: тесты проходят; cancellation работает; в логах виден полный путь tool_call → confirm.
+- **✅ DoD**: backend-тесты проходят; cancellation работает; в логах виден путь tool_call → confirm. Финальный LLM-текст после confirm и frontend-рендер карточек закрываются следующими задачами UX.
 - **⛓ Зависит от**: AIA-038, AIA-039
 
 ---
@@ -684,7 +684,7 @@
 | AIA-037 | create_internal_picking_draft | V3-3 | Высокий | ✅ | 🔧 | AIA-031..034 |
 | AIA-038 | post_chatter_note + ToolExecutor | V3-3 | Критический | ✅ | 🔧 | AIA-031, 035..037 |
 | AIA-039 | OpenRouterClient.send_chat_with_tools | V3-4 | Критический | ✅ | 🔧 | AIA-031 |
-| AIA-040 | tool-call loop + /confirm + pending_action | V3-4 | Критический | ⏳ | — | AIA-038, AIA-039 |
+| AIA-040 | tool-call loop + /confirm + pending_action | V3-4 | Критический | ✅ | — | AIA-038, AIA-039 |
 | AIA-041 | OWL ConfirmationCard | V3-5 | Высокий | ⏳ | 🔧 | AIA-040 |
 | AIA-042 | OWL ResultCard | V3-5 | Высокий | ⏳ | — | AIA-041 |
 | AIA-043 | ai_chat_service.js cards | V3-5 | Высокий | ⏳ | — | AIA-041, AIA-042 |

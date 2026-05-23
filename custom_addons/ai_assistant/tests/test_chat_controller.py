@@ -51,7 +51,16 @@ class TestChatController(HttpCase):
     # --- validation tests ---
 
     def test_chat_returns_answer(self):
-        result = self._post_chat({'message': 'Привет'})
+        with patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat',
+            return_value={
+                'answer': 'Привет.',
+                'model_used': 'test-model',
+                'mode': 'text',
+            },
+        ):
+            result = self._post_chat({'message': 'Привет'})
         data = result.get('result', {})
         self.assertIn('answer', data)
         self.assertFalse(data.get('error'))
@@ -134,3 +143,200 @@ class TestChatController(HttpCase):
         result = response.json()
         data = result.get('result', {})
         self.assertIn('has_access', data)
+
+    def test_actions_mode_read_tool_call_loop(self):
+        partner = self.env['res.partner'].create({
+            'name': 'ООО Tool Loop',
+            'supplier_rank': 1,
+        })
+        responses = [
+            {
+                'type': 'tool_calls',
+                'content': '',
+                'tool_calls': [{
+                    'id': 'call_1',
+                    'name': 'find_partner',
+                    'arguments': {
+                        'query': partner.name,
+                        'is_supplier': True,
+                    },
+                }],
+                'model_used': 'test-model',
+            },
+            {
+                'type': 'message',
+                'content': 'Поставщик найден.',
+                'tool_calls': [],
+                'model_used': 'test-model',
+            },
+        ]
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'AiAssistantController._resolve_mode',
+            return_value='actions',
+        ), patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat_with_tools',
+            side_effect=responses,
+        ):
+            result = self._post_chat({
+                'message': 'Найди поставщика',
+                'context': {'module': 'purchase'},
+            })
+
+        data = result.get('result', {})
+        self.assertEqual(data.get('answer'), 'Поставщик найден.')
+        self.assertEqual(data.get('cards'), [])
+        self.assertEqual(data.get('meta', {}).get('mode'), 'actions')
+
+    def test_actions_mode_write_returns_confirmation_card(self):
+        project = self.env['object.request.project'].create({
+            'name': 'Chat Confirm Object',
+        })
+        response = {
+            'type': 'tool_calls',
+            'content': '',
+            'tool_calls': [{
+                'id': 'call_write',
+                'name': 'create_object_request_draft',
+                'arguments': {
+                    'project_id': project.id,
+                    'need_date': '2026-06-20',
+                    'lines': [{
+                        'name_raw': 'Труба',
+                        'qty_requested': 2.0,
+                        'preferred_vendor_id': None,
+                    }],
+                },
+            }],
+            'model_used': 'test-model',
+        }
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'AiAssistantController._resolve_mode',
+            return_value='actions',
+        ), patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat_with_tools',
+            return_value=response,
+        ):
+            result = self._post_chat({'message': 'Создай требование'})
+
+        data = result.get('result', {})
+        self.assertEqual(data['cards'][0]['type'], 'confirmation')
+        self.assertTrue(data['cards'][0]['pending_key'])
+        self.assertEqual(
+            data['cards'][0]['plan']['tool_name'],
+            'create_object_request_draft',
+        )
+
+    def test_confirm_endpoint_executes_pending(self):
+        project = self.env['object.request.project'].create({
+            'name': 'Chat Execute Object',
+        })
+        pending_key = self._create_pending_or(project.id)
+
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'ToolExecutor.execute',
+            return_value={
+                'success': True,
+                'result': {
+                    'request_id': 99,
+                    'name': 'OR/TEST',
+                    'url': '/odoo/object_request/99',
+                },
+            },
+        ):
+            result = self._post_confirm({
+                'pending_key': pending_key,
+                'decision': 'confirm',
+            })
+
+        data = result.get('result', {})
+        self.assertEqual(data.get('meta', {}).get('status'), 'ok')
+        self.assertEqual(data['cards'][0]['type'], 'result')
+        self.assertEqual(data['cards'][0]['status'], 'success')
+        self.assertTrue(data['cards'][0]['record']['id'])
+
+    def test_confirm_with_wrong_key_returns_error(self):
+        result = self._post_confirm({
+            'pending_key': 'wrong',
+            'decision': 'confirm',
+        })
+
+        data = result.get('result', {})
+        self.assertIn('error', data)
+
+    def test_max_iterations_breaks_loop(self):
+        response = {
+            'type': 'tool_calls',
+            'content': '',
+            'tool_calls': [{
+                'id': 'call_1',
+                'name': 'find_partner',
+                'arguments': {
+                    'query': 'No Vendor',
+                    'is_supplier': True,
+                },
+            }],
+            'model_used': 'test-model',
+        }
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'AiAssistantController._resolve_mode',
+            return_value='actions',
+        ), patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat_with_tools',
+            return_value=response,
+        ):
+            result = self._post_chat({'message': 'Loop tools'})
+
+        data = result.get('result', {})
+        self.assertEqual(
+            data.get('meta', {}).get('status'),
+            'max_iterations',
+        )
+
+    def _post_confirm(self, payload):
+        body = json.dumps(
+            {'jsonrpc': '2.0', 'method': 'call', 'params': payload}
+        )
+        response = self.url_open(
+            '/ai_assistant/confirm',
+            data=body.encode(),
+            headers={'Content-Type': 'application/json'},
+        )
+        return response.json()
+
+    def _create_pending_or(self, project_id):
+        response = {
+            'type': 'tool_calls',
+            'content': '',
+            'tool_calls': [{
+                'id': 'call_write',
+                'name': 'create_object_request_draft',
+                'arguments': {
+                    'project_id': project_id,
+                    'need_date': '2026-06-21',
+                    'lines': [{
+                        'name_raw': 'Кран',
+                        'qty_requested': 1.0,
+                        'preferred_vendor_id': None,
+                    }],
+                },
+            }],
+            'model_used': 'test-model',
+        }
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'AiAssistantController._resolve_mode',
+            return_value='actions',
+        ), patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat_with_tools',
+            return_value=response,
+        ):
+            result = self._post_chat({'message': 'Создай OR'})
+        return result['result']['cards'][0]['pending_key']

@@ -2,6 +2,17 @@
 ### Исправлено
 - `AbstractTool._validate_args_manually`: добавлен метод `_validate_value`, рекурсивно проверяющий `properties` вложенных объектов и `items` массивов. До исправления ручной fallback (без `jsonschema`) пропускал невалидные данные во вложенных структурах, тогда как `jsonschema` их отклонял.
 
+## [2026-05-23] — AIA-040: tool-call loop и pending actions
+### Добавлено
+- `services/pending_action.py` — in-memory `PendingActionStore` с TTL 10 минут для write tools, ожидающих UI-подтверждения.
+- Actions-mode в `chat_controller.py`: выбор режима по `ai_assistant.actions_enabled` и группе `ai_assistant.group_ai_assistant_supply`, отправка `tools[]` в OpenRouter, read tool-call loop до 5 итераций.
+- Write tool calls больше не выполняются из `/ai_assistant/chat`; вместо этого сохраняются в pending store и возвращают `cards[].type == 'confirmation'`.
+- Endpoint `/ai_assistant/confirm`: `confirm` выполняет pending write через `ToolExecutor`, `cancel` удаляет pending action.
+- DTO `cards` для confirmation/result карточек backend-first.
+
+### Тесты
+- `tests/test_chat_controller.py` покрывает read tool-call loop, write confirmation card, confirm endpoint, неверный pending key и max-iterations break.
+
 ## [2026-05-23] — AIA-038: post_chatter_note и ToolExecutor
 ### Добавлено
 - `PostChatterNoteTool` — write tool для внутренних заметок chatter на allowlist моделей `object.request`, `purchase.order`, `stock.picking`.
