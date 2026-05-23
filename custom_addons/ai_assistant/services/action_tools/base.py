@@ -53,8 +53,18 @@ class AbstractTool(ABC):
             field_schema = properties.get(field_name)
             if not field_schema:
                 continue
-            self._validate_value_type(field_name, value, field_schema)
-            self._validate_value_enum(field_name, value, field_schema)
+            self._validate_value(field_name, value, field_schema)
+
+    def _validate_value(self, field_name, value, field_schema):
+        self._validate_value_type(field_name, value, field_schema)
+        self._validate_value_enum(field_name, value, field_schema)
+        if field_schema.get('type') == 'object' and isinstance(value, dict):
+            self._validate_args_manually(value, field_schema)
+        elif field_schema.get('type') == 'array' and isinstance(value, list):
+            item_schema = field_schema.get('items')
+            if item_schema:
+                for i, item in enumerate(value):
+                    self._validate_value('%s[%d]' % (field_name, i), item, item_schema)
 
     def _validate_value_type(self, field_name, value, field_schema):
         expected_type = field_schema.get('type')

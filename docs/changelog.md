@@ -1,3 +1,7 @@
+## [2026-05-24] — fix: рекурсивная валидация вложенных структур в AbstractTool
+### Исправлено
+- `AbstractTool._validate_args_manually`: добавлен метод `_validate_value`, рекурсивно проверяющий `properties` вложенных объектов и `items` массивов. До исправления ручной fallback (без `jsonschema`) пропускал невалидные данные во вложенных структурах, тогда как `jsonschema` их отклонял.
+
 ## [2026-05-23] — AIA-038: post_chatter_note и ToolExecutor
 ### Добавлено
 - `PostChatterNoteTool` — write tool для внутренних заметок chatter на allowlist моделей `object.request`, `purchase.order`, `stock.picking`.
