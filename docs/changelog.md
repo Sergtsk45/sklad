@@ -1,3 +1,16 @@
+## [2026-05-24] - Задача AIA-051: find_warehouse по name (backlog)
+### Добавлено
+- `docs/tasktracker_ai_assistant_v3.md` — задача **AIA-051**: расширить read-tool `find_warehouse` — поиск склада по `name` (`ilike`, например «Хмельницкого») в дополнение к `code` (`ОбМ-4`); этап V3-9 post-v3.
+
+### Изменено
+- `find_warehouse` принимает новый параметр `query` и legacy `code_pattern`, ищет по `code` или `name`.
+- `supply_cycle_context.md` уточняет, что склад можно искать по коду или части адреса/названия.
+
+### Проверено
+- `tests/test_read_tools.py` покрывает поиск склада по коду, legacy-параметру, фрагменту/полному адресу, пустому результату и префиксу `ОбМ-`.
+
+---
+
 ## [2026-05-24] - AI Assistant v3 Actions
 ### Добавлено
 - Action tool layer для AI Assistant: registry/base, read tools, write tools и `ToolExecutor`.

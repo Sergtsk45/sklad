@@ -47,6 +47,10 @@ No tool confirms purchase orders or validates pickings. `button_confirm` and
 - Receipt validation and stock quant creation remain manual until TD-003 is closed.
 - `pending_action` and tool rate limits are in-memory and reset on Odoo worker restart.
 
+### Closed after pilot
+
+- AIA-051: `find_warehouse` now accepts `query` and finds object warehouses by code or by address/name fragment, for example `Хмельницкого` -> `ОбМ-4`.
+
 ## 2026-05-24 — AIA-047 verification
 
 ### Tests

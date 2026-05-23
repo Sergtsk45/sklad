@@ -115,7 +115,7 @@
 | `search_products` | `product.product` | `ai_search_products(query, limit)` | поиск номенклатуры по нормализованному имени |
 | `find_product_by_id` | `product.product` | `read([id], fields)` | детали товара (UoM, is_storable, category) |
 | `search_stock_quants` | `stock.quant` | `search_read(domain, fields)` | остатки по `product_id` и складам, с фильтром «положительные» |
-| `find_warehouse` | `stock.warehouse` | `search_read([('code'='ОбМ-N')])` | резолв склада объекта в id и `in_type_id` |
+| `find_warehouse` | `stock.warehouse` | `search_read` по `code` или `name` | резолв склада объекта в id и `in_type_id` |
 | `find_picking_type` | `stock.picking.type` | `search_read` (`code in (incoming, internal)`, фильтр по `warehouse_id`) | resolve конкретного типа операции |
 | `find_partner` | `res.partner` | `search_read` (`supplier_rank>0` для поставщиков) | поставщик по ИНН/имени |
 | `find_object_request` | `object.request` | `search_read` по `name` / `project_id` / `state` | поиск OR пользователем |
@@ -515,6 +515,13 @@ docker exec odoo19-local odoo --test-enable --test-tags ai_assistant -d odoo19_l
 - Multi-step plan execution без подтверждений между шагами.
 - Сохранение истории в БД (остаётся sessionStorage).
 - Telegram/мобильный клиент.
+- Список **всех** позиций на складе без указания товара — отдельный tool (см. backlog **AIA-052** в трекере).
+
+### 11.1. Post-v3 backlog (v3.1)
+
+| ID | Улучшение | Статус |
+|---|---|---|
+| **AIA-051** | `find_warehouse`: поиск по `name` (`ilike`), не только `code` | ✅ выполнено, см. [`tasktracker_ai_assistant_v3.md`](tasktracker_ai_assistant_v3.md) |
 
 ---
 
@@ -523,3 +530,5 @@ docker exec odoo19-local odoo --test-enable --test-tags ai_assistant -d odoo19_l
 | Дата | Версия | Изменение |
 |---|---|---|
 | 2026-05-23 | 0.1 | Первая версия roadmap v3: actions в `ai_assistant`, без TD-003 |
+| 2026-05-24 | 0.2 | Backlog AIA-051: `find_warehouse` по name |
+| 2026-05-24 | 0.3 | AIA-051 выполнена: `find_warehouse(query)` ищет по коду и названию склада |

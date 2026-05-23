@@ -713,6 +713,67 @@
 
 ---
 
+## Этап V3-9. Post-v3 — улучшения read tools
+
+### Задача: AIA-051 — `find_warehouse`: поиск по `name`, не только по `code`
+
+- **Статус**: ✅ Выполнена (2026-05-24)
+- **Приоритет**: Высокий
+- **Описание**: Расширить read-tool `find_warehouse`, чтобы ассистент находил склад объекта по **адресу/названию** (например «Б. Хмельницкого, 112», «Хмельницкого»), а не только по коду `ОбМ-N`. Сейчас tool ищет только поле `stock.warehouse.code`, из‑за чего пользователь получает просьбу «уточните код склада» при естественных формулировках.
+- **Контекст (проблема на проде)**:
+  - Запрос: «что есть на складе Б. Хмельницкого, 112» → ассистент просит код склада.
+  - В БД: `name = "Б. Хмельницкого, 112"`, `code = "ОбМ-4"`.
+  - Tool: `custom_addons/ai_assistant/services/action_tools/read_tools.py::FindWarehouseTool`.
+- **📁 Контекст**:
+  - `custom_addons/ai_assistant/services/action_tools/read_tools.py` — `FindWarehouseTool`
+  - `custom_addons/ai_assistant/tests/test_read_tools.py` — `test_find_warehouse_by_code`
+  - `custom_addons/ai_assistant/static/knowledge/supply_cycle_context.md` — таблица ОбМ-1…4 (name ↔ code)
+  - `docs/pilot_results_v3.md` §Known limitations — упомянуть закрытие после AIA-051
+- **🔧 Context7** (опционально):
+  - Тема: «Odoo 19 stock.warehouse search domain name ilike»
+  - Цель: подтвердить поле `name` и отсутствие конфликта с `code` при OR-domain.
+- **Шаги выполнения**:
+  - [x] Изменить JSON Schema `find_warehouse`:
+    - [x] Переименовать параметр `code_pattern` → **`query`** (строка ≥ 2 символов) **или** оставить `code_pattern` и добавить опциональный `name_query` — **предпочтительно один параметр `query`** для LLM (меньше путаницы).
+    - [x] Обновить `description`: «Найти склад по коду (ОбМ-4, ОбМ-) или по части названия/адреса (Хмельницкого, Ломоносова)».
+  - [x] Логика `execute(env, args)`:
+    - [x] Нормализовать `query`: `strip()`, min length 2.
+    - [x] Если `query` матчит шаблон `ОбМ-` (regex `^ОбМ-\d*$` или заканчивается на `-`) — искать по **`code`** (как сейчас: `=ilike` / `ilike` для префикса).
+    - [x] Иначе — domain: `['|', ('code', 'ilike', query), ('name', 'ilike', query)]`, `limit=20`.
+    - [x] Дедупликация по `id` если оба условия совпали.
+    - [x] Возвращать те же поля: `id`, `name`, `code`, `in_type_id`, `int_type_id`, `lot_stock_id`.
+  - [x] Обратная совместимость (если меняется имя параметра):
+    - [x] В `execute` принимать и legacy `code_pattern` → маппить в `query` (deprecation в docstring, без ломания старых pending actions — их нет для read tools).
+  - [x] Тесты `tests/test_read_tools.py`:
+    - [x] `test_find_warehouse_by_code` — оставить/адаптировать под `query='ОбМ-R'`.
+    - [x] `test_find_warehouse_by_name_fragment` — `query='Хмельницкого'` → находит склад с `code='ОбМ-4'`.
+    - [x] `test_find_warehouse_by_full_name` — `query='Б. Хмельницкого, 112'`.
+    - [x] `test_find_warehouse_no_match` — пустой список, не exception.
+    - [x] `test_find_warehouse_obm_prefix_list` — `query='ОбМ-'` возвращает все объектные склады (как сейчас для code prefix).
+  - [x] Обновить `supply_cycle_context.md` §«Склады объектов»: явная строка «поиск find_warehouse принимает и код, и название».
+  - [x] Прогон: `docker exec odoo19-local odoo --test-enable --test-tags /ai_assistant -d odoo19_local --stop-after-init` (или prod после деплоя `-u ai_assistant`).
+- **🚫 Запрещено**:
+  - `sudo()` при поиске складов.
+  - Возвращать склады вне ACL пользователя (стандартный `search_read` достаточен).
+  - Менять write-tools или добавлять `list_warehouse_stock` в scope этой задачи (отдельная AIA-052 при необходимости).
+- **✅ DoD**:
+  - В чате на проде запрос «найди склад Б. Хмельницкого, 112» или «остатки … на Хмельницкого» **не** заканчивается просьбой «уточните код»; ассистент вызывает `find_warehouse` и получает `ОбМ-4`.
+  - Все новые и существующие тесты `find_warehouse` зелёные.
+  - Flake8 на изменённых файлах без новых ошибок.
+- **Примеры приёмки (ручной чат)**:
+  ```
+  find_warehouse(query="Хмельницкого")     → warehouses[0].code == "ОбМ-4"
+  find_warehouse(query="ОбМ-4")             → тот же склад
+  find_warehouse(query="Ломоносова")        → ОбМ-2
+  ```
+- **⛓ Зависит от**: AIA-034 (read tools на проде)
+- **Результат**:
+  - `find_warehouse` принимает `query` и legacy `code_pattern`.
+  - Поиск по адресу/названию идёт через `('name', 'ilike', query)` вместе с `code`.
+  - Добавлены тесты для кода, legacy-параметра, фрагмента/полного адреса, пустого результата и префикса `ОбМ-`.
+
+---
+
 ## 13. Сводная таблица задач
 
 | ID | Название | Этап | Приоритет | Статус | Context7 | Зависит от |
@@ -740,6 +801,7 @@
 | AIA-048 | ai_assistant.audit модель | V3-7 | Средний | ✅ | — | AIA-038 |
 | AIA-049 | E2E УТ-1132 → PO ОбМ-4 | V3-7 | Высокий | ✅ | — | AIA-035, AIA-036, AIA-038 |
 | AIA-050 | pilot_results_v3 + docs | V3-8 | Средний | ✅ | — | AIA-049 |
+| AIA-051 | find_warehouse: поиск по name | V3-9 | Высокий | ✅ | — | AIA-034 |
 
 ---
 
@@ -756,6 +818,10 @@ AIA-035 → AIA-038 → AIA-046 → AIA-045 → AIA-041 → AIA-042 → AIA-043 
 **Инкремент 3 — «полный цикл»:**
 AIA-036 → AIA-037 → AIA-049 → AIA-047 → AIA-048 → AIA-050 →
 демо: УТ-1132 → PO ОбМ-4 в `draft`, снабженец завершает в UI.
+
+**Инкремент 4 — «склад по адресу» (post-v3):**
+AIA-051 →
+демо: «остатки трубы 89×3,5 на Б. Хмельницкого, 112» без просьбы уточнить код ОбМ-4.
 
 ---
 

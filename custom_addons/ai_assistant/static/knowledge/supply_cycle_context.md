@@ -13,6 +13,7 @@
 ## Склады объектов и picking type
 
 Объектные склады имеют код `ОбМ-N`. Для PO нужен `stock.warehouse.in_type_id` склада объекта, для внутреннего перемещения - `stock.warehouse.int_type_id`, назначение - `stock.warehouse.lot_stock_id`.
+Tool `find_warehouse` принимает `query`: можно передать код склада (`ОбМ-4`, `ОбМ-`) или часть названия/адреса (`Хмельницкого`, `Ломоносова`).
 
 | Объект | Код склада | PO incoming picking type | Internal picking type |
 |---|---|---|---|

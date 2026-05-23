@@ -109,7 +109,7 @@ class TestUT1132PipelineDraft(TransactionCase):
 
         warehouse_result = executor.execute(
             'find_warehouse',
-            {'code_pattern': 'ОбМ-4'},
+            {'query': 'ОбМ-4'},
         )
         self.assertTrue(warehouse_result['success'])
         warehouse = self._find_result_by_id(

@@ -1,3 +1,5 @@
+import re
+
 from .base import AbstractReadTool
 from .registry import default_registry
 
@@ -146,25 +148,59 @@ class SearchStockQuantsTool(AbstractReadTool):
 
 class FindWarehouseTool(AbstractReadTool):
     name = 'find_warehouse'
-    description = 'Найти склад объекта по коду, например ОбМ-4 или ОбМ-.'
+    description = (
+        'Найти склад по коду (ОбМ-4, ОбМ-) или по части '
+        'названия/адреса (Хмельницкого, Ломоносова).'
+    )
     parameters_schema = {
         'type': 'object',
         'properties': {
+            'query': {'type': 'string', 'minLength': 2},
             'code_pattern': {'type': 'string', 'minLength': 2},
         },
-        'required': ['code_pattern'],
+        'anyOf': [
+            {'required': ['query']},
+            {'required': ['code_pattern']},
+        ],
         'additionalProperties': False,
     }
 
     def execute(self, env, args):
-        pattern = args['code_pattern']
-        operator = 'ilike' if pattern.endswith('-') else '=ilike'
+        query = self._get_query(args)
+        if self._is_object_warehouse_code_query(query):
+            operator = 'ilike' if query.endswith('-') else '=ilike'
+            domain = [('code', operator, query)]
+        else:
+            domain = ['|', ('code', 'ilike', query), ('name', 'ilike', query)]
         warehouses = env['stock.warehouse'].search_read(
-            [('code', operator, pattern)],
-            ['id', 'name', 'code', 'in_type_id', 'int_type_id', 'lot_stock_id'],
+            domain,
+            [
+                'id',
+                'name',
+                'code',
+                'in_type_id',
+                'int_type_id',
+                'lot_stock_id',
+            ],
             limit=20,
         )
-        return {'warehouses': warehouses}
+        return {'warehouses': self._deduplicate_by_id(warehouses)}
+
+    def _get_query(self, args):
+        # code_pattern is kept for compatibility with existing read tool calls.
+        query = (args.get('query') or args.get('code_pattern') or '').strip()
+        if len(query) < 2:
+            raise ValueError('query must contain at least 2 characters')
+        return query
+
+    def _is_object_warehouse_code_query(self, query):
+        return bool(re.match(r'^ОбМ-\d*$', query))
+
+    def _deduplicate_by_id(self, warehouses):
+        warehouse_by_id = {}
+        for warehouse in warehouses:
+            warehouse_by_id.setdefault(warehouse['id'], warehouse)
+        return list(warehouse_by_id.values())
 
 
 class FindPickingTypeTool(AbstractReadTool):

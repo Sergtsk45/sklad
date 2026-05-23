@@ -47,6 +47,14 @@ class TestActionReadTools(TransactionCase):
             'name': 'ОбМ Read Tools',
             'code': 'ОбМ-R',
         })
+        cls.address_warehouse = cls._get_or_create_warehouse(
+            'Б. Хмельницкого, 112',
+            'ОбМ-4',
+        )
+        cls.prefix_warehouse = cls._get_or_create_warehouse(
+            'Ломоносова 164',
+            'ОбМ-2',
+        )
         cls.env['stock.quant']._update_available_quantity(
             cls.product, cls.warehouse.lot_stock_id, 7.0
         )
@@ -65,6 +73,20 @@ class TestActionReadTools(TransactionCase):
             'uom_id': cls.env.ref('uom.product_uom_meter').id,
             'qty_requested': 7.0,
             'qty_to_buy': 7.0,
+        })
+
+    @classmethod
+    def _get_or_create_warehouse(cls, name, code):
+        warehouse = cls.env['stock.warehouse'].search(
+            [('code', '=', code)],
+            limit=1,
+        )
+        if warehouse:
+            warehouse.name = name
+            return warehouse
+        return cls.env['stock.warehouse'].create({
+            'name': name,
+            'code': code,
         })
 
     def test_search_products_basic(self):
@@ -133,10 +155,45 @@ class TestActionReadTools(TransactionCase):
 
     def test_find_warehouse_by_code(self):
         result = FindWarehouseTool().execute(
+            self.env, {'query': 'ОбМ-R'}
+        )
+        warehouse_ids = [item['id'] for item in result['warehouses']]
+        self.assertIn(self.warehouse.id, warehouse_ids)
+
+    def test_find_warehouse_by_legacy_code_pattern(self):
+        result = FindWarehouseTool().execute(
             self.env, {'code_pattern': 'ОбМ-R'}
         )
         warehouse_ids = [item['id'] for item in result['warehouses']]
         self.assertIn(self.warehouse.id, warehouse_ids)
+
+    def test_find_warehouse_by_name_fragment(self):
+        result = FindWarehouseTool().execute(
+            self.env, {'query': 'Хмельницкого'}
+        )
+        warehouse_ids = [item['id'] for item in result['warehouses']]
+        self.assertIn(self.address_warehouse.id, warehouse_ids)
+
+    def test_find_warehouse_by_full_name(self):
+        result = FindWarehouseTool().execute(
+            self.env, {'query': 'Б. Хмельницкого, 112'}
+        )
+        warehouse_ids = [item['id'] for item in result['warehouses']]
+        self.assertIn(self.address_warehouse.id, warehouse_ids)
+
+    def test_find_warehouse_no_match(self):
+        result = FindWarehouseTool().execute(
+            self.env, {'query': 'Несуществующий склад read tools'}
+        )
+        self.assertEqual(result['warehouses'], [])
+
+    def test_find_warehouse_obm_prefix_list(self):
+        result = FindWarehouseTool().execute(
+            self.env, {'query': 'ОбМ-'}
+        )
+        warehouse_ids = [item['id'] for item in result['warehouses']]
+        self.assertIn(self.address_warehouse.id, warehouse_ids)
+        self.assertIn(self.prefix_warehouse.id, warehouse_ids)
 
     def test_find_picking_type(self):
         result = FindPickingTypeTool().execute(self.env, {
