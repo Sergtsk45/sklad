@@ -99,19 +99,19 @@
  - Стандартные Odoo-модули: `stock`, `purchase`, `product`, `contacts`, `mail`
 
 ## Задача: AI Assistant v3 — Actions (исполнение из чата в Odoo)
-- **Статус**: Не начата (документация подготовлена)
+- **Статус**: Завершена
 - **Описание**: Расширить модуль `custom_addons/ai_assistant/` от консультативного режима к исполнению ограниченного набора действий снабжения из `docs/instruction-warehouse-supply-cycle.md` прямо в чате Odoo: создание черновиков `object.request`, `purchase.order`, `stock.picking` (internal/incoming), поиск товаров/остатков/складов, аудит через `mail.thread.message_post`. Без TD-003 — никаких `button_confirm`/`button_validate`.
 - **Шаги выполнения**:
   - [x] Подготовить roadmap `docs/roadmap_ai_assistant_v3_actions.md` (allowlist/denylist, архитектура, безопасность, риски).
   - [x] Подготовить детальный трекер `docs/tasktracker_ai_assistant_v3.md` (AIA-029…AIA-050) с контекстом, метками Context7, DoD, зависимостями.
-  - [ ] V3-1 Knowledge + Prompt: AIA-029, AIA-030.
-  - [ ] V3-2 Tool layer (домен): AIA-031, AIA-032, AIA-033, AIA-034.
-  - [ ] V3-3 Write tools + executor: AIA-035, AIA-036, AIA-037, AIA-038.
-  - [ ] V3-4 OpenRouter integration: AIA-039, AIA-040.
-  - [ ] V3-5 Frontend UX: AIA-041, AIA-042, AIA-043.
-  - [ ] V3-6 Безопасность: AIA-044, AIA-045, AIA-046.
-  - [ ] V3-7 Тесты и E2E: AIA-047, AIA-048, AIA-049.
-  - [ ] V3-8 Документация и пилот: AIA-050.
+  - [x] V3-1 Knowledge + Prompt: AIA-029, AIA-030.
+  - [x] V3-2 Tool layer (домен): AIA-031, AIA-032, AIA-033, AIA-034.
+  - [x] V3-3 Write tools + executor: AIA-035, AIA-036, AIA-037, AIA-038.
+  - [x] V3-4 OpenRouter integration: AIA-039, AIA-040.
+  - [x] V3-5 Frontend UX: AIA-041, AIA-042, AIA-043.
+  - [x] V3-6 Безопасность: AIA-044, AIA-045, AIA-046.
+  - [x] V3-7 Тесты и E2E: AIA-047, AIA-048, AIA-049.
+  - [x] V3-8 Документация и пилот: AIA-050.
 - **Зависимости**:
   - Модули: `ai_assistant` (v2), `object_request`, `custom_product_search`, стандартные `stock`, `purchase`, `mail`.
   - Документы: `docs/instruction-warehouse-supply-cycle.md`, `docs/technical-debt.md` (TD-001/TD-002/TD-003), `docs/datamodelspecobjectrequest.md`.

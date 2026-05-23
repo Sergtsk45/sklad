@@ -616,7 +616,7 @@
 - **🚫 Запрещено**: коммитить без зелёных тестов.
 - **✅ DoD**: все тесты v3 проходят; нет регрессий v1/v2.
 - **Результат**:
-  - Полный `/ai_assistant` test suite зелёный: 235 post-tests, 0 failed, 0 errors.
+  - Полный `/ai_assistant` test suite зелёный: 237 post-tests, 0 failed, 0 errors.
   - Полный `flake8 /mnt/extra-addons/ai_assistant` падает на существующем style debt вне AIA-041..046.
   - Точечный flake8 по изменённым Python-файлам AIA-045/AIA-046 зелёный.
   - Coverage tooling в текущем workflow не найден; процент покрытия не сформирован.
@@ -626,31 +626,37 @@
 
 ### Задача: AIA-048 — (Опционально) Модель `ai_assistant.audit`
 
-- **Статус**: ⏳ Не начата
+- **Статус**: ✅ Выполнена
 - **Приоритет**: Средний
 - **Описание**: Централизованный журнал tool-вызовов на случай, если chatter недостаточно.
 - **📁 Контекст**: `docs/roadmap_ai_assistant_v3_actions.md` §7.3
 - **Шаги выполнения**:
-  - [ ] Модель `ai_assistant.audit` с полями: `user_id`, `tool_name`, `args_summary` (Text, без PII), `result_status`, `record_ref`, `created_at`
-  - [ ] Запись в `ToolExecutor.execute()` после выполнения
-  - [ ] Меню/view (только для admin)
-  - [ ] Тест `test_audit_records_write_tool_call`
+  - [x] Модель `ai_assistant.audit` с полями: `user_id`, `tool_name`, `args_summary` (Text, без PII), `result_status`, `record_ref`, `created_at`
+  - [x] Запись в `ToolExecutor.execute()` после выполнения
+  - [x] Меню/view (только для admin)
+  - [x] Тест `test_audit_records_write_tool_call`
 - **🚫 Запрещено**: писать в audit полные `args` (может содержать PII).
 - **✅ DoD**: видны последние 100 действий ассистента в админ-меню.
+- **Результат**:
+  - Добавлена модель `ai_assistant.audit`, ACL на чтение только для `group_ai_assistant_admin`.
+  - `ToolExecutor` пишет audit после успешных и ошибочных вызовов tool.
+  - `args_summary` хранит только имена аргументов и типы/размеры, без сырых значений.
+  - Добавлены list/form views и меню `Settings → AI Assistant → Audit`, limit 100.
+  - Тест `test_audit_records_write_tool_call` проверяет запись audit и отсутствие PII в summary.
 - **⛓ Зависит от**: AIA-038
 
 ---
 
 ### Задача: AIA-049 — E2E-тест «УТ-1132 → PO на ОбМ-4»
 
-- **Статус**: ⏳ Не начата
+- **Статус**: ✅ Выполнена
 - **Приоритет**: Высокий
 - **Описание**: Один интеграционный тест, имитирующий полный сценарий.
 - **📁 Контекст**:
   - `docs/instruction-warehouse-supply-cycle.md` §7 (таблица пересчёта)
   - `custom_addons/object_request/data/demo_data.xml` — есть ли там подходящий проект
 - **Шаги выполнения**:
-  - [ ] `tests/test_e2e_supply_cycle.py::TestUT1132PipelineDraft`
+  - [x] `tests/test_e2e_supply_cycle.py::TestUT1132PipelineDraft`
     - setUp: создать проект ОбМ-4, поставщика ООО ПроМеталл, 6 товаров-труб с UoM «метр» и `is_storable=True`, OR/2026/05/0007
     - act: вызвать через `ToolExecutor`:
       1. `find_warehouse("ОбМ-4")` → id, in_type_id
@@ -666,6 +672,11 @@
       - chatter содержит «AI Assistant»
 - **🚫 Запрещено**: вызывать `button_confirm` в тесте.
 - **✅ DoD**: тест зелёный; имитирует приёмочный сценарий v3.
+- **Результат**:
+  - Добавлен `tests/test_e2e_supply_cycle.py`.
+  - Тест проходит через `ToolExecutor`: `find_warehouse`, `find_partner`, `search_products`, `create_purchase_order_draft`.
+  - Проверяется draft PO для `ОбМ-4`, `origin=OR/2026/05/0007`, `partner_ref=УТ-1132`, сумма строк `1098`, chatter содержит `AI Assistant`.
+  - `button_confirm` не вызывается.
 - **⛓ Зависит от**: AIA-035, AIA-036, AIA-038
 
 ---
@@ -674,7 +685,7 @@
 
 ### Задача: AIA-050 — `pilot_results_v3.md` + обновить `instruction-warehouse-supply-cycle.md`
 
-- **Статус**: ⏳ Не начата
+- **Статус**: ✅ Выполнена
 - **Приоритет**: Средний
 - **Описание**: Финальная документация и обновление инструкции (раздел API).
 - **📁 Контекст**:
@@ -682,16 +693,22 @@
   - `docs/changelog.md`
   - `docs/project.md`
 - **Шаги выполнения**:
-  - [ ] `docs/pilot_results_v3.md` — отчёт пилота:
+  - [x] `docs/pilot_results_v3.md` — отчёт пилота:
     - сценарии (3–5 кейсов): УТ-1132, перемещение с базы, OR без сопоставления и т.п.
     - метрики (создано черновиков, отказов, ошибок валидации)
     - известные ограничения
-  - [ ] `docs/instruction-warehouse-supply-cycle.md` §8.1 — обновить колонки матрицы для tools, реализованных в v3 (отметить ✅, оставить ❌* для confirm/validate)
-  - [ ] `docs/project.md` — обновить mermaid-схему, добавить `tool_layer` под `ai_assistant`
-  - [ ] `docs/changelog.md` — запись `## [YYYY-MM-DD] - AI Assistant v3 Actions`
-  - [ ] `docs/tasktracker.md` — задача «AI Assistant v3 Actions: завершена»
+  - [x] `docs/instruction-warehouse-supply-cycle.md` §8.1 — обновить колонки матрицы для tools, реализованных в v3 (отметить ✅, оставить ❌* для confirm/validate)
+  - [x] `docs/project.md` — обновить mermaid-схему, добавить `tool_layer` под `ai_assistant`
+  - [x] `docs/changelog.md` — запись `## [YYYY-MM-DD] - AI Assistant v3 Actions`
+  - [x] `docs/tasktracker.md` — задача «AI Assistant v3 Actions: завершена»
 - **🚫 Запрещено**: указывать в инструкции, что AI делает Confirm/Validate.
 - **✅ DoD**: все артефакты документации обновлены; PR/коммит готов.
+- **Результат**:
+  - `pilot_results_v3.md` дополнен summary пилота, сценариями, метриками и ограничениями.
+  - `instruction-warehouse-supply-cycle.md` разделяет MCP/API и AI v3 tools; Confirm/Validate отмечены как ❌*.
+  - `project.md` содержит mermaid-схему `ai_assistant v3 actions`.
+  - `changelog.md` содержит запись `2026-05-24 - AI Assistant v3 Actions`.
+  - `tasktracker.md` помечает AI Assistant v3 Actions как завершённую задачу.
 - **⛓ Зависит от**: AIA-049
 
 ---
@@ -720,9 +737,9 @@
 | AIA-045 | rate limit + idempotency | V3-6 | Высокий | ✅ | — | AIA-038, AIA-040 |
 | AIA-046 | denylist guard в executor | V3-6 | Критический | ✅ | — | AIA-038 |
 | AIA-047 | unit tests coverage | V3-7 | Высокий | ⏳ | — | AIA-031..046 |
-| AIA-048 | ai_assistant.audit модель | V3-7 | Средний | ⏳ | — | AIA-038 |
-| AIA-049 | E2E УТ-1132 → PO ОбМ-4 | V3-7 | Высокий | ⏳ | — | AIA-035, AIA-036, AIA-038 |
-| AIA-050 | pilot_results_v3 + docs | V3-8 | Средний | ⏳ | — | AIA-049 |
+| AIA-048 | ai_assistant.audit модель | V3-7 | Средний | ✅ | — | AIA-038 |
+| AIA-049 | E2E УТ-1132 → PO ОбМ-4 | V3-7 | Высокий | ✅ | — | AIA-035, AIA-036, AIA-038 |
+| AIA-050 | pilot_results_v3 + docs | V3-8 | Средний | ✅ | — | AIA-049 |
 
 ---
 

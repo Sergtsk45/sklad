@@ -274,18 +274,18 @@ flowchart TB
 
 ### 8.1. Матрица возможностей
 
-| Операция | MCP/API | Проведение остатков | Комментарий |
-|----------|---------|---------------------|-------------|
-| Создать / изменить **OR** | ✅ | — | Зависит от allowlist (TD-001) |
-| Поиск остатков `stock.quant` | ✅ | — | Для решения «с базы / закупка» |
-| Создать **PO** + строки | ✅ | — | Указать `picking_type_id` склада объекта |
-| **Confirm** PO (`button_confirm`) | ❌* | — | *Без доработки TD-003 |
-| Создать **incoming / internal** picking | ✅ | — | Черновик + move lines |
-| Заполнить количества в move / move.line | ✅ частично | — | Поля `quantity`, move lines |
-| **Validate** picking (`button_validate`) | ❌* | **Да, только так** | *Прямой `state=done` **не создаёт quants** |
-| Vendor bill, оплата | ➖ не используем | — | 1С |
-| **Инвентаризация** (`stock.quant` inventory) | ⚠️ технически возможно | Обходной путь | **Запрещено** этим процессом |
-| Удаление ошибочных quants | ❌ | — | Права MCP-пользователя |
+| Операция | MCP/API | AI v3 tools | Проведение остатков | Комментарий |
+|----------|---------|-------------|---------------------|-------------|
+| Создать / изменить **OR** | ✅ | ✅ draft only | — | `create_object_request_draft`, подтверждение в чате |
+| Поиск остатков `stock.quant` | ✅ | ✅ read only | — | `search_stock_quants` для решения «с базы / закупка» |
+| Создать **PO** + строки | ✅ | ✅ draft only | — | `create_purchase_order_draft`, склад объекта через `picking_type_id` |
+| **Confirm** PO (`button_confirm`) | ❌* | ❌* | — | *Без доработки TD-003, только вручную в UI |
+| Создать **incoming / internal** picking | ✅ | ✅ internal draft | — | AI v3 создаёт internal picking draft; receipt validate не делает |
+| Заполнить количества в move / move.line | ✅ частично | ❌ | — | Не входит в v3 action tools |
+| **Validate** picking (`button_validate`) | ❌* | ❌* | **Да, только так** | *Прямой `state=done` **не создаёт quants** |
+| Vendor bill, оплата | ➖ не используем | ➖ не используем | — | 1С |
+| **Инвентаризация** (`stock.quant` inventory) | ⚠️ технически возможно | ❌ | Обходной путь | **Запрещено** этим процессом |
+| Удаление ошибочных quants | ❌ | ❌ | — | Права MCP-пользователя / вне v3 |
 
 ### 8.2. Урок кейса ОбМ-4/IN/00001
 

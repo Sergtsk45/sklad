@@ -13,3 +13,4 @@ from . import test_validators  # noqa: F401
 from . import test_read_tools  # noqa: F401
 from . import test_write_tools  # noqa: F401
 from . import test_tool_executor_security  # noqa: F401
+from . import test_e2e_supply_cycle  # noqa: F401

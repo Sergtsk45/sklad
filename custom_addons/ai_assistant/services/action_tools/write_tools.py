@@ -217,8 +217,8 @@ class CreatePurchaseOrderDraftTool(AbstractWriteTool):
 
         po.message_post(
             body=(
-                'Черновик закупки создан AI-ассистентом по запросу %s. '
-                'Строк: %s.'
+                'Черновик закупки создан AI Assistant '
+                '(AI-ассистентом) по запросу %s. Строк: %s.'
             ) % (env.user.name, len(lines)),
             message_type='notification',
             subtype_xmlid='mail.mt_note',

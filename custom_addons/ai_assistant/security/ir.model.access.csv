@@ -1,1 +1,2 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_ai_assistant_audit_admin,ai.assistant.audit.admin,model_ai_assistant_audit,ai_assistant.group_ai_assistant_admin,1,0,0,0

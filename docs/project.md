@@ -73,3 +73,28 @@ flowchart TD
 - Поиск товаров выполняется через стандартные ORM `search`, `search_fetch`, `read`.
 - `ai_search_products()` не использует `sudo()` для поиска и чтения результатов, чтобы сохранить ACL и record rules текущего пользователя.
 - Секреты OpenRouter и конфиги с паролями не фиксируются в документации и git.
+
+## ai_assistant v3 actions
+
+AI Assistant v3 добавляет ограниченный tool layer для снабжения. Tools работают
+через allowlist, denylist, JSON schema validation, frontend confirmation cards,
+rate limits и audit. AI создаёт только черновики и заметки; Confirm/Validate
+остаются ручными действиями пользователя в Odoo UI.
+
+```mermaid
+flowchart TD
+    Chat[OWL chat widget] --> Controller[ai_assistant chat_controller]
+    Controller --> OpenRouter[OpenRouter tools/function calling]
+    Controller --> ToolLayer[action_tools registry + ToolExecutor]
+    ToolLayer --> ReadTools[read tools]
+    ToolLayer --> WriteTools[write draft tools]
+    ToolLayer --> Pending[pending_action confirmation store]
+    ToolLayer --> Audit[ai_assistant.audit]
+    ReadTools --> ProductSearch[custom_product_search.ai_search_products]
+    ReadTools --> OdooRead[Odoo ORM read/search]
+    WriteTools --> OR[object.request draft]
+    WriteTools --> PO[purchase.order draft]
+    WriteTools --> Picking[stock.picking internal draft]
+    WriteTools --> Chatter[mail.thread message_post]
+    Pending --> ConfirmCard[ConfirmationCard / ResultCard]
+```

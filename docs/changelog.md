@@ -1,3 +1,28 @@
+## [2026-05-24] - AI Assistant v3 Actions
+### Добавлено
+- Action tool layer для AI Assistant: registry/base, read tools, write tools и `ToolExecutor`.
+- Tool-call loop в `/ai_assistant/chat`, pending confirmation store и `/ai_assistant/confirm`.
+- OWL `ConfirmationCard` и `ResultCard` в floating chat.
+- Feature flag `ai_assistant.actions_enabled` и группа `AI Assistant / Снабжение`.
+- Rate limit для tools: 30 read/min и 5 write/min на пользователя.
+- Idempotency для pending write actions.
+- Denylist guard для forbidden tool names и forbidden write fields.
+- Модель `ai_assistant.audit` с admin-only меню аудита.
+- E2E-тест сценария `УТ-1132 → draft PO на ОбМ-4`.
+
+### Изменено
+- `instruction-warehouse-supply-cycle.md` обновлён: AI v3 tools отмечены как draft-only, Confirm/Validate остаются запрещёнными для AI.
+- `project.md` дополнен схемой `ai_assistant v3 actions`.
+- `pilot_results_v3.md` содержит summary пилота, метрики, ограничения и результаты проверок.
+
+### Проверено
+- `docker exec odoo19-local odoo --test-enable --test-tags /ai_assistant -d odoo19_local --stop-after-init --http-port=8071` — 237 post-tests, 0 failed, 0 errors.
+- `TestUT1132PipelineDraft` — 1 post-test, 0 failed, 0 errors.
+- Targeted flake8 по новым/затронутым AIA-048/AIA-049 файлам — clean.
+- Полный `flake8 /mnt/extra-addons/ai_assistant` всё ещё падает на ранее существующем style debt.
+
+---
+
 ## [2026-05-24] — fix: рекурсивная валидация вложенных структур в AbstractTool
 ### Исправлено
 - `AbstractTool._validate_args_manually`: добавлен метод `_validate_value`, рекурсивно проверяющий `properties` вложенных объектов и `items` массивов. До исправления ручной fallback (без `jsonschema`) пропускал невалидные данные во вложенных структурах, тогда как `jsonschema` их отклонял.

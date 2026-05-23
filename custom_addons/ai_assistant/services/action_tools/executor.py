@@ -74,10 +74,14 @@ class ToolExecutor:
             tool.validate_args(args or {})
             rate_ok, retry_after = self._check_rate(tool)
             if not rate_ok:
-                return self._error(
-                    'rate_limited',
-                    'Слишком много действий. Повторите позже.',
-                    retry_after=retry_after,
+                return self._audit_and_return(
+                    tool,
+                    args or {},
+                    self._error(
+                        'rate_limited',
+                        'Слишком много действий. Повторите позже.',
+                        retry_after=retry_after,
+                    ),
                 )
             _logger.info(
                 'AI tool execute: name=%s write=%s',
@@ -85,18 +89,98 @@ class ToolExecutor:
                 bool(tool.is_write),
             )
             result = tool.execute(self.env, args or {})
-            return {'success': True, 'result': result}
+            return self._audit_and_return(
+                tool,
+                args or {},
+                {'success': True, 'result': result},
+            )
         except AccessError as err:
-            return self._error('access_denied', str(err))
+            return self._audit_and_return(
+                tool,
+                args or {},
+                self._error('access_denied', str(err)),
+            )
         except ValidationError as err:
-            return self._error('validation_error', str(err))
+            return self._audit_and_return(
+                tool,
+                args or {},
+                self._error('validation_error', str(err)),
+            )
         except UserError as err:
-            return self._error('user_error', str(err))
+            return self._audit_and_return(
+                tool,
+                args or {},
+                self._error('user_error', str(err)),
+            )
         except ValueError as err:
-            return self._error('invalid_arguments', str(err))
+            return self._audit_and_return(
+                tool,
+                args or {},
+                self._error('invalid_arguments', str(err)),
+            )
         except Exception as err:
             _logger.exception('AI tool failed: name=%s', name)
-            return self._error('tool_error', str(err))
+            return self._audit_and_return(
+                tool,
+                args or {},
+                self._error('tool_error', str(err)),
+            )
+
+    def _audit_and_return(self, tool, args, envelope):
+        self._audit_tool(tool, args, envelope)
+        return envelope
+
+    def _audit_tool(self, tool, args, envelope):
+        try:
+            self.env['ai_assistant.audit'].sudo().create({
+                'user_id': self.env.uid,
+                'tool_name': tool.name,
+                'args_summary': self._args_summary(args),
+                'result_status': (
+                    'success' if envelope.get('success') else 'error'
+                ),
+                'record_ref': self._record_ref(envelope),
+            })
+        except Exception:
+            _logger.exception('Failed to write AI assistant audit record')
+
+    def _args_summary(self, args):
+        if not isinstance(args, dict):
+            return self._value_summary(args)
+        rows = []
+        for key in sorted(args):
+            rows.append('%s: %s' % (key, self._value_summary(args[key])))
+        return '\n'.join(rows)
+
+    def _value_summary(self, value):
+        if isinstance(value, list):
+            return 'list[%s]' % len(value)
+        if isinstance(value, dict):
+            return 'object[%s]' % len(value)
+        if isinstance(value, bool):
+            return 'boolean'
+        if isinstance(value, int) and not isinstance(value, bool):
+            return 'integer'
+        if isinstance(value, float):
+            return 'number'
+        if isinstance(value, str):
+            return 'string[%s]' % len(value)
+        if value is None:
+            return 'null'
+        return type(value).__name__
+
+    def _record_ref(self, envelope):
+        result = envelope.get('result') or {}
+        if not envelope.get('success') or not isinstance(result, dict):
+            return ''
+        if result.get('model') and result.get('record_id'):
+            return '%s,%s' % (result['model'], result['record_id'])
+        for key in ('request_id', 'po_id', 'picking_id', 'record_id'):
+            if result.get(key):
+                return '%s=%s' % (key, result[key])
+        if result.get('url'):
+            return result['url']
+        return ''
 
     def _check_forbidden_tool(self, tool):
         for pattern in _FORBIDDEN_METHOD_PATTERNS:

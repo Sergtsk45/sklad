@@ -25,6 +25,7 @@
         'security/ir.model.access.csv',
         'views/ai_assistant_assets.xml',
         'views/ai_assistant_settings_views.xml',
+        'views/ai_assistant_audit_views.xml',
     ],
     'assets': {
         'web.assets_backend': [

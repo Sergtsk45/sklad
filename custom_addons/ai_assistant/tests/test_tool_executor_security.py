@@ -193,6 +193,32 @@ class TestToolExecutorSecurity(TransactionCase):
         self.assertEqual(result['error']['code'], 'rate_limited')
         self.assertGreater(result['error']['retry_after'], 0)
 
+    def test_audit_records_write_tool_call(self):
+        registry = ToolRegistry()
+        registry.register(GroupedWriteTool())
+        executor = ToolExecutor(
+            self.env(user=self.supply_user),
+            registry=registry,
+            rate_limiter=ToolRateLimiter(),
+        )
+
+        result = executor.execute(
+            'grouped_write_tool',
+            {'value': 'secret-material-name'},
+        )
+
+        self.assertTrue(result['success'])
+        audit = self.env['ai_assistant.audit'].sudo().search(
+            [('tool_name', '=', 'grouped_write_tool')],
+            order='id desc',
+            limit=1,
+        )
+        self.assertTrue(audit)
+        self.assertEqual(audit.user_id, self.supply_user)
+        self.assertEqual(audit.result_status, 'success')
+        self.assertIn('value: string', audit.args_summary)
+        self.assertNotIn('secret-material-name', audit.args_summary)
+
     def test_rate_limit_blocks_after_30_reads(self):
         registry = ToolRegistry()
         registry.register(EchoTool())
