@@ -30,8 +30,11 @@ class PendingActionStore:
         return item
 
     def pop(self, uid, key):
-        item = self.get(uid, key)
-        self._items.pop((uid, key), None)
+        item = self._items.pop((uid, key), None)
+        if item is None:
+            return None
+        if item['expires_at'] < time.time():
+            return None
         return item
 
     def clear(self, uid):
