@@ -45,6 +45,9 @@ export const aiChatService = {
                     if (Array.isArray(m.cards) && m.cards.length) {
                         msg.cards = m.cards;
                     }
+                    if (Array.isArray(m.links) && m.links.length) {
+                        msg.links = m.links;
+                    }
                     return msg;
                 });
 
@@ -82,6 +85,9 @@ export const aiChatService = {
             };
             if (Array.isArray(extra.cards) && extra.cards.length) {
                 newMsg.cards = extra.cards;
+            }
+            if (Array.isArray(extra.links) && extra.links.length) {
+                newMsg.links = extra.links;
             }
             const updated = [...messages, newMsg];
             return saveHistory(updated);

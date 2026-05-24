@@ -4,6 +4,10 @@ import { Component, useState, useRef, onMounted } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { ConfirmationCard, ResultCard } from "./ai_chat_actions";
+import {
+    formatMessageContent,
+    mergeMessageLinks,
+} from "./ai_chat_format";
 
 const SUGGESTED_PROMPTS = [
     "Как пользоваться этим разделом?",
@@ -79,6 +83,14 @@ export class AiChatWidget extends Component {
         return `${card.type || "card"}-${index}`;
     }
 
+    messageLinks(msg) {
+        return mergeMessageLinks(msg.links, msg.content);
+    }
+
+    messageDisplayContent(msg) {
+        return formatMessageContent(msg.content, this.messageLinks(msg));
+    }
+
     toggleChat() {
         this.state.isOpen = !this.state.isOpen;
         if (this.state.isOpen) {
@@ -149,6 +161,7 @@ export class AiChatWidget extends Component {
             await this._cancelActiveConfirmations(this._extractCards(result));
             this._addMessage("assistant", result.answer || "", {
                 cards: this._extractCards(result),
+                links: this._extractLinks(result),
             });
             this.state.status = "online";
         } catch (_err) {
@@ -241,6 +254,10 @@ export class AiChatWidget extends Component {
 
     _extractCards(result) {
         return result && Array.isArray(result.cards) ? result.cards : [];
+    }
+
+    _extractLinks(result) {
+        return result && Array.isArray(result.links) ? result.links : [];
     }
 
     async _cancelActiveConfirmations(incomingCards) {

@@ -35,6 +35,7 @@
             'ai_assistant/static/src/js/screenshot_trigger.js',
             'ai_assistant/static/src/js/ai_chat_service.js',
             'ai_assistant/static/src/js/ai_chat_actions.js',
+            'ai_assistant/static/src/js/ai_chat_format.js',
             'ai_assistant/static/src/js/ai_chat_boot.js',
         ],
     },

@@ -53,8 +53,25 @@
                     <t t-foreach="state.messages" t-as="msg" t-key="msg.timestamp">
                         <div t-attf-class="o_ai_message o_ai_message_{{ msg.role }}">
                             <div class="o_ai_message_bubble">
-                                <t t-if="msg.content">
-                                    <t t-esc="msg.content"/>
+                                <t t-if="messageDisplayContent(msg)">
+                                    <div class="o_ai_message_text">
+                                        <t t-esc="messageDisplayContent(msg)"/>
+                                    </div>
+                                </t>
+                                <t t-if="messageLinks(msg).length">
+                                    <div class="o_ai_message_links">
+                                        <a
+                                            t-foreach="messageLinks(msg)"
+                                            t-as="link"
+                                            t-key="link.url"
+                                            class="o_ai_link_btn"
+                                            t-att-href="link.url"
+                                            t-att-title="link.menu_breadcrumb or link.label"
+                                        >
+                                            <i class="fa fa-external-link"/>
+                                            <span><t t-esc="link.label"/></span>
+                                        </a>
+                                    </div>
                                 </t>
                                 <t t-if="msg.cards">
                                     <t t-foreach="msg.cards" t-as="card" t-key="cardKey(card, card_index)">

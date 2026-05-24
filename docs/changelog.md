@@ -1,3 +1,13 @@
+## [2026-05-24] — feat: AIA-053.UI кликабельные ссылки в чате
+### Добавлено
+- Кнопки-ссылки под ответом ассистента из `links[]` API и markdown `[label](url)`.
+- Сырой URL убирается из текста пузыря; клик ведёт на `/odoo/...` в той же вкладке.
+
+### Изменено
+- `ai_chat_widget.xml`, `ai_chat_boot.js`, `ai_chat_format.js`, `ai_chat_service.js`.
+
+---
+
 ## [2026-05-24] — feat: AIA-052 get_warehouse_stock_link
 ### Добавлено
 - Read-tool `get_warehouse_stock_link`: URL отчёта `/odoo/stock-report?search_warehouse=...` по складу.
