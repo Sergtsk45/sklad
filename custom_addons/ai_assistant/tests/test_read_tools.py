@@ -236,6 +236,13 @@ class TestActionReadTools(TransactionCase):
         self.assertTrue(result['url'].startswith('/odoo/'))
         self.assertIn('menu_breadcrumb', result)
 
+    def test_get_navigation_link_zakupku_alias(self):
+        result = GetNavigationLinkTool().execute(
+            self.env, {'topic': 'заказы на закупку'}
+        )
+        self.assertEqual(result['label'], 'Заказы поставщикам')
+        self.assertTrue(result['url'].startswith('/odoo/'))
+
     def test_get_navigation_link_unknown_topic(self):
         result = GetNavigationLinkTool().execute(
             self.env, {'topic': 'несуществующий раздел xyz'}

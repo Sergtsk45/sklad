@@ -26,6 +26,9 @@ from odoo.addons.ai_assistant.services.action_tools.base import (
 from odoo.addons.ai_assistant.services.pending_action import (
     PendingActionStore,
 )
+from odoo.addons.ai_assistant.services.navigation_helper import (
+    NavigationHelper,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -203,20 +206,28 @@ class AiAssistantController(http.Controller):
             client = OpenRouterClient(request.env)
             if mode == 'actions':
                 vision_model = model_override if image_data else None
+                nav_helper = NavigationHelper(request.env)
+                nav_result = nav_helper.fetch_link(message)
                 return self._get_tools_response(
                     client,
                     messages,
                     model_override=vision_model,
                     allow_write=True,
                     mode_label='actions',
+                    nav_helper=nav_helper,
+                    nav_result=nav_result,
                 )
             vision_model = model_override if image_data else None
+            nav_helper = NavigationHelper(request.env)
+            nav_result = nav_helper.fetch_link(message)
             return self._get_tools_response(
                 client,
                 messages,
                 model_override=vision_model,
                 allow_write=False,
                 mode_label='consult',
+                nav_helper=nav_helper,
+                nav_result=nav_result,
             )
         except ValueError:
             return self._mock_response()
@@ -283,8 +294,17 @@ class AiAssistantController(http.Controller):
         model_override=None,
         allow_write=True,
         mode_label='actions',
+        nav_helper=None,
+        nav_result=None,
     ):
         executor = ToolExecutor(request.env)
+        if nav_result and nav_helper:
+            ctx_msg = nav_helper.build_context_message(nav_result)
+            if ctx_msg:
+                messages = list(messages) + [{
+                    'role': 'system',
+                    'content': ctx_msg,
+                }]
         tools = default_registry.to_openrouter_tools(
             request.env,
             read_only=not allow_write,
@@ -296,10 +316,15 @@ class AiAssistantController(http.Controller):
                 model_override=model_override,
             )
             if response.get('type') == 'message':
+                answer = response.get('content', '')
+                if nav_helper and nav_result:
+                    answer = nav_helper.enrich_answer(answer, nav_result)
                 return {
-                    'answer': response.get('content', ''),
+                    'answer': answer,
                     'suggestions': [],
                     'cards': [],
+                    'links': nav_helper.response_links(nav_result)
+                    if nav_helper else [],
                     'meta': {
                         'model_used': response.get('model_used'),
                         'mode': mode_label,
@@ -329,7 +354,10 @@ class AiAssistantController(http.Controller):
                         'role': 'tool',
                         'tool_call_id': tool_call.get('id'),
                         'name': tool_call['name'],
-                        'content': self._json_dumps(result),
+                        'content': self._tool_result_content(
+                            tool_call['name'],
+                            result,
+                        ),
                     })
                 continue
             if write_call:
@@ -363,7 +391,10 @@ class AiAssistantController(http.Controller):
                     'role': 'tool',
                     'tool_call_id': tool_call.get('id'),
                     'name': tool_call['name'],
-                    'content': self._json_dumps(result),
+                    'content': self._tool_result_content(
+                        tool_call['name'],
+                        result,
+                    ),
                 })
 
         return {
@@ -394,6 +425,16 @@ class AiAssistantController(http.Controller):
                         },
                     }
         return executor.execute(name, args)
+
+    def _tool_result_content(self, tool_name, result):
+        if result.get('success') and isinstance(result.get('result'), dict):
+            try:
+                tool = default_registry.get(tool_name)
+            except KeyError:
+                tool = None
+            if tool and not tool.is_write:
+                return self._json_dumps(result['result'])
+        return self._json_dumps(result)
 
     def _first_write_tool_call(self, tool_calls):
         for tool_call in tool_calls:

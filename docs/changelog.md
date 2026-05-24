@@ -1,3 +1,24 @@
+## [2026-05-24] — fix: server-side навигация при (None) от LLM
+### Исправлено
+- `NavigationHelper`: сервер определяет навигационные вопросы, вызывает `get_navigation_link` до LLM и подставляет URL в ответ (замена `(None)` или дополнение ссылки).
+- Алиас темы «заказы на закупку» в `NAVIGATION_CATALOG`.
+- Read-tools отдают LLM плоский JSON (`url`, `label`) без обёртки `{success, result}`.
+
+### Проверено
+- `test_navigation_helper.py`, `test_chat_controller.test_consult_mode_enriches_none_navigation_link`.
+
+---
+
+## [2026-05-24] — fix: навигационные ссылки (None) в consult-режиме
+### Исправлено
+- Consult-режим теперь вызывает `send_chat_with_tools` только с read-tools (`get_navigation_link`, `find_warehouse` и др.); write-tools недоступны без группы «Снабжение».
+- Промпт: запрет ссылок `(None)`; url берётся только из `result.url` ответа tool.
+
+### Проверено
+- `TestChatController` — 16 post-tests, 0 failed.
+
+---
+
 ## [2026-05-24] — fix: actions mode с скриншотом + уникальные t-key карточек
 ### Исправлено
 - `chat_controller`: в режиме actions запрос со скриншотом больше не уходит в `send_chat()` без tools — используется `_get_actions_response()` / `send_chat_with_tools()` с vision-моделью.

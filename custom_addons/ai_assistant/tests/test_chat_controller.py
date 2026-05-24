@@ -384,6 +384,38 @@ class TestChatController(HttpCase):
         self.assertIn('get_navigation_link', tool_names)
         self.assertNotIn('create_object_request_draft', tool_names)
 
+    def test_consult_mode_enriches_none_navigation_link(self):
+        response = {
+            'type': 'message',
+            'content': (
+                'Чтобы посмотреть заказы, перейдите в '
+                '[Открыть «Заказы на закупку»](None). '
+                'Путь: Покупка → Заказы → Заказы на закупку.'
+            ),
+            'tool_calls': [],
+            'model_used': 'test-model',
+        }
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'AiAssistantController._resolve_mode',
+            return_value='consult',
+        ), patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat_with_tools',
+            return_value=response,
+        ):
+            result = self._post_chat({
+                'message': 'как посмотреть заказы поставщикам',
+                'context': {'module': 'purchase'},
+            })
+
+        data = result.get('result', {})
+        answer = data.get('answer', '')
+        self.assertNotIn('(None)', answer)
+        self.assertIn('purchase-orders', answer)
+        self.assertTrue(data.get('links'))
+        self.assertIn('purchase-orders', data['links'][0]['url'])
+
     def _post_confirm(self, payload):
         body = json.dumps(
             {'jsonrpc': '2.0', 'method': 'call', 'params': payload}
