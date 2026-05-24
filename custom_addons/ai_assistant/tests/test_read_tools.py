@@ -8,6 +8,7 @@ from odoo.addons.ai_assistant.services.action_tools.read_tools import (
     FindProductByIdTool,
     FindWarehouseTool,
     GetNavigationLinkTool,
+    GetWarehouseStockLinkTool,
     ReadObjectRequestTool,
     SearchStockQuantsTool,
     SearchProductsTool,
@@ -146,6 +147,10 @@ class TestActionReadTools(TransactionCase):
         )
         self.assertIsInstance(
             default_registry.get('get_navigation_link'), GetNavigationLinkTool
+        )
+        self.assertIsInstance(
+            default_registry.get('get_warehouse_stock_link'),
+            GetWarehouseStockLinkTool,
         )
 
     def test_search_stock_quants_basic(self):
@@ -295,3 +300,29 @@ class TestActionReadTools(TransactionCase):
         result = tool.execute(self.env, {'topic': 'missing action test'})
         self.assertIsNone(result['url'])
         self.assertEqual(result['reason'], 'not_found')
+
+    def test_get_warehouse_stock_link_by_id(self):
+        result = GetWarehouseStockLinkTool().execute(
+            self.env,
+            {'warehouse_id': self.address_warehouse.id},
+        )
+        self.assertTrue(result['url'].startswith('/odoo/stock-report?'))
+        self.assertIn('search_warehouse=%s' % self.address_warehouse.id, result['url'])
+        self.assertIn('search_default_real_stock_available=1', result['url'])
+        self.assertIn('ОбМ-4', result['label'])
+
+    def test_get_warehouse_stock_link_by_query(self):
+        result = GetWarehouseStockLinkTool().execute(
+            self.env,
+            {'query': 'Хмельницкого', 'only_available': False},
+        )
+        self.assertIn('stock-report', result['url'])
+        self.assertNotIn('search_default_real_stock_available', result['url'])
+
+    def test_get_warehouse_stock_link_not_found(self):
+        result = GetWarehouseStockLinkTool().execute(
+            self.env,
+            {'query': 'несуществующий склад xyz'},
+        )
+        self.assertIsNone(result['url'])
+        self.assertEqual(result['reason'], 'warehouse_not_found')

@@ -29,6 +29,9 @@ from odoo.addons.ai_assistant.services.pending_action import (
 from odoo.addons.ai_assistant.services.navigation_helper import (
     NavigationHelper,
 )
+from odoo.addons.ai_assistant.services.warehouse_stock_link_helper import (
+    WarehouseStockLinkHelper,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -207,7 +210,9 @@ class AiAssistantController(http.Controller):
             if mode == 'actions':
                 vision_model = model_override if image_data else None
                 nav_helper = NavigationHelper(request.env)
+                stock_helper = WarehouseStockLinkHelper(request.env)
                 nav_result = nav_helper.fetch_link(message)
+                stock_result = stock_helper.fetch_link(message, history)
                 return self._get_tools_response(
                     client,
                     messages,
@@ -216,10 +221,14 @@ class AiAssistantController(http.Controller):
                     mode_label='actions',
                     nav_helper=nav_helper,
                     nav_result=nav_result,
+                    stock_helper=stock_helper,
+                    stock_result=stock_result,
                 )
             vision_model = model_override if image_data else None
             nav_helper = NavigationHelper(request.env)
+            stock_helper = WarehouseStockLinkHelper(request.env)
             nav_result = nav_helper.fetch_link(message)
+            stock_result = stock_helper.fetch_link(message, history)
             return self._get_tools_response(
                 client,
                 messages,
@@ -228,6 +237,8 @@ class AiAssistantController(http.Controller):
                 mode_label='consult',
                 nav_helper=nav_helper,
                 nav_result=nav_result,
+                stock_helper=stock_helper,
+                stock_result=stock_result,
             )
         except ValueError:
             return self._mock_response()
@@ -296,15 +307,24 @@ class AiAssistantController(http.Controller):
         mode_label='actions',
         nav_helper=None,
         nav_result=None,
+        stock_helper=None,
+        stock_result=None,
     ):
         executor = ToolExecutor(request.env)
+        context_messages = []
         if nav_result and nav_helper:
             ctx_msg = nav_helper.build_context_message(nav_result)
             if ctx_msg:
-                messages = list(messages) + [{
-                    'role': 'system',
-                    'content': ctx_msg,
-                }]
+                context_messages.append(ctx_msg)
+        if stock_result and stock_helper:
+            ctx_msg = stock_helper.build_context_message(stock_result)
+            if ctx_msg:
+                context_messages.append(ctx_msg)
+        if context_messages:
+            messages = list(messages) + [{
+                'role': 'system',
+                'content': '\n'.join(context_messages),
+            }]
         tools = default_registry.to_openrouter_tools(
             request.env,
             read_only=not allow_write,
@@ -319,12 +339,13 @@ class AiAssistantController(http.Controller):
                 answer = response.get('content', '')
                 if nav_helper and nav_result:
                     answer = nav_helper.enrich_answer(answer, nav_result)
+                if stock_helper and stock_result:
+                    answer = stock_helper.enrich_answer(answer, stock_result)
                 return {
                     'answer': answer,
                     'suggestions': [],
                     'cards': [],
-                    'links': nav_helper.response_links(nav_result)
-                    if nav_helper else [],
+                    'links': self._response_links(nav_result, stock_result),
                     'meta': {
                         'model_used': response.get('model_used'),
                         'mode': mode_label,
@@ -435,6 +456,22 @@ class AiAssistantController(http.Controller):
             if tool and not tool.is_write:
                 return self._json_dumps(result['result'])
         return self._json_dumps(result)
+
+    def _response_links(self, nav_result, stock_result):
+        links = []
+        if nav_result and nav_result.get('url'):
+            links.append({
+                'label': nav_result['label'],
+                'url': nav_result['url'],
+                'menu_breadcrumb': nav_result.get('menu_breadcrumb') or '',
+            })
+        if stock_result and stock_result.get('url'):
+            links.append({
+                'label': stock_result['label'],
+                'url': stock_result['url'],
+                'menu_breadcrumb': stock_result.get('menu_breadcrumb') or '',
+            })
+        return links
 
     def _first_write_tool_call(self, tool_calls):
         for tool_call in tool_calls:

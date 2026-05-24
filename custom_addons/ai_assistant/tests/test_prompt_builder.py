@@ -299,6 +299,7 @@ class TestPromptBuilder(TransactionCase):
             system_content = messages[0]['content']
             self.assertIn('ПРАВИЛО НАВИГАЦИОННЫХ ССЫЛОК', system_content)
             self.assertIn('get_navigation_link', system_content)
+            self.assertIn('get_warehouse_stock_link', system_content)
             self.assertIn('НИКОГДА не выдумывай URL', system_content)
 
     def test_navigation_map_included_in_knowledge_block(self):

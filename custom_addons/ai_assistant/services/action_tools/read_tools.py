@@ -345,6 +345,109 @@ class ReadObjectRequestTool(AbstractReadTool):
         return {'request': request_data}
 
 
+class GetWarehouseStockLinkTool(AbstractReadTool):
+    name = 'get_warehouse_stock_link'
+    description = (
+        'Вернуть ссылку на отчёт Odoo с товарами/остатками по конкретному '
+        'складу (stock-report). Не возвращает список позиций — только URL.'
+    )
+    required_groups = ['ai_assistant.group_ai_assistant_user']
+    parameters_schema = {
+        'type': 'object',
+        'properties': {
+            'warehouse_id': {'type': 'integer'},
+            'query': {'type': 'string', 'minLength': 2},
+            'only_available': {'type': 'boolean', 'default': True},
+        },
+        'anyOf': [
+            {'required': ['warehouse_id']},
+            {'required': ['query']},
+        ],
+        'additionalProperties': False,
+    }
+
+    def execute(self, env, args):
+        if not env.user.has_group('stock.group_stock_user'):
+            return {
+                'url': None,
+                'reason': 'forbidden',
+            }
+
+        warehouse = self._resolve_warehouse(env, args)
+        if not warehouse:
+            return {
+                'url': None,
+                'reason': 'warehouse_not_found',
+            }
+
+        action = env.ref(
+            'stock.action_product_stock_view',
+            raise_if_not_found=False,
+        )
+        if not action:
+            return {
+                'url': None,
+                'reason': 'not_found',
+            }
+
+        if not self._can_read_products(env):
+            return {
+                'url': None,
+                'reason': 'forbidden',
+            }
+
+        query_params = {'search_warehouse': warehouse['id']}
+        if args.get('only_available', True):
+            query_params['search_default_real_stock_available'] = 1
+
+        url = '/odoo/stock-report?' + urlencode(query_params)
+        return {
+            'url': url,
+            'label': 'Остатки: %s (%s)' % (
+                warehouse['name'],
+                warehouse['code'],
+            ),
+            'warehouse_id': warehouse['id'],
+            'warehouse_code': warehouse['code'],
+            'warehouse_name': warehouse['name'],
+            'menu_breadcrumb': 'Склад -> Отчетность -> Наличие',
+        }
+
+    def _resolve_warehouse(self, env, args):
+        warehouse_id = args.get('warehouse_id')
+        if warehouse_id:
+            warehouse = env['stock.warehouse'].browse(warehouse_id).exists()
+            if warehouse:
+                return warehouse.read(['id', 'name', 'code'])[0]
+            return None
+
+        query = (args.get('query') or '').strip()
+        if len(query) < 2:
+            return None
+
+        warehouses = FindWarehouseTool().execute(
+            env,
+            {'query': query},
+        ).get('warehouses') or []
+        if not warehouses:
+            return None
+        if len(warehouses) == 1:
+            return warehouses[0]
+
+        normalized = query.lower()
+        for warehouse in warehouses:
+            if warehouse.get('code', '').lower() == normalized:
+                return warehouse
+        return warehouses[0]
+
+    def _can_read_products(self, env):
+        try:
+            env['product.product'].check_access('read')
+        except AccessError:
+            return False
+        return True
+
+
 class GetNavigationLinkTool(AbstractReadTool):
     name = 'get_navigation_link'
     description = (
@@ -475,4 +578,5 @@ default_registry.register(FindWarehouseTool())
 default_registry.register(FindPickingTypeTool())
 default_registry.register(FindObjectRequestTool())
 default_registry.register(ReadObjectRequestTool())
+default_registry.register(GetWarehouseStockLinkTool())
 default_registry.register(GetNavigationLinkTool())

@@ -11,6 +11,11 @@ class TestChatController(HttpCase):
     def setUp(self):
         super().setUp()
         self.authenticate('admin', 'admin')
+        if not self.env['stock.warehouse'].search([('code', '=', 'ОбМ-4')], limit=1):
+            self.env['stock.warehouse'].create({
+                'name': 'Б. Хмельницкого, 112',
+                'code': 'ОбМ-4',
+            })
 
     def _post_chat(self, payload, authenticated=True):
         body = json.dumps(
@@ -415,6 +420,43 @@ class TestChatController(HttpCase):
         self.assertIn('purchase-orders', answer)
         self.assertTrue(data.get('links'))
         self.assertIn('purchase-orders', data['links'][0]['url'])
+
+    def test_consult_mode_enriches_warehouse_stock_link_from_history(self):
+        response = {
+            'type': 'message',
+            'content': (
+                'Я не могу предоставить ссылку на фильтр товаров по складу.'
+            ),
+            'tool_calls': [],
+            'model_used': 'test-model',
+        }
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'AiAssistantController._resolve_mode',
+            return_value='consult',
+        ), patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat_with_tools',
+            return_value=response,
+        ):
+            result = self._post_chat({
+                'message': 'дай ссылку на фильтр товаров по складу',
+                'context': {'module': 'stock'},
+                'history': [{
+                    'role': 'assistant',
+                    'content': (
+                        'Найдено: Склад Б. Хмельницкого, 112 (ОбМ-4).'
+                    ),
+                }],
+            })
+
+        data = result.get('result', {})
+        answer = data.get('answer', '')
+        self.assertIn('stock-report', answer)
+        self.assertTrue(any(
+            'stock-report' in link.get('url', '')
+            for link in data.get('links', [])
+        ))
 
     def _post_confirm(self, payload):
         body = json.dumps(

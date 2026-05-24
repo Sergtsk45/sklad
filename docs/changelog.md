@@ -1,3 +1,14 @@
+## [2026-05-24] — feat: AIA-052 get_warehouse_stock_link
+### Добавлено
+- Read-tool `get_warehouse_stock_link`: URL отчёта `/odoo/stock-report?search_warehouse=...` по складу.
+- `WarehouseStockLinkHelper`: server-side подстановка ссылки (в т.ч. склад из history чата).
+- Правила промпта и обновление `navigation_map.md`.
+
+### Проверено
+- `test_warehouse_stock_link_helper.py`, `test_read_tools`, `test_chat_controller`.
+
+---
+
 ## [2026-05-24] — fix: server-side навигация при (None) от LLM
 ### Исправлено
 - `NavigationHelper`: сервер определяет навигационные вопросы, вызывает `get_navigation_link` до LLM и подставляет URL в ответ (замена `(None)` или дополнение ссылки).

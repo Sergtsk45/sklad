@@ -48,6 +48,21 @@ _NAVIGATION_RULES_BLOCK = (
     "и объясни, что ссылку открыть нельзя (нет прав или раздел не найден)."
 )
 
+_WAREHOUSE_STOCK_RULES_BLOCK = (
+    "ПРАВИЛО ОСТАТКОВ ПО СКЛАДУ (consult и actions):\n"
+    "Если пользователь спрашивает «что есть на складе», «все товары на "
+    "складе», «остатки по складу», «дай ссылку на фильтр по складу»:\n"
+    "1. Определи склад: сначала find_warehouse (код ОбМ-N или адрес), "
+    "либо используй склад из предыдущих сообщений.\n"
+    "2. Вызови get_warehouse_stock_link с warehouse_id или query.\n"
+    "3. Если url задан — дай markdown-ссылку [Открыть «label»](url) и путь "
+    "меню. Не говори, что «нет такой функции».\n"
+    "4. Tool не возвращает список всех позиций — только ссылку на отчёт "
+    "«Наличие» с фильтром по складу. Для одного товара используй "
+    "search_stock_quants.\n"
+    "5. НИКОГДА не пиши (None) в ссылке."
+)
+
 _ACTIONS_RULES_BLOCK = (
     "РЕЖИМ ДЕЙСТВИЙ.\n"
     "\n"
@@ -155,6 +170,7 @@ class PromptBuilder:
 
         parts.append(self.build_safety_rules(mode=mode))
         parts.append(_NAVIGATION_RULES_BLOCK)
+        parts.append(_WAREHOUSE_STOCK_RULES_BLOCK)
 
         context_block = self.build_context_block(context)
         if context_block:
