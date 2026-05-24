@@ -57,7 +57,7 @@
                                     <t t-esc="msg.content"/>
                                 </t>
                                 <t t-if="msg.cards">
-                                    <t t-foreach="msg.cards" t-as="card" t-key="card.pending_key || card.type">
+                                    <t t-foreach="msg.cards" t-as="card" t-key="cardKey(card, card_index)">
                                         <ConfirmationCard
                                             t-if="card.type === 'confirmation'"
                                             plan="card.plan"

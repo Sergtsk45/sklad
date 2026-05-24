@@ -201,8 +201,13 @@ class AiAssistantController(http.Controller):
                 mode=mode,
             )
             client = OpenRouterClient(request.env)
-            if mode == 'actions' and not image_data:
-                return self._get_actions_response(client, messages)
+            if mode == 'actions':
+                vision_model = model_override if image_data else None
+                return self._get_actions_response(
+                    client,
+                    messages,
+                    model_override=vision_model,
+                )
             result = client.send_chat(messages, model_override=model_override)
             _logger.debug(
                 '[AI Assistant] Response: model=%s mode=%s len=%d',
@@ -276,11 +281,15 @@ class AiAssistantController(http.Controller):
             return 'consult'
         return 'actions'
 
-    def _get_actions_response(self, client, messages):
+    def _get_actions_response(self, client, messages, model_override=None):
         executor = ToolExecutor(request.env)
         tools = default_registry.to_openrouter_tools(request.env)
         for _iteration in range(5):
-            response = client.send_chat_with_tools(messages, tools)
+            response = client.send_chat_with_tools(
+                messages,
+                tools,
+                model_override=model_override,
+            )
             if response.get('type') == 'message':
                 return {
                     'answer': response.get('content', ''),

@@ -309,6 +309,44 @@ class TestChatController(HttpCase):
             'max_iterations',
         )
 
+    def test_actions_mode_with_screenshot_uses_tools(self):
+        """Actions mode must keep tool loop when a screenshot is attached."""
+        screenshot = 'data:image/jpeg;base64,' + ('A' * 1000)
+        tools_response = {
+            'type': 'message',
+            'content': 'Вижу экран, поставщик найден.',
+            'tool_calls': [],
+            'model_used': 'vision-model',
+        }
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'AiAssistantController._resolve_mode',
+            return_value='actions',
+        ), patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat_with_tools',
+            return_value=tools_response,
+        ) as mock_tools, patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat',
+        ) as mock_chat:
+            result = self._post_chat({
+                'message': 'Что на экране и найди поставщика',
+                'context': {'module': 'purchase'},
+                'screenshot': screenshot,
+            })
+
+        data = result.get('result', {})
+        self.assertEqual(
+            data.get('answer'),
+            'Вижу экран, поставщик найден.',
+        )
+        self.assertEqual(data.get('meta', {}).get('mode'), 'actions')
+        mock_tools.assert_called_once()
+        mock_chat.assert_not_called()
+        _, kwargs = mock_tools.call_args
+        self.assertIn('model_override', kwargs)
+
     def _post_confirm(self, payload):
         body = json.dumps(
             {'jsonrpc': '2.0', 'method': 'call', 'params': payload}

@@ -1,3 +1,13 @@
+## [2026-05-24] — fix: actions mode с скриншотом + уникальные t-key карточек
+### Исправлено
+- `chat_controller`: в режиме actions запрос со скриншотом больше не уходит в `send_chat()` без tools — используется `_get_actions_response()` / `send_chat_with_tools()` с vision-моделью.
+- `ai_chat_widget.xml` / `ai_chat_boot.js`: ключи `t-foreach` для cards уникальны (`pending_key`, `record id` или `type-index`).
+
+### Проверено
+- `TestChatController.test_actions_mode_with_screenshot_uses_tools` — 15 post-tests chat controller, 0 failed.
+
+---
+
 ## [2026-05-24] - Задача AIA-051: find_warehouse по name (backlog)
 ### Добавлено
 - `docs/tasktracker_ai_assistant_v3.md` — задача **AIA-051**: расширить read-tool `find_warehouse` — поиск склада по `name` (`ilike`, например «Хмельницкого») в дополнение к `code` (`ОбМ-4`); этап V3-9 post-v3.

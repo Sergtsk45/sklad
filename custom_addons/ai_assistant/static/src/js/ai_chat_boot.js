@@ -69,6 +69,16 @@ export class AiChatWidget extends Component {
             : "Думаю...";
     }
 
+    cardKey(card, index) {
+        if (card.pending_key) {
+            return card.pending_key;
+        }
+        if (card.type === "result" && card.record?.id) {
+            return `result-${card.record.model || "record"}-${card.record.id}`;
+        }
+        return `${card.type || "card"}-${index}`;
+    }
+
     toggleChat() {
         this.state.isOpen = !this.state.isOpen;
         if (this.state.isOpen) {
