@@ -1,3 +1,11 @@
+## [2026-05-24] — fix: фильтр склада в ссылке на остатки (AIA-052)
+### Исправлено
+- URL `/odoo/stock-report?search_warehouse=...` не применял фильтр: Odoo 19 не передаёт `search_warehouse` из query string в context action.
+- Ссылка теперь ведёт на server action `/odoo/ai-warehouse-stock?active_id=<warehouse_id>`, который открывает stock-report с `search_warehouse` и фильтром «Available Products» в context.
+- В search view stock-report добавлено поле `warehouse_id` для отображения активного фильтра.
+
+---
+
 ## [2026-05-24] — feat: AIA-053.UI кликабельные ссылки в чате
 ### Добавлено
 - Кнопки-ссылки под ответом ассистента из `links[]` API и markdown `[label](url)`.

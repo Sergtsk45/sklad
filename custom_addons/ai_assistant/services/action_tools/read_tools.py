@@ -349,7 +349,8 @@ class GetWarehouseStockLinkTool(AbstractReadTool):
     name = 'get_warehouse_stock_link'
     description = (
         'Вернуть ссылку на отчёт Odoo с товарами/остатками по конкретному '
-        'складу (stock-report). Не возвращает список позиций — только URL.'
+        'складу (ai-warehouse-stock → stock-report). Не возвращает список '
+        'позиций — только URL.'
     )
     required_groups = ['ai_assistant.group_ai_assistant_user']
     parameters_schema = {
@@ -396,11 +397,11 @@ class GetWarehouseStockLinkTool(AbstractReadTool):
                 'reason': 'forbidden',
             }
 
-        query_params = {'search_warehouse': warehouse['id']}
-        if args.get('only_available', True):
-            query_params['search_default_real_stock_available'] = 1
+        query_params = {'active_id': warehouse['id']}
+        if not args.get('only_available', True):
+            query_params['active_ids'] = '%s,0' % warehouse['id']
 
-        url = '/odoo/stock-report?' + urlencode(query_params)
+        url = '/odoo/ai-warehouse-stock?' + urlencode(query_params)
         return {
             'url': url,
             'label': 'Остатки: %s (%s)' % (

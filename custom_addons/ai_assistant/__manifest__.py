@@ -23,6 +23,8 @@
     'data': [
         'security/security_groups.xml',
         'security/ir.model.access.csv',
+        'data/warehouse_stock_action.xml',
+        'views/stock_search_inherit.xml',
         'views/ai_assistant_assets.xml',
         'views/ai_assistant_settings_views.xml',
         'views/ai_assistant_audit_views.xml',

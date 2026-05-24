@@ -306,9 +306,9 @@ class TestActionReadTools(TransactionCase):
             self.env,
             {'warehouse_id': self.address_warehouse.id},
         )
-        self.assertTrue(result['url'].startswith('/odoo/stock-report?'))
-        self.assertIn('search_warehouse=%s' % self.address_warehouse.id, result['url'])
-        self.assertIn('search_default_real_stock_available=1', result['url'])
+        self.assertTrue(result['url'].startswith('/odoo/ai-warehouse-stock?'))
+        self.assertIn('active_id=%s' % self.address_warehouse.id, result['url'])
+        self.assertNotIn('search_warehouse', result['url'])
         self.assertIn('ОбМ-4', result['label'])
 
     def test_get_warehouse_stock_link_by_query(self):
@@ -316,8 +316,8 @@ class TestActionReadTools(TransactionCase):
             self.env,
             {'query': 'Хмельницкого', 'only_available': False},
         )
-        self.assertIn('stock-report', result['url'])
-        self.assertNotIn('search_default_real_stock_available', result['url'])
+        self.assertIn('ai-warehouse-stock', result['url'])
+        self.assertIn('active_ids=', result['url'])
 
     def test_get_warehouse_stock_link_not_found(self):
         result = GetWarehouseStockLinkTool().execute(

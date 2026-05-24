@@ -48,7 +48,7 @@ class TestWarehouseStockLinkHelper(TransactionCase):
             'дай ссылку на фильтр товаров по складу',
             history,
         )
-        self.assertTrue(result['url'].startswith('/odoo/stock-report?'))
+        self.assertTrue(result['url'].startswith('/odoo/ai-warehouse-stock?'))
         self.assertIn('ОбМ-4', result['label'])
 
     def test_enrich_answer_replaces_none(self):
@@ -58,4 +58,4 @@ class TestWarehouseStockLinkHelper(TransactionCase):
         answer = 'Откройте [Отчёт](None).'
         enriched = self.helper.enrich_answer(answer, result)
         self.assertNotIn('(None)', enriched)
-        self.assertIn('stock-report', enriched)
+        self.assertIn('ai-warehouse-stock', enriched)

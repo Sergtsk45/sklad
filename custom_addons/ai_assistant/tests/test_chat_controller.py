@@ -452,9 +452,9 @@ class TestChatController(HttpCase):
 
         data = result.get('result', {})
         answer = data.get('answer', '')
-        self.assertIn('stock-report', answer)
+        self.assertIn('ai-warehouse-stock', answer)
         self.assertTrue(any(
-            'stock-report' in link.get('url', '')
+            'ai-warehouse-stock' in link.get('url', '')
             for link in data.get('links', [])
         ))
 
