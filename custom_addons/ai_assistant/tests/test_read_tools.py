@@ -7,6 +7,7 @@ from odoo.addons.ai_assistant.services.action_tools.read_tools import (
     FindPickingTypeTool,
     FindProductByIdTool,
     FindWarehouseTool,
+    GetNavigationLinkTool,
     ReadObjectRequestTool,
     SearchStockQuantsTool,
     SearchProductsTool,
@@ -143,6 +144,9 @@ class TestActionReadTools(TransactionCase):
         self.assertIsInstance(
             default_registry.get('search_stock_quants'), SearchStockQuantsTool
         )
+        self.assertIsInstance(
+            default_registry.get('get_navigation_link'), GetNavigationLinkTool
+        )
 
     def test_search_stock_quants_basic(self):
         result = SearchStockQuantsTool().execute(self.env, {
@@ -223,3 +227,64 @@ class TestActionReadTools(TransactionCase):
         self.assertEqual(request_data['id'], self.request.id)
         self.assertEqual(request_data['lines'][0]['id'], self.line.id)
         self.assertIn('summary', request_data)
+
+    def test_get_navigation_link_known_topic(self):
+        result = GetNavigationLinkTool().execute(
+            self.env, {'topic': 'заказы поставщикам'}
+        )
+        self.assertEqual(result['label'], 'Заказы поставщикам')
+        self.assertTrue(result['url'].startswith('/odoo/'))
+        self.assertIn('menu_breadcrumb', result)
+
+    def test_get_navigation_link_unknown_topic(self):
+        result = GetNavigationLinkTool().execute(
+            self.env, {'topic': 'несуществующий раздел xyz'}
+        )
+        self.assertIsNone(result['url'])
+        self.assertEqual(result['reason'], 'unknown_topic')
+
+    def test_get_navigation_link_no_group(self):
+        user = self.env['res.users'].create({
+            'name': 'AI Nav No Purchase',
+            'login': 'ai_nav_no_purchase',
+            'email': 'ai_nav_no_purchase@example.com',
+            'group_ids': [(6, 0, [
+                self.env.ref('base.group_user').id,
+                self.env.ref('ai_assistant.group_ai_assistant_user').id,
+            ])],
+        })
+        result = GetNavigationLinkTool().execute(
+            self.env(user=user),
+            {'topic': 'заказы поставщикам'},
+        )
+        self.assertIsNone(result['url'])
+        self.assertEqual(result['reason'], 'forbidden')
+
+    def test_get_navigation_link_with_context_defaults(self):
+        result = GetNavigationLinkTool().execute(
+            self.env, {'topic': 'заказы поставщикам'}
+        )
+        self.assertIn('search_default_my_purchases=1', result['url'])
+
+    def test_get_navigation_link_aliases(self):
+        tool = GetNavigationLinkTool()
+        by_po = tool.execute(self.env, {'topic': 'po'})
+        by_purchase = tool.execute(self.env, {'topic': 'закупки'})
+        self.assertEqual(by_po['label'], 'Заказы поставщикам')
+        self.assertEqual(
+            by_purchase['label'],
+            'Запросы коммерческих предложений',
+        )
+
+    def test_get_navigation_link_action_missing(self):
+        tool = GetNavigationLinkTool()
+        tool.catalog = ({
+            'topic_keys': ('missing action test',),
+            'label': 'Missing Action',
+            'action_xml_id': 'ai_assistant.missing_action_for_test',
+            'required_groups': ('base.group_user',),
+            'menu_breadcrumb': 'Missing',
+        },)
+        result = tool.execute(self.env, {'topic': 'missing action test'})
+        self.assertIsNone(result['url'])
+        self.assertEqual(result['reason'], 'not_found')

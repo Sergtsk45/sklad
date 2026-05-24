@@ -66,6 +66,7 @@ MODULE_DOCS_FILES = {
 }
 
 SUPPLY_CYCLE_FILE = 'supply_cycle_context.md'
+NAVIGATION_MAP_FILE = 'navigation_map.md'
 SUPPLY_CYCLE_MODULES = {'purchase', 'stock', 'object_request'}
 SUPPLY_CYCLE_KEYWORDS = {
     'снабжение', 'закупка', 'требование', 'приход', 'обм',
@@ -99,14 +100,17 @@ class KnowledgeProviderV2:
         Вернуть знания из всех трёх слоёв.
 
         :param include_technical: если None — определяется автоматически
-            через _is_technical_query(). Передать True/False для явного управления.
+            через _is_technical_query(). Передать True/False для явного
+            управления.
         :returns dict: {
             'docs_snippets': str,   # релевантные фрагменты из docs/
             'tech_context': str|None,
             'term_mapping': dict,
         }
         """
-        docs_snippets = self._search_docs(module, query)
+        docs_snippets = self._with_navigation_map(
+            self._search_docs(module, query)
+        )
         if include_technical is None:
             include_technical = self._is_technical_query(query)
         tech_context = (
@@ -126,7 +130,11 @@ class KnowledgeProviderV2:
         if not raw:
             return []
         # Возвращаем список dict-ов, как в v1
-        return [{'content': section} for section in raw.split('\n\n---\n\n') if section.strip()]
+        return [
+            {'content': section}
+            for section in raw.split('\n\n---\n\n')
+            if section.strip()
+        ]
 
     def get_technical_context(self, module):
         """Загрузить akaidoo-контекст из generated/."""
@@ -171,7 +179,8 @@ class KnowledgeProviderV2:
     def _expand_query(self, query):
         """
         Расширить запрос синонимами из term_mapping.
-        'категории хранения' → 'категории хранения storage categories storage category'
+        'категории хранения' → 'категории хранения storage categories
+        storage category'
         'storage category' → 'storage category категории хранения'
         """
         if not self._term_mapping:
@@ -206,7 +215,13 @@ class KnowledgeProviderV2:
 
         # 2. term_mapping — пропускать RU-термины, уже покрытые CUSTOM_PAIRS
         all_pairs = {}
-        for section in ['buttons', 'menu_items', 'fields', 'view_labels', 'statuses']:
+        for section in [
+            'buttons',
+            'menu_items',
+            'fields',
+            'view_labels',
+            'statuses',
+        ]:
             section_data = mapping.get(section, {})
             if isinstance(section_data, dict):
                 for en, ru in section_data.items():
@@ -238,7 +253,12 @@ class KnowledgeProviderV2:
 
         scored = []
         for section in index:
-            score = self._score_section(section, query_lower, query_words, module)
+            score = self._score_section(
+                section,
+                query_lower,
+                query_words,
+                module,
+            )
             scored.append((score, section))
 
         scored.sort(key=lambda x: x[0], reverse=True)
@@ -247,14 +267,37 @@ class KnowledgeProviderV2:
 
         return self._join_sections(candidates)
 
+    def _with_navigation_map(self, docs_snippets):
+        navigation_map = self._read_navigation_map()
+        if not navigation_map:
+            return docs_snippets
+        if docs_snippets:
+            return docs_snippets + '\n\n---\n\n' + navigation_map
+        return navigation_map
+
+    def _read_navigation_map(self):
+        path = os.path.join(_KNOWLEDGE_DIR, NAVIGATION_MAP_FILE)
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        except Exception:
+            return ''
+        return ''.join(lines[:200]).strip()
+
     def _build_docs_index(self):
-        """Построить индекс секций из всех MD-файлов в docs/. Кешируется с инвалидацией по mtime."""
+        """
+        Построить индекс секций из всех MD-файлов в docs/.
+        Кешируется с инвалидацией по mtime.
+        """
         try:
             current_mtime = os.path.getmtime(DOCS_DIR)
         except OSError:
             current_mtime = 0
 
-        if self._docs_index is not None and current_mtime <= self._docs_mtime:
+        if (
+            self._docs_index is not None
+            and current_mtime <= self._docs_mtime
+        ):
             return self._docs_index
 
         self._docs_mtime = current_mtime
@@ -267,7 +310,10 @@ class KnowledgeProviderV2:
             if not filename.endswith('.md'):
                 continue
             path = os.path.join(DOCS_DIR, filename)
-            file_module = filename.split('_')[0] if '_' in filename else filename[:-3]
+            file_module = (
+                filename.split('_')[0]
+                if '_' in filename else filename[:-3]
+            )
             self._append_docs_file_to_index(path, filename, [file_module])
 
         supply_path = os.path.join(_KNOWLEDGE_DIR, SUPPLY_CYCLE_FILE)
@@ -283,7 +329,9 @@ class KnowledgeProviderV2:
     def _append_docs_file_to_index(
         self, path, filename, modules, extra_keywords=None
     ):
-        """Добавить MD-файл в индекс секций для одного или нескольких модулей."""
+        """
+        Добавить MD-файл в индекс секций для одного или нескольких модулей.
+        """
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -381,9 +429,11 @@ class KnowledgeProviderV2:
         except OSError:
             current_mtime = 0
 
-        # _term_mapping_mtime == 0 означает значение установлено вручную (напр. в тестах)
+        # _term_mapping_mtime == 0 означает значение установлено вручную
+        # (например, в тестах).
         if self._term_mapping is not None and (
-            self._term_mapping_mtime == 0 or current_mtime <= self._term_mapping_mtime
+            self._term_mapping_mtime == 0
+            or current_mtime <= self._term_mapping_mtime
         ):
             return self._term_mapping
 

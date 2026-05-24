@@ -522,6 +522,8 @@ docker exec odoo19-local odoo --test-enable --test-tags ai_assistant -d odoo19_l
 | ID | Улучшение | Статус |
 |---|---|---|
 | **AIA-051** | `find_warehouse`: поиск по `name` (`ilike`), не только `code` | ✅ выполнено, см. [`tasktracker_ai_assistant_v3.md`](tasktracker_ai_assistant_v3.md) |
+| **AIA-052** | `get_warehouse_stock_link` — ссылка на отфильтрованный отчёт остатков по складу (`/odoo/stock-locations?...`) | ⏳ запланирована |
+| **AIA-053** | `get_navigation_link` — навигационные ссылки в consult-режиме (Вариант 4: гибрид каталог + tool + knowledge + промпт) | ✅ выполнена (backend/knowledge MVP), см. [`tasktracker_ai_assistant_v3.md`](tasktracker_ai_assistant_v3.md) §AIA-053 |
 
 ---
 
@@ -532,3 +534,5 @@ docker exec odoo19-local odoo --test-enable --test-tags ai_assistant -d odoo19_l
 | 2026-05-23 | 0.1 | Первая версия roadmap v3: actions в `ai_assistant`, без TD-003 |
 | 2026-05-24 | 0.2 | Backlog AIA-051: `find_warehouse` по name |
 | 2026-05-24 | 0.3 | AIA-051 выполнена: `find_warehouse(query)` ищет по коду и названию склада |
+| 2026-05-24 | 0.4 | Backlog AIA-053: навигационные ссылки в consult-режиме (`get_navigation_link`, Вариант 4 — гибрид) |
+| 2026-05-24 | 0.5 | AIA-053 выполнена: `NAVIGATION_CATALOG`, read-tool `get_navigation_link`, `navigation_map.md`, правила промпта и тесты |

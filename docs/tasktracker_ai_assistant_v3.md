@@ -774,6 +774,169 @@
 
 ---
 
+### Задача: AIA-053 — Навигационные ссылки в consult-режиме (`get_navigation_link`, гибрид)
+
+- **Статус**: Выполнена (backend/knowledge MVP; UI-кнопки вынесены в AIA-053.UI)
+- **Приоритет**: Высокий
+- **Описание**: Дать ассистенту возможность **в consult-режиме** на вопросы вида «как посмотреть …?», «где найти …?», «открой …», «покажи раздел …» возвращать рабочую markdown-ссылку на нужный экран Odoo 19 (`/odoo/<path>` или `/odoo/<model>` или `/odoo/<model>/<id>`), а не описывать путь меню словами. Реализация — по **Варианту 4 (гибрид)**: маленький каталог «тема → action xml_id / path» в коде модуля + read-tool `get_navigation_link` + knowledge-файл `navigation_map.md` для LLM + жёсткое правило в системном промпте + (опционально) UI-кнопки `links[]` под сообщением.
+- **Контекст (проблема)**:
+  - На вопрос «как посмотреть заказы поставщикам?» ассистент описывает путь меню, но не даёт кликабельную ссылку.
+  - LLM «знает» URL некоторых разделов, но без tool склонна выдумывать пути — нет гарантии валидности.
+  - В режиме actions у write-tools уже возвращается `url` (`/odoo/purchase/{id}`, `/odoo/object_request/{id}` и др.) — этот же паттерн нужно распространить на consult.
+  - Связано с AIA-052 (`get_warehouse_stock_link`) — частный случай этой задачи для остатков по складу.
+- **📁 Контекст**:
+  - `custom_addons/ai_assistant/services/action_tools/read_tools.py` — новый `GetNavigationLinkTool`
+  - `custom_addons/ai_assistant/services/action_tools/registry.py` — регистрация tool
+  - `custom_addons/ai_assistant/services/action_tools/__init__.py` (если нужен экспорт каталога)
+  - `custom_addons/ai_assistant/services/prompt_builder.py` — `_SYSTEM_PROMPT_V2` / новый блок `_NAVIGATION_RULES_BLOCK`
+  - `custom_addons/ai_assistant/services/knowledge_provider_v2.py` — подключение `navigation_map.md`
+  - `custom_addons/ai_assistant/static/knowledge/navigation_map.md` — каталог «тема → ссылка → когда давать»
+  - `custom_addons/ai_assistant/tests/test_read_tools.py` — тесты tool
+  - `custom_addons/ai_assistant/tests/test_prompt_builder.py` — тесты правила в промпте
+  - (опционально UI) `custom_addons/ai_assistant/static/src/js/ai_chat_service.js`, `ai_chat_widget.xml`, `ai_chat_widget.scss` — рендер `links[]`
+- **🔧 Context7** (опционально):
+  - Тема: «Odoo 19 ir.actions.act_window path field + /odoo URL routing»
+  - Цель: подтвердить, что `action.path` стабилен и что `/odoo/<path>` + `search_default_*` корректно работают без авторизованного состояния React-роутера.
+- **Архитектура (Вариант 4 — гибрид)**:
+  ```mermaid
+  flowchart LR
+      Q["Вопрос: как посмотреть PO?"] --> LLM
+      LLM -->|tool_call| T["get_navigation_link(topic='заказы поставщикам')"]
+      T --> CAT["NAVIGATION_CATALOG (код модуля)"]
+      CAT --> RES["resolve action_xml_id"]
+      RES --> ACL["env.user.has_groups + check_access('read')"]
+      ACL --> URL["/odoo/purchase?search_default_my_purchases=1"]
+      URL --> LLM
+      LLM --> A["Ответ: краткое объяснение + [Открыть «Заказы»](url)"]
+      KMD["static/knowledge/navigation_map.md"] -. system prompt .-> LLM
+  ```
+- **Шаги выполнения**:
+  - [x] **Каталог `NAVIGATION_CATALOG`** в `services/action_tools/navigation_catalog.py` (новый файл):
+    - [x] Структура записи:
+      ```python
+      {
+          'topic_keys': ['заказы поставщикам', 'po', 'purchase order', 'закупки'],
+          'label': 'Заказы поставщикам',
+          'action_xml_id': 'purchase.purchase_form_action',
+          # либо: 'path': 'purchase'
+          # либо: 'model': 'purchase.order'
+          'context_defaults': {'search_default_my_purchases': 1},
+          'required_groups': ['purchase.group_purchase_user'],
+          'menu_breadcrumb': 'Закупки → Заказы',
+      }
+      ```
+    - [x] Минимальный набор тем для MVP (≥ 15): PO, RFQ, поставщики, OR, приёмки, внутренние перемещения, остатки/локации, инвентаризация, товары, контакты, мои настройки, разделы CRM/Sales (на будущее), audit AI, чат, dashboard.
+    - [x] Хранить как `tuple(dict)` — иммутабельно, без `sudo()` при чтении.
+  - [x] **Tool `GetNavigationLinkTool`** в `services/action_tools/read_tools.py`:
+    - [x] Имя: `get_navigation_link`, `is_write=False`, `required_groups=['ai_assistant.group_ai_assistant_user']`.
+    - [x] JSON Schema:
+      ```python
+      {
+          'type': 'object',
+          'properties': {
+              'topic': {'type': 'string', 'minLength': 2},
+              'extra_filters': {'type': ['object', 'null']},  # для будущих расширений
+          },
+          'required': ['topic'],
+          'additionalProperties': False,
+      }
+      ```
+    - [x] Алгоритм `execute(env, args)`:
+      1. Нормализовать `topic` (lower, strip).
+      2. Найти запись в `NAVIGATION_CATALOG` по вхождению в `topic_keys` (substring или exact, с приоритетом exact).
+      3. Если не нашли → `{'url': None, 'reason': 'unknown_topic', 'topic': topic}`. **Не угадывать.**
+      4. Проверить группы пользователя (`env.user.has_group`); если хотя бы одна `required_groups` не выполнена → `{'url': None, 'reason': 'forbidden', 'topic': topic}`.
+      5. Резолвить action: `xml_id` → `env.ref(xml_id, raise_if_not_found=False)`; fallback на `path` через `env['ir.actions.act_window'].search([('path','=',path)], limit=1)`.
+      6. Если action не найден или у `action.res_model` нет `check_access('read')` → `forbidden`.
+      7. Собрать URL: `/odoo/<action.path or 'action-' + xml_id>` + query из `context_defaults` (URL-encoded) + `extra_filters`.
+      8. Вернуть:
+         ```python
+         {
+             'topic': topic,
+             'label': record['label'],
+             'url': '/odoo/...',
+             'menu_breadcrumb': record['menu_breadcrumb'],
+         }
+         ```
+    - [x] Регистрация в `registry.py` (`default_registry.register(...)`).
+  - [x] **Knowledge `navigation_map.md`** в `static/knowledge/`:
+    - [x] Таблица «Тема | Когда давать | Tool вызывает» (без URL — URL только из tool, чтобы LLM не выдумывала).
+    - [x] Включить в `KnowledgeProviderV2` независимо от модуля контекста (универсальный сниппет, лимит ~200 строк).
+  - [x] **Правило в промпте** (`prompt_builder.py`):
+    - [x] Новая константа `_NAVIGATION_RULES_BLOCK`:
+      ```
+      ПРАВИЛО НАВИГАЦИОННЫХ ССЫЛОК (consult и actions):
+      Если пользователь спрашивает «как посмотреть / где найти /
+      открой / покажи раздел / куда нажать»:
+      1. Сначала вызови tool get_navigation_link с темой на русском.
+      2. Если tool вернул url — встрой его в ответ как
+         markdown-ссылку: [Открыть «<label>»](<url>).
+      3. Также назови путь меню («<menu_breadcrumb>»).
+      4. НИКОГДА не выдумывай URL руками — только из tool.
+      5. Если tool вернул url=None → честно скажи, что
+         раздел не найден / нет прав, и предложи уточнить.
+      ```
+    - [x] Включать блок в `_build_system(...)` **в обоих режимах** (consult и actions), сразу после safety rules.
+  - [ ] **(Опционально) UI-карточка `links[]`** в виджете чата:
+    - [ ] В ответе `/ai_assistant/chat` добавлять `links: [{label, url}]`, если в tool-call цикле был вызван `get_navigation_link` и tool вернул url.
+    - [ ] В `ai_chat_widget.xml` под сообщением рисовать кнопки `[fa-external-link] <label>`.
+    - [ ] Если scope разрастается — вынести в **AIA-053.UI** как отдельную подзадачу, чтобы MVP закрыть без фронта (markdown-ссылка в тексте достаточно).
+  - [x] **Тесты `tests/test_read_tools.py`**:
+    - [x] `test_get_navigation_link_known_topic` — `topic='заказы поставщикам'` → `url.startswith('/odoo/')`, `label`.
+    - [x] `test_get_navigation_link_unknown_topic` → `url is None`, `reason='unknown_topic'`.
+    - [x] `test_get_navigation_link_no_group` — user без `purchase.group_purchase_user` → `reason='forbidden'`.
+    - [x] `test_get_navigation_link_with_context_defaults` — URL содержит `search_default_my_purchases=1`.
+    - [x] `test_get_navigation_link_aliases` — несколько `topic_keys` (`'po'`, `'закупки'`) ведут на одну и ту же запись.
+    - [x] `test_get_navigation_link_action_missing` — если `xml_id` не существует, `reason='not_found'`, без exception.
+  - [x] **Тесты `tests/test_prompt_builder.py`**:
+    - [x] Системный промпт в обоих режимах содержит `_NAVIGATION_RULES_BLOCK`.
+    - [x] `navigation_map.md` подключается в knowledge block.
+  - [x] **Аудит**: read-tool проходит через существующий executor/audit pipeline как прочие tools; отдельный `record_ref` для URL не добавлялся.
+  - [ ] **Кэш** (опционально, если профайлинг покажет): in-process LRU на резолв `xml_id → action.path` (инвалидация при `-u ai_assistant` тривиальна, processes перезапускаются).
+  - [x] **Прогон**: `docker exec odoo19-local odoo --test-enable --test-tags /ai_assistant -d odoo19_local --stop-after-init --http-port=8071` → 250 post-tests, 0 failed, 0 errors.
+- **🚫 Запрещено**:
+  - `sudo()` при резолве action и проверке прав — только `env.user.has_group` + `check_access('read')`.
+  - Возвращать URL без проверки существования action в текущей БД.
+  - Хардкодить домены/фильтры конкретного пользователя — каталог должен быть «универсальным».
+  - Открывать через `get_navigation_link` write-страницы конкретных записей по чужому `id` (резолв `/odoo/<model>/<id>` оставить для write-tools и явных «найди запись» сценариев — отдельная подзадача).
+  - Менять системный промпт consult так, чтобы он терял существующие правила (Odoo 19 «Новое», без «Сохранить» и т.п.) — только дополнение.
+- **✅ DoD**:
+  - На проде в чате на вопрос «как посмотреть заказы поставщикам?» ассистент даёт **краткое объяснение + кликабельную markdown-ссылку**, по которой открывается раздел в Odoo.
+  - Покрыты ≥ 15 типичных тем (см. `NAVIGATION_CATALOG`).
+  - Все новые тесты `test_read_tools.py` и `test_prompt_builder.py` зелёные; существующие — без регрессии.
+  - Flake8 на изменённых файлах без новых ошибок.
+  - `navigation_map.md` и правило в промпте задокументированы; в `pilot_results_v3.md` добавлен раздел «Навигационные ссылки» с примерами.
+- **Примеры приёмки (ручной чат)**:
+  ```
+  «как посмотреть заказы поставщикам?»
+    → tool get_navigation_link(topic='заказы поставщикам')
+    → url '/odoo/purchase-orders?search_default_my_purchases=1'
+    → ответ: «Раздел Закупки → Заказы. [Открыть «Заказы поставщикам»](/odoo/purchase-orders?search_default_my_purchases=1)»
+
+  «где найти требования прорабов?»
+    → /odoo/action-object_request.action_object_request
+
+  «как открыть инвентаризацию?»
+    → /odoo/action-stock.action_stock_inventory_adjustement_name
+
+  «как посмотреть остатки на ОбМ-4?»
+    → делегирует AIA-052 (get_warehouse_stock_link), не выдумывает URL
+  ```
+- **⛓ Зависит от**:
+  - AIA-031 (registry/base)
+  - AIA-033/034 (read tools на проде)
+  - AIA-030 (system prompt actions/consult)
+  - AIA-051 (для топика «склад по адресу» — через AIA-052)
+- **Связано с**:
+  - **AIA-052** (`get_warehouse_stock_link`) — частный случай навигации для остатков; реализуется параллельно/после.
+- **Подзадачи (для удобства разбивки PR)**:
+  - **AIA-053.1** — ✅ `NAVIGATION_CATALOG` + `GetNavigationLinkTool` + регистрация (бэкенд).
+  - **AIA-053.2** — ✅ `navigation_map.md` + `_NAVIGATION_RULES_BLOCK` в `prompt_builder.py`.
+  - **AIA-053.3** — ✅ тесты (`test_read_tools.py`, `test_prompt_builder.py`).
+  - **AIA-053.UI** *(опционально, может быть отдельным PR)* — `links[]` в JSON-ответе чата + рендер кнопок в OWL-виджете.
+
+---
+
 ## 13. Сводная таблица задач
 
 | ID | Название | Этап | Приоритет | Статус | Context7 | Зависит от |
@@ -802,6 +965,7 @@
 | AIA-049 | E2E УТ-1132 → PO ОбМ-4 | V3-7 | Высокий | ✅ | — | AIA-035, AIA-036, AIA-038 |
 | AIA-050 | pilot_results_v3 + docs | V3-8 | Средний | ✅ | — | AIA-049 |
 | AIA-051 | find_warehouse: поиск по name | V3-9 | Высокий | ✅ | — | AIA-034 |
+| AIA-053 | get_navigation_link (consult-ссылки) | V3-9 | Высокий | ✅ | 🔧 | AIA-030, AIA-031, AIA-033, AIA-034 |
 
 ---
 
@@ -822,6 +986,10 @@ AIA-036 → AIA-037 → AIA-049 → AIA-047 → AIA-048 → AIA-050 →
 **Инкремент 4 — «склад по адресу» (post-v3):**
 AIA-051 →
 демо: «остатки трубы 89×3,5 на Б. Хмельницкого, 112» без просьбы уточнить код ОбМ-4.
+
+**Инкремент 5 — «рабочие ссылки в consult» (post-v3):**
+AIA-053.1 → AIA-053.2 → AIA-053.3 → (опц.) AIA-053.UI →
+демо: «как посмотреть заказы поставщикам?» — ассистент даёт объяснение + кликабельную markdown-ссылку, которую открывает в один клик; параллельно AIA-052 (`get_warehouse_stock_link`) для остатков по складу.
 
 ---
 

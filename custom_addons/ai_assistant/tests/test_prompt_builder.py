@@ -1,6 +1,9 @@
 from odoo.tests.common import TransactionCase
 from odoo.tests import tagged
 
+from odoo.addons.ai_assistant.services.knowledge_provider_v2 import (
+    KnowledgeProviderV2,
+)
 from odoo.addons.ai_assistant.services.prompt_builder import PromptBuilder
 
 
@@ -82,8 +85,14 @@ class TestPromptBuilder(TransactionCase):
 
     def test_build_knowledge_block_with_snippets(self):
         snippets = [
-            {'topic': 'Создание товара', 'content': 'Нажмите Создать в меню Товары.'},
-            {'topic': 'Инвентаризация', 'content': 'Перейдите в раздел Инвентаризация.'},
+            {
+                'topic': 'Создание товара',
+                'content': 'Нажмите Создать в меню Товары.',
+            },
+            {
+                'topic': 'Инвентаризация',
+                'content': 'Перейдите в раздел Инвентаризация.',
+            },
         ]
         block = self.builder.build_knowledge_block(snippets)
         self.assertIn('Создание товара', block)
@@ -238,7 +247,7 @@ class TestPromptBuilder(TransactionCase):
     # --- term_mapping в промпте ---
 
     def test_term_mapping_included_in_build_messages(self):
-        """term_mapping должен попадать в системный промпт через build_messages."""
+        """term_mapping должен попадать в системный промпт."""
         knowledge = {
             'docs_snippets': '',
             'tech_context': None,
@@ -277,6 +286,31 @@ class TestPromptBuilder(TransactionCase):
         self.assertIn('РЕЖИМ ДЕЙСТВИЙ', system_content)
         self.assertIn('Я создам', system_content)
         self.assertIn('post_chatter_note', system_content)
+
+    def test_navigation_rules_in_consult_and_actions_modes(self):
+        consult_messages = self.builder.build_messages(
+            'Как посмотреть заказы поставщикам?', [], context=None,
+            mode='consult'
+        )
+        actions_messages = self.builder.build_messages(
+            'Открой заказы поставщикам', [], context=None, mode='actions'
+        )
+        for messages in (consult_messages, actions_messages):
+            system_content = messages[0]['content']
+            self.assertIn('ПРАВИЛО НАВИГАЦИОННЫХ ССЫЛОК', system_content)
+            self.assertIn('get_navigation_link', system_content)
+            self.assertIn('НИКОГДА не выдумывай URL', system_content)
+
+    def test_navigation_map_included_in_knowledge_block(self):
+        knowledge = KnowledgeProviderV2().get_knowledge(
+            'purchase',
+            'как посмотреть заказы поставщикам',
+            include_technical=False,
+        )
+        block = self.builder.build_knowledge_block(knowledge)
+        self.assertIn('Навигационные ссылки Odoo', block)
+        self.assertIn('get_navigation_link', block)
+        self.assertIn('Заказы поставщикам', block)
 
     def test_consult_mode_unchanged(self):
         default_messages = self.builder.build_messages(

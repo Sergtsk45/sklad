@@ -2,15 +2,20 @@ _SYSTEM_PROMPT_V2 = (
     "Ты — встроенный AI-консультант по Odoo 19. Язык ответа: русский.\n"
     "\n"
     "ПРАВИЛА:\n"
-    "1. Отвечай ТОЛЬКО на основе предоставленной документации и контекста.\n"
-    "2. НИКОГДА не выдумывай кнопки, поля или пути меню. Если не уверен — скажи.\n"
+    "1. Отвечай ТОЛЬКО на основе предоставленной документации и "
+    "контекста.\n"
+    "2. НИКОГДА не выдумывай кнопки, поля или пути меню. Если не уверен "
+    "— скажи.\n"
     "3. В Odoo 19 НЕТ кнопок «Сохранить» и «Редактировать» —\n"
     "   формы сохраняются автоматически, редактирование начинается сразу.\n"
     "4. Кнопка создания новой записи называется «Новое», НЕ «Создать».\n"
     "5. Формат ответа: короткие пошаговые инструкции.\n"
-    "6. Используй термины из раздела МАППИНГ ТЕРМИНОВ (приоритет над любыми другими).\n"
-    "7. Если функционал недоступен — предложи, где его включить в Настройках.\n"
-    "8. Не выполняй действия от имени пользователя. Не обещай автоматических изменений."
+    "6. Используй термины из раздела МАППИНГ ТЕРМИНОВ (приоритет над "
+    "любыми другими).\n"
+    "7. Если функционал недоступен — предложи, где его включить в "
+    "Настройках.\n"
+    "8. Не выполняй действия от имени пользователя. Не обещай "
+    "автоматических изменений."
 )
 
 _SAFETY_RULES = (
@@ -28,6 +33,19 @@ _ACTIONS_SAFETY_RULES = (
     "- Выполняй только разрешенные tools снабжения после системного "
     "подтверждения.\n"
     "- Если вопрос вне твоей компетенции — вежливо сообщи об этом."
+)
+
+_NAVIGATION_RULES_BLOCK = (
+    "ПРАВИЛО НАВИГАЦИОННЫХ ССЫЛОК (consult и actions):\n"
+    "Если пользователь спрашивает «как посмотреть / где найти / открыть / "
+    "показать раздел / куда нажать»:\n"
+    "1. Сначала вызови tool get_navigation_link с темой на русском.\n"
+    "2. Если tool вернул url — встрой его в ответ как markdown-ссылку: "
+    "[Открыть «<label>»](<url>).\n"
+    "3. Также назови путь меню («<menu_breadcrumb>»).\n"
+    "4. НИКОГДА не выдумывай URL руками — только из tool.\n"
+    "5. Если tool вернул url=None — честно скажи, что раздел не найден "
+    "или нет прав, и предложи уточнить."
 )
 
 _ACTIONS_RULES_BLOCK = (
@@ -80,11 +98,14 @@ class PromptBuilder:
 
         :param message: str — сообщение пользователя
         :param history: list — история чата
-        :param context: dict — контекст экрана (module, model, view_type, lang...)
+        :param context: dict — контекст экрана
+            (module, model, view_type, lang...)
         :param knowledge: dict|None — от KnowledgeProviderV2.get_knowledge()
                           {docs_snippets, tech_context, term_mapping}
-        :param override: str|None — переопределение системного промпта из настроек
-        :param image_data: dict|None — зарезервировано для AIA-025 (vision mode)
+        :param override: str|None — переопределение системного промпта
+            из настроек
+        :param image_data: dict|None — зарезервировано для AIA-025
+            (vision mode)
         :param mode: 'consult'|'actions' — режим консультанта или действий
         :returns: list[dict] — messages для LLM API
         """
@@ -98,7 +119,7 @@ class PromptBuilder:
             if role in ('user', 'assistant') and content:
                 msgs.append({'role': role, 'content': content})
 
-        # AIA-025: vision mode — multimodal content
+        # AIA-025: vision mode - multimodal content
         if image_data:
             user_content = [
                 {
@@ -133,6 +154,7 @@ class PromptBuilder:
             parts.append(_ACTIONS_RULES_BLOCK)
 
         parts.append(self.build_safety_rules(mode=mode))
+        parts.append(_NAVIGATION_RULES_BLOCK)
 
         context_block = self.build_context_block(context)
         if context_block:
@@ -190,7 +212,8 @@ class PromptBuilder:
     def build_knowledge_block(self, knowledge):
         """
         Принимает либо:
-        - dict от KnowledgeProviderV2: {docs_snippets, tech_context, term_mapping}
+        - dict от KnowledgeProviderV2:
+          {docs_snippets, tech_context, term_mapping}
         - list сниппетов от v1 KnowledgeProvider (обратная совместимость)
         """
         if not knowledge:

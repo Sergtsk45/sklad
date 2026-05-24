@@ -1,6 +1,10 @@
 import re
+from urllib.parse import urlencode
+
+from odoo.exceptions import AccessError
 
 from .base import AbstractReadTool
+from .navigation_catalog import NAVIGATION_CATALOG
 from .registry import default_registry
 
 
@@ -341,6 +345,128 @@ class ReadObjectRequestTool(AbstractReadTool):
         return {'request': request_data}
 
 
+class GetNavigationLinkTool(AbstractReadTool):
+    name = 'get_navigation_link'
+    description = (
+        'Вернуть проверенную ссылку на экран Odoo по теме навигации. '
+        'Не угадывает URL для неизвестных тем.'
+    )
+    required_groups = ['ai_assistant.group_ai_assistant_user']
+    parameters_schema = {
+        'type': 'object',
+        'properties': {
+            'topic': {'type': 'string', 'minLength': 2},
+            'extra_filters': {'type': ['object', 'null']},
+        },
+        'required': ['topic'],
+        'additionalProperties': False,
+    }
+    catalog = NAVIGATION_CATALOG
+
+    def execute(self, env, args):
+        topic = self._normalize_topic(args['topic'])
+        record = self._find_record(topic)
+        if not record:
+            return {
+                'url': None,
+                'reason': 'unknown_topic',
+                'topic': topic,
+            }
+
+        if not self._user_has_groups(env, record.get('required_groups') or ()):
+            return {
+                'url': None,
+                'reason': 'forbidden',
+                'topic': topic,
+            }
+
+        action = self._resolve_action(env, record)
+        if record.get('action_xml_id') and not action:
+            return {
+                'url': None,
+                'reason': 'not_found',
+                'topic': topic,
+            }
+
+        if action and not self._can_read_action_model(env, action):
+            return {
+                'url': None,
+                'reason': 'forbidden',
+                'topic': topic,
+            }
+
+        url = self._build_url(record, action, args.get('extra_filters'))
+        return {
+            'topic': topic,
+            'label': record['label'],
+            'url': url,
+            'menu_breadcrumb': record['menu_breadcrumb'],
+        }
+
+    def _normalize_topic(self, topic):
+        return (topic or '').strip().lower()
+
+    def _find_record(self, topic):
+        exact_match = None
+        substring_match = None
+        for record in self.catalog:
+            keys = [self._normalize_topic(key) for key in record['topic_keys']]
+            if topic in keys:
+                exact_match = record
+                break
+            if any(key in topic or topic in key for key in keys):
+                substring_match = substring_match or record
+        return exact_match or substring_match
+
+    def _user_has_groups(self, env, groups):
+        return all(env.user.has_group(xmlid) for xmlid in groups)
+
+    def _resolve_action(self, env, record):
+        xml_id = record.get('action_xml_id')
+        if xml_id:
+            action = env.ref(xml_id, raise_if_not_found=False)
+            if action:
+                return action
+
+        path = record.get('path')
+        if path:
+            return env['ir.actions.act_window'].search(
+                [('path', '=', path)],
+                limit=1,
+            )
+        return env['ir.actions.act_window']
+
+    def _can_read_action_model(self, env, action):
+        model_name = action.res_model
+        if not model_name:
+            return True
+        if model_name not in env:
+            return False
+        try:
+            env[model_name].check_access('read')
+        except AccessError:
+            return False
+        return True
+
+    def _build_url(self, record, action, extra_filters):
+        path = self._get_url_path(record, action)
+        query = dict(record.get('context_defaults') or {})
+        if isinstance(extra_filters, dict):
+            query.update(extra_filters)
+
+        url = '/odoo/%s' % path
+        if query:
+            url += '?' + urlencode(query, doseq=True)
+        return url
+
+    def _get_url_path(self, record, action):
+        if record.get('path'):
+            return record['path']
+        if action and action.path:
+            return action.path
+        return 'action-%s' % record['action_xml_id']
+
+
 default_registry.register(SearchProductsTool())
 default_registry.register(FindProductByIdTool())
 default_registry.register(FindPartnerTool())
@@ -349,3 +475,4 @@ default_registry.register(FindWarehouseTool())
 default_registry.register(FindPickingTypeTool())
 default_registry.register(FindObjectRequestTool())
 default_registry.register(ReadObjectRequestTool())
+default_registry.register(GetNavigationLinkTool())

@@ -51,6 +51,29 @@ No tool confirms purchase orders or validates pickings. `button_confirm` and
 
 - AIA-051: `find_warehouse` now accepts `query` and finds object warehouses by code or by address/name fragment, for example `Хмельницкого` -> `ОбМ-4`.
 
+## 2026-05-24 — AIA-053 Navigation Links
+
+### Scope
+
+- Added `get_navigation_link` read-tool for consult/actions navigation questions.
+- Added `NAVIGATION_CATALOG` with 22 common Odoo topics.
+- Added `navigation_map.md` knowledge snippet without hardcoded URLs.
+- Added system prompt rule: links must come only from `get_navigation_link`.
+
+### Examples
+
+| User asks | Tool topic | Expected response link |
+|-----------|------------|------------------------|
+| `как посмотреть заказы поставщикам?` | `заказы поставщикам` | `[Открыть «Заказы поставщикам»](/odoo/purchase-orders?search_default_my_purchases=1)` |
+| `где найти требования прорабов?` | `требования прорабов` | link to the resolved `object_request.action_object_request` action |
+| `как открыть инвентаризацию?` | `инвентаризация` | link to the resolved stock inventory action |
+
+### Verification
+
+- `/ai_assistant` tests: 250 post-tests, 0 failed, 0 errors.
+- `ai_assistant` stats: 288 tests, 6334 queries.
+- Targeted flake8 on changed Python files: passed.
+
 ## 2026-05-24 — AIA-047 verification
 
 ### Tests
