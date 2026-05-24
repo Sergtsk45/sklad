@@ -1,4 +1,8 @@
-## [2026-05-24] — fix: фильтр склада в ссылке на остатки (AIA-052)
+## [2026-05-24] — fix: кнопки «Попробуйте спросить» в чате AI
+### Исправлено
+- Клик по suggested prompt падал с `Cannot read properties of undefined (reading 'state')`: в OWL-шаблоне вызов без `this.onSuggestedPrompt`.
+
+---
 ### Исправлено
 - URL `/odoo/stock-report?search_warehouse=...` не применял фильтр: Odoo 19 не передаёт `search_warehouse` из query string в context action.
 - Ссылка теперь ведёт на server action `/odoo/ai-warehouse-stock?active_id=<warehouse_id>`, который открывает stock-report с `search_warehouse` и фильтром «Available Products» в context.

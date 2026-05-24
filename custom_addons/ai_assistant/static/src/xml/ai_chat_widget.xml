@@ -42,7 +42,7 @@
                         <t t-foreach="suggestedPrompts" t-as="prompt" t-key="prompt">
                             <button
                                 class="o_ai_suggested_chip"
-                                t-on-click="() => onSuggestedPrompt(prompt)"
+                                t-on-click="() => this.onSuggestedPrompt(prompt)"
                             >
                                 <t t-esc="prompt"/>
                             </button>
