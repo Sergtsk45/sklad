@@ -26,7 +26,10 @@ class ToolRegistry:
             if self._user_has_required_groups(env, tool)
         ]
 
-    def to_openrouter_tools(self, env):
+    def to_openrouter_tools(self, env, read_only=False):
+        tools = self.list_for_user(env)
+        if read_only:
+            tools = [tool for tool in tools if not tool.is_write]
         return [
             {
                 'type': 'function',
@@ -36,7 +39,7 @@ class ToolRegistry:
                     'parameters': tool.parameters_schema,
                 },
             }
-            for tool in self.list_for_user(env)
+            for tool in tools
         ]
 
     def _user_has_required_groups(self, env, tool):

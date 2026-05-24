@@ -53,11 +53,12 @@ class TestChatController(HttpCase):
     def test_chat_returns_answer(self):
         with patch(
             'odoo.addons.ai_assistant.services.openrouter_client.'
-            'OpenRouterClient.send_chat',
+            'OpenRouterClient.send_chat_with_tools',
             return_value={
-                'answer': 'Привет.',
+                'type': 'message',
+                'content': 'Привет.',
+                'tool_calls': [],
                 'model_used': 'test-model',
-                'mode': 'text',
             },
         ):
             result = self._post_chat({'message': 'Привет'})
@@ -346,6 +347,42 @@ class TestChatController(HttpCase):
         mock_chat.assert_not_called()
         _, kwargs = mock_tools.call_args
         self.assertIn('model_override', kwargs)
+
+    def test_consult_mode_uses_read_tools_not_send_chat(self):
+        response = {
+            'type': 'message',
+            'content': (
+                'Откройте [Заказы поставщикам](/odoo/purchase-orders).'
+            ),
+            'tool_calls': [],
+            'model_used': 'test-model',
+        }
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'AiAssistantController._resolve_mode',
+            return_value='consult',
+        ), patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat_with_tools',
+            return_value=response,
+        ) as mock_tools, patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat',
+        ) as mock_chat:
+            result = self._post_chat({
+                'message': 'как посмотреть заказы поставщикам',
+                'context': {'module': 'purchase'},
+            })
+
+        data = result.get('result', {})
+        self.assertIn('purchase-orders', data.get('answer', ''))
+        self.assertEqual(data.get('meta', {}).get('mode'), 'consult')
+        mock_tools.assert_called_once()
+        mock_chat.assert_not_called()
+        tools_payload = mock_tools.call_args[0][1]
+        tool_names = [item['function']['name'] for item in tools_payload]
+        self.assertIn('get_navigation_link', tool_names)
+        self.assertNotIn('create_object_request_draft', tool_names)
 
     def _post_confirm(self, payload):
         body = json.dumps(

@@ -203,26 +203,21 @@ class AiAssistantController(http.Controller):
             client = OpenRouterClient(request.env)
             if mode == 'actions':
                 vision_model = model_override if image_data else None
-                return self._get_actions_response(
+                return self._get_tools_response(
                     client,
                     messages,
                     model_override=vision_model,
+                    allow_write=True,
+                    mode_label='actions',
                 )
-            result = client.send_chat(messages, model_override=model_override)
-            _logger.debug(
-                '[AI Assistant] Response: model=%s mode=%s len=%d',
-                result.get('model_used'),
-                result.get('mode', 'text'),
-                len(result.get('answer', '')),
+            vision_model = model_override if image_data else None
+            return self._get_tools_response(
+                client,
+                messages,
+                model_override=vision_model,
+                allow_write=False,
+                mode_label='consult',
             )
-            return {
-                'answer': result['answer'],
-                'suggestions': [],
-                'meta': {
-                    'model_used': result.get('model_used'),
-                    'mode': result.get('mode', 'text'),
-                },
-            }
         except ValueError:
             return self._mock_response()
         except ConnectionError as e:
@@ -281,9 +276,19 @@ class AiAssistantController(http.Controller):
             return 'consult'
         return 'actions'
 
-    def _get_actions_response(self, client, messages, model_override=None):
+    def _get_tools_response(
+        self,
+        client,
+        messages,
+        model_override=None,
+        allow_write=True,
+        mode_label='actions',
+    ):
         executor = ToolExecutor(request.env)
-        tools = default_registry.to_openrouter_tools(request.env)
+        tools = default_registry.to_openrouter_tools(
+            request.env,
+            read_only=not allow_write,
+        )
         for _iteration in range(5):
             response = client.send_chat_with_tools(
                 messages,
@@ -297,13 +302,15 @@ class AiAssistantController(http.Controller):
                     'cards': [],
                     'meta': {
                         'model_used': response.get('model_used'),
-                        'mode': 'actions',
+                        'mode': mode_label,
                     },
                 }
             tool_calls = response.get('tool_calls') or []
             if not tool_calls:
                 break
-            write_call = self._first_write_tool_call(tool_calls)
+            write_call = (
+                self._first_write_tool_call(tool_calls) if allow_write else None
+            )
             read_calls = self._read_tool_calls(tool_calls)
             if write_call and read_calls:
                 # Mixed batch: execute reads first so LLM has full context
@@ -313,9 +320,10 @@ class AiAssistantController(http.Controller):
                     self._assistant_tool_calls_message(response, read_calls)
                 )
                 for tool_call in read_calls:
-                    result = executor.execute(
-                        tool_call['name'],
-                        tool_call.get('arguments') or {},
+                    result = self._execute_tool_call(
+                        executor,
+                        tool_call,
+                        allow_write=allow_write,
                     )
                     messages.append({
                         'role': 'tool',
@@ -341,14 +349,15 @@ class AiAssistantController(http.Controller):
                     'cards': [
                         self._confirmation_card(write_call, pending_key)
                     ],
-                    'meta': {'mode': 'actions', 'status': 'pending'},
+                    'meta': {'mode': mode_label, 'status': 'pending'},
                 }
 
             messages.append(self._assistant_tool_calls_message(response))
             for tool_call in tool_calls:
-                result = executor.execute(
-                    tool_call['name'],
-                    tool_call.get('arguments') or {},
+                result = self._execute_tool_call(
+                    executor,
+                    tool_call,
+                    allow_write=allow_write,
                 )
                 messages.append({
                     'role': 'tool',
@@ -361,8 +370,30 @@ class AiAssistantController(http.Controller):
             'answer': 'Не удалось завершить обработку tools за 5 итераций.',
             'suggestions': [],
             'cards': [],
-            'meta': {'mode': 'actions', 'status': 'max_iterations'},
+            'meta': {'mode': mode_label, 'status': 'max_iterations'},
         }
+
+    def _execute_tool_call(self, executor, tool_call, allow_write=True):
+        name = tool_call['name']
+        args = tool_call.get('arguments') or {}
+        if not allow_write:
+            try:
+                tool = default_registry.get(name)
+            except KeyError:
+                pass
+            else:
+                if tool.is_write:
+                    return {
+                        'success': False,
+                        'error': {
+                            'code': 'write_not_allowed',
+                            'message': (
+                                'Создание документов доступно только '
+                                'пользователям группы «Снабжение».'
+                            ),
+                        },
+                    }
+        return executor.execute(name, args)
 
     def _first_write_tool_call(self, tool_calls):
         for tool_call in tool_calls:
