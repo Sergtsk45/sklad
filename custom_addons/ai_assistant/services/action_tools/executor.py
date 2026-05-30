@@ -175,7 +175,7 @@ class ToolExecutor:
             return ''
         if result.get('model') and result.get('record_id'):
             return '%s,%s' % (result['model'], result['record_id'])
-        for key in ('request_id', 'po_id', 'picking_id', 'record_id'):
+        for key in ('request_id', 'po_id', 'picking_id', 'product_id', 'record_id'):
             if result.get(key):
                 return '%s=%s' % (key, result[key])
         if result.get('url'):

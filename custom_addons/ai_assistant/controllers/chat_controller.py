@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 
@@ -32,11 +33,20 @@ from odoo.addons.ai_assistant.services.navigation_helper import (
 from odoo.addons.ai_assistant.services.warehouse_stock_link_helper import (
     WarehouseStockLinkHelper,
 )
+from odoo.addons.ai_assistant.services.invoice_extraction_store import (
+    InvoiceExtractionStore,
+)
+from odoo.addons.ai_assistant.services.invoice_parsing import (
+    extract_invoice,
+    validate_invoice_data,
+)
 
 _logger = logging.getLogger(__name__)
 
 MAX_HISTORY_SIZE = 12
 MAX_SCREENSHOT_B64 = 500_000   # ~500 KB base64 — AIA-024
+MAX_INVOICE_BYTES = 5 * 1024 * 1024  # 5 MB — AIA-056
+ALLOWED_INVOICE_EXTENSIONS = frozenset({'pdf', 'xlsx'})
 
 # AIA-026: Rate limit для vision-запросов
 _VISION_RATE = {}              # {uid: [timestamp, ...]}
@@ -49,6 +59,7 @@ _prompt_builder = PromptBuilder()
 _GROUP_USER = 'ai_assistant.group_ai_assistant_user'
 _GROUP_SUPPLY = 'ai_assistant.group_ai_assistant_supply'
 _pending_actions = PendingActionStore()
+_invoice_store = InvoiceExtractionStore()
 
 _MODULE_FROM_MODEL = {
     'stock': 'stock', 'purchase': 'purchase', 'sale': 'sale',
@@ -75,7 +86,10 @@ class AiAssistantController(http.Controller):
                 methods=['POST'])
     def check_access(self, **kwargs):
         has_access = request.env.user.has_group(_GROUP_USER)
-        return {'has_access': has_access}
+        has_supply = (
+            has_access and request.env.user.has_group(_GROUP_SUPPLY)
+        )
+        return {'has_access': has_access, 'has_supply': has_supply}
 
     @http.route('/ai_assistant/chat', type='jsonrpc', auth='user',
                 methods=['POST'])
@@ -583,6 +597,8 @@ class AiAssistantController(http.Controller):
             return 'object.request', result.get('request_id')
         if tool_name == 'create_purchase_order_draft':
             return 'purchase.order', result.get('po_id')
+        if tool_name == 'create_product_draft':
+            return 'product.product', result.get('product_id')
         if tool_name == 'create_internal_picking_draft':
             return 'stock.picking', result.get('picking_id')
         return '', result.get('record_id')

@@ -287,6 +287,104 @@ default_registry.register(
 )
 
 
+class CreateProductDraftTool(AbstractWriteTool):
+    name = 'create_product_draft'
+    description = (
+        'Создать черновик номенклатуры product.product (storable, purchase_ok).'
+    )
+    required_groups = ['ai_assistant.group_ai_assistant_supply']
+    parameters_schema = {
+        'type': 'object',
+        'properties': {
+            'name': {'type': 'string', 'minLength': 1},
+            'categ_id': {'type': ['integer', 'null']},
+            'uom_id': {'type': ['integer', 'null']},
+            'purchase_ok': {'type': 'boolean'},
+            'sale_ok': {'type': 'boolean'},
+        },
+        'required': ['name'],
+        'additionalProperties': False,
+    }
+
+    def execute(self, env, args):
+        _ensure_tool_required_groups(self, env)
+        name = (args.get('name') or '').strip()
+        if not name:
+            raise ValidationError('Укажите наименование товара.')
+
+        categ_id = args.get('categ_id') or self._default_category_id(env)
+        uom_id = args.get('uom_id') or self._default_uom_id(env)
+        self._validate_category(env, categ_id)
+        self._validate_uom(env, uom_id)
+        self._ensure_no_duplicate(env, name, categ_id)
+
+        product = env['product.product'].create({
+            'name': name,
+            'is_storable': True,
+            'categ_id': categ_id,
+            'uom_id': uom_id,
+            'purchase_ok': args.get('purchase_ok', True),
+            'sale_ok': args.get('sale_ok', False),
+        })
+        product.product_tmpl_id.message_post(
+            body=(
+                'Товар создан AI-ассистентом по запросу %s.'
+            ) % env.user.name,
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+        )
+        return {
+            'product_id': product.id,
+            'name': product.display_name,
+            'url': '/odoo/product.product/%s' % product.id,
+        }
+
+    def idempotency_key(self, args):
+        payload = {
+            'name': (args.get('name') or '').strip(),
+            'categ_id': args.get('categ_id') or 0,
+        }
+        raw_payload = json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(',', ':'),
+        )
+        return hashlib.sha256(raw_payload.encode('utf-8')).hexdigest()
+
+    def _default_category_id(self, env):
+        return env.ref('product.product_category_all').id
+
+    def _default_uom_id(self, env):
+        return env.ref('uom.product_uom_unit').id
+
+    def _validate_category(self, env, categ_id):
+        category = env['product.category'].browse(categ_id)
+        if not category.exists():
+            raise ValidationError('Категория товара не найдена.')
+
+    def _validate_uom(self, env, uom_id):
+        uom = env['uom.uom'].browse(uom_id)
+        if not uom.exists():
+            raise ValidationError('Единица измерения не найдена.')
+
+    def _ensure_no_duplicate(self, env, name, categ_id):
+        duplicate = env['product.product'].search([
+            ('name', '=ilike', name),
+            ('categ_id', '=', categ_id),
+        ], limit=1)
+        if duplicate:
+            raise ValidationError(
+                'Товар с таким наименованием уже существует: %s.'
+                % duplicate.display_name
+            )
+
+
+default_registry.register(
+    CreateProductDraftTool()
+)
+
+
 class CreateInternalPickingDraftTool(AbstractWriteTool):
     name = 'create_internal_picking_draft'
     description = 'Создать черновик внутреннего перемещения на склад объекта.'

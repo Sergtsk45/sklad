@@ -962,19 +962,19 @@
 
 ### Задача: AIA-055 — Порт парсера счетов в `services/invoice_parsing/`
 
-- **Статус**: Не начата
+- **Статус**: Завершена ✅ (2026-05-30)
 - **Приоритет**: Критический
 - **Описание**: Перенести в Odoo логику извлечения из `extraction_specific_PDF/services/invoice-extractor` (text-first): таблица + эвристики, шапка (номер счёта с префиксом `НФ-504`/`УТ-1132`, поставщик/покупатель по `extract_party_name`), фильтр мусорных строк, нормализация и арифметическая валидация.
 - **📁 Контекст**:
   - `~/projects/extraction_specific_PDF/services/invoice-extractor/backend/app/` — `extractor.py`, `invoice_utils.py`, `normalizer.py`, `validators.py` (источник, уже исправлен под НФ-504)
   - `custom_addons/ai_assistant/services/` — куда переносим
 - **Шаги выполнения**:
-  - [ ] Создать пакет `services/invoice_parsing/` (`__init__.py`, `extractor.py`, `invoice_utils.py`, `normalizer.py`, `validators.py`)
-  - [ ] Перенести text-first парс (pdfplumber `extract_tables` + эвристика по строкам)
-  - [ ] Перенести фиксы НФ-504: regex номера с кириллическим префиксом, `extract_party_name` (до `, ИНН`), `is_garbage_item`
-  - [ ] Перенести `validate_invoice_data` (qty×price=sum, сумма строк=итого)
-  - [ ] (XLSX) опционально через openpyxl (есть в Odoo); иначе только PDF в v1
-  - [ ] Тесты `tests/test_invoice_parsing.py`: фикстура-текст НФ-504, 14 позиций, поставщик «ИП Татаринов…», 0 warning по арифметике
+  - [x] Создать пакет `services/invoice_parsing/` (`__init__.py`, `extractor.py`, `invoice_utils.py`, `normalizer.py`, `validators.py`)
+  - [x] Перенести text-first парс (pdfplumber `extract_tables` + эвристика по строкам); принимает `bytes` вместо пути
+  - [x] Перенести фиксы НФ-504: regex номера с кириллическим префиксом, `extract_party_name` (до `, ИНН`), `is_garbage_item`
+  - [x] Перенести `validate_invoice_data` (qty×price=sum, сумма строк=итого)
+  - [x] (XLSX) не реализован в v1 — только PDF
+  - [x] Тесты `tests/test_invoice_parsing.py`: фикстура-текст НФ-504, 14 позиций, поставщик «ИП Татаринов…», 0 warning по арифметике
 - **🚫 Запрещено**: сетевые вызовы; vision-fallback (backlog — см. [`technical-debt.md` TD-005](technical-debt.md)).
 - **✅ DoD**: на фикстуре НФ-504 извлекается 14 позиций, верная шапка, сумма 72 096,22; мусорная строка отфильтрована.
 - **⛓ Зависит от**: AIA-054
@@ -1025,18 +1025,18 @@
 
 ### Задача: AIA-058 — Write-tool `create_product_draft`
 
-- **Статус**: Не начата
+- **Статус**: Завершена ✅ (2026-05-30)
 - **Приоритет**: Высокий
 - **Описание**: Инструмент для создания недостающей номенклатуры (D2): `product.product` (storable, `categ_id`, `uom_id`, `purchase_ok`). Через стандартную карточку подтверждения, денилист-safe.
 - **📁 Контекст**:
   - `custom_addons/ai_assistant/services/action_tools/write_tools.py` — образец write-tool + регистрация
   - `custom_addons/ai_assistant/services/action_tools/executor.py` — денилист (`_FORBIDDEN_WRITE_FIELDS`)
 - **Шаги выполнения**:
-  - [ ] `CreateProductDraftTool` (name `create_product_draft`, группа `group_ai_assistant_supply`)
-  - [ ] Schema: `name` (required), `categ_id`, `uom_id`, `purchase_ok`, `sale_ok`; без `state`
-  - [ ] `idempotency_key` по `name`+`categ_id`; проверка дубля по имени перед созданием
-  - [ ] `message_post` «создано AI-ассистентом по запросу <user>»
-  - [ ] Регистрация в `registry`; тесты happy-case + отказ для не-supply + денилист
+  - [x] `CreateProductDraftTool` (name `create_product_draft`, группа `group_ai_assistant_supply`)
+  - [x] Schema: `name` (required), `categ_id`, `uom_id`, `purchase_ok`, `sale_ok`; без `state`
+  - [x] `idempotency_key` по `name`+`categ_id`; проверка дубля по имени перед созданием
+  - [x] `message_post` «создано AI-ассистентом по запросу <user>»
+  - [x] Регистрация в `registry`; тесты happy-case + отказ для не-supply + денилист
 - **🚫 Запрещено**: поля `state`/`company_id`/`currency_id`; создание без подтверждения.
 - **✅ DoD**: товар «Тройник 76х3,5-45х3-20 ГОСТ 17376-2001» создаётся как storable-черновик после подтверждения.
 - **⛓ Зависит от**: AIA-031, AIA-032
@@ -1114,7 +1114,7 @@
 | AIA-055 | порт парсера счетов в services/invoice_parsing | V3-10 | Критический | ⏳ | — | AIA-054 |
 | AIA-056 | /upload_invoice + кнопка-скрепка | V3-10 | Критический | ⏳ | — | AIA-055 |
 | AIA-057 | InvoiceContextHelper + инъекция в промпт | V3-10 | Критический | ⏳ | — | AIA-055, AIA-056 |
-| AIA-058 | create_product_draft (write-tool) | V3-10 | Высокий | ⏳ | — | AIA-031, AIA-032 |
+| AIA-058 | create_product_draft (write-tool) | V3-10 | Высокий | ✅ | 2026-05-30 | AIA-031, AIA-032 |
 | AIA-059 | ResultCard инструкции UI (Confirm→Validate) | V3-10 | Средний | ⏳ | — | AIA-057, AIA-058 |
 | AIA-060 | E2E НФ-504 → PO draft | V3-10 | Высокий | ⏳ | — | AIA-055..058 |
 

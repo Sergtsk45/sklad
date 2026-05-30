@@ -8,6 +8,7 @@ from odoo.addons.ai_assistant.services.action_tools.registry import (
 from odoo.addons.ai_assistant.services.action_tools.write_tools import (
     CreateInternalPickingDraftTool,
     CreateObjectRequestDraftTool,
+    CreateProductDraftTool,
     CreatePurchaseOrderDraftTool,
 )
 
@@ -204,6 +205,70 @@ class TestActionWriteTools(TransactionCase):
         self.assertIsInstance(
             default_registry.get('create_purchase_order_draft'),
             CreatePurchaseOrderDraftTool,
+        )
+
+    def test_create_product_draft_happy(self):
+        tool = CreateProductDraftTool()
+        product_name = 'Тройник 76х3,5-45х3-20 ГОСТ 17376-2001'
+
+        result = tool.execute(
+            self.env(user=self.supply_user),
+            {
+                'name': product_name,
+                'categ_id': self.pipe_category.id,
+                'uom_id': self.env.ref('uom.product_uom_unit').id,
+                'purchase_ok': True,
+                'sale_ok': False,
+            },
+        )
+
+        product = self.env['product.product'].browse(result['product_id'])
+        self.assertTrue(product.is_storable)
+        self.assertEqual(product.name, product_name)
+        self.assertEqual(product.categ_id, self.pipe_category)
+        self.assertTrue(product.purchase_ok)
+        self.assertFalse(product.sale_ok)
+        self.assertEqual(
+            result['url'], '/odoo/product.product/%s' % product.id
+        )
+        body = '\n'.join(product.product_tmpl_id.message_ids.mapped('body'))
+        self.assertIn('AI-ассистентом', body)
+
+    def test_create_product_draft_rejects_without_supply_group(self):
+        tool = CreateProductDraftTool()
+
+        with self.assertRaises(AccessError):
+            tool.execute(
+                self.env(user=self.no_ai_user),
+                {'name': 'Новый товар Write Tools'},
+            )
+
+    def test_create_product_draft_rejects_duplicate_name(self):
+        tool = CreateProductDraftTool()
+        args = {
+            'name': self.pipe_products[0].name,
+            'categ_id': self.pipe_category.id,
+        }
+
+        with self.assertRaises(ValidationError):
+            tool.execute(self.env(user=self.supply_user), args)
+
+    def test_create_product_draft_registered(self):
+        self.assertIsInstance(
+            default_registry.get('create_product_draft'),
+            CreateProductDraftTool,
+        )
+
+    def test_create_product_draft_idempotency_key_is_stable(self):
+        tool = CreateProductDraftTool()
+        args = {
+            'name': 'Тройник тест',
+            'categ_id': self.pipe_category.id,
+        }
+
+        self.assertEqual(
+            tool.idempotency_key(args),
+            tool.idempotency_key(dict(args)),
         )
 
     def test_create_internal_picking_draft_happy(self):

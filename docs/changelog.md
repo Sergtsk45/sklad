@@ -1,3 +1,24 @@
+## [2026-05-30] — feat(AIA-058): write-tool create_product_draft
+
+### Добавлено
+- `CreateProductDraftTool` — создание storable `product.product` после подтверждения (группа supply): `name`, `categ_id`, `uom_id`, `purchase_ok`, `sale_ok`; без запрещённых полей `state`/`company_id`/`currency_id`.
+- Проверка дубля по `name`+`categ_id`, `idempotency_key`, заметка в chatter шаблона товара.
+- Тесты в `test_write_tools.py`; `ResultCard` поддерживает `product.product`.
+
+---
+
+## [2026-05-30] — feat(AIA-055): порт парсера счетов в services/invoice_parsing/
+
+### Добавлено
+- `custom_addons/ai_assistant/services/invoice_parsing/` — новый пакет (5 файлов): `__init__.py`, `extractor.py`, `invoice_utils.py`, `normalizer.py`, `validators.py`.
+- `extractor.py`: text-first парсинг PDF через `pdfplumber` (bytes-интерфейс); поддержка НФ-504/УТ-1132 номеров; эвристика по строкам как fallback; валидация magic bytes.
+- `invoice_utils.py`: `extract_party_name` (до ИНН), `is_garbage_item` (фильтр мусора).
+- `normalizer.py`: нормализация числовых полей, дат, ИНН/КПП/БИК.
+- `validators.py`: арифметическая проверка qty×price=sum + сумма строк=итого.
+- `tests/test_invoice_parsing.py` — 20 unit-тестов с mock pdfplumber, фикстура НФ-504 (14 позиций, 72 096,22 ₽, поставщик ИП Татаринов).
+
+---
+
 ## [2026-05-30] — feat(AIA-054): pdfplumber как external dependency + Dockerfile для образа
 
 ### Добавлено
