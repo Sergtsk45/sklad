@@ -7,6 +7,7 @@ Odoo 19 ERP — локальная разработка и деплой на VPS
 ## Команды
 
 - **Запуск стека**: `docker compose -f docker-compose.local.yml up -d`
+- **Первый запуск / пересборка образа** (после изменения Dockerfile): `docker compose -f docker-compose.local.yml build --no-cache && docker compose -f docker-compose.local.yml up -d`
 - **Остановка**: `docker compose -f docker-compose.local.yml down`
 - **Рестарт Odoo**: `docker compose -f docker-compose.local.yml restart odoo`
 - **Логи Odoo**: `docker compose -f docker-compose.local.yml logs -f odoo`
@@ -16,6 +17,11 @@ Odoo 19 ERP — локальная разработка и деплой на VPS
 - **Тесты (конкретный класс)**: `docker exec odoo19-local odoo --test-enable --test-tags <tag> -d odoo19_local --stop-after-init`
 - **Lint**: `docker exec odoo19-local python -m flake8 /mnt/extra-addons`
 - **Установить зависимости**: `docker exec odoo19-local pip install -r /mnt/extra-addons/<module>/requirements.txt`
+- **Проверить pdfplumber**: `docker exec odoo19-local python -c "import pdfplumber; print(pdfplumber.__version__)"`
+
+> **⚠️ Примечание:** `pdfplumber` встроен в образ через `Dockerfile` (`pip install pdfplumber`).
+> При использовании `image: odoo:19.0` напрямую (без `build`) зависимость потеряется при пересоздании контейнера.
+> Всегда использовать `docker compose build` перед `up` после изменений в `Dockerfile`.
 
 ## Структура проекта
 

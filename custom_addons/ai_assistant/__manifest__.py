@@ -41,6 +41,7 @@
             'ai_assistant/static/src/js/ai_chat_boot.js',
         ],
     },
+    'external_dependencies': {'python': ['pdfplumber']},
     'installable': True,
     'application': False,
     'auto_install': False,

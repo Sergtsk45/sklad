@@ -1,3 +1,25 @@
+## [2026-05-30] — feat(AIA-054): pdfplumber как external dependency + Dockerfile для образа
+
+### Добавлено
+- `Dockerfile` поверх `odoo:19.0` — устанавливает `pdfplumber>=0.11` при сборке образа.
+- `custom_addons/ai_assistant/requirements.txt` — фиксирует зависимость `pdfplumber>=0.11`.
+- `CLAUDE.md`: команды пересборки образа (`docker compose build`) и проверки (`import pdfplumber`), предупреждение о потере зависимостей при работе без `build`.
+
+### Изменено
+- `custom_addons/ai_assistant/__manifest__.py` — добавлен `'external_dependencies': {'python': ['pdfplumber']}`.
+- `docker-compose.local.yml` — сервис `odoo` переключён с `image: odoo:19.0` на `build: .` (образ `odoo19-local-custom`).
+
+---
+
+## [2026-05-30] — docs: план приёмки товаров из счёта в чат-ассистенте (V3-10)
+### Добавлено
+- `docs/roadmap_ai_assistant_v3_invoice.md` — план внедрения сквозного сценария «счёт → склад» в чат-ассистент: загрузка файла, парсинг внутри Odoo, черновики через API, инструкции UI.
+- Задачи **AIA-054…060** (этап V3-10) в `docs/tasktracker_ai_assistant_v3.md` + строки в сводной таблице и инкремент 6.
+### Решения
+- D1: парсинг счетов внутри Odoo (порт логики `invoice-extractor`, без внешней сети). D2: авто-черновик товара `create_product_draft` с подтверждением. D3: склад приёмки всегда уточняется у пользователя.
+
+---
+
 ## [2026-05-24] — fix: кнопки «Попробуйте спросить» в чате AI
 ### Исправлено
 - Клик по suggested prompt падал с `Cannot read properties of undefined (reading 'state')`: в OWL-шаблоне вызов без `this.onSuggestedPrompt`.

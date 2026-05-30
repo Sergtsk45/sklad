@@ -937,6 +937,150 @@
 
 ---
 
+## Этап V3-10. Приёмка товаров из счёта (Invoice → Склад)
+
+> **Roadmap:** [`roadmap_ai_assistant_v3_invoice.md`](roadmap_ai_assistant_v3_invoice.md)
+> **Решения:** D1 — парсинг внутри Odoo; D2 — авто-черновик товара с подтверждением; D3 — склад приёмки всегда уточняется у пользователя.
+
+### Задача: AIA-054 — External dependency `pdfplumber` + установка в образ
+
+- **Статус**: Завершена ✅ (2026-05-30)
+- **Приоритет**: Критический
+- **Описание**: Дать Odoo-контейнеру возможность парсить PDF-счета без внешнего сервиса. Объявить `pdfplumber` как python external dependency модуля и обеспечить установку в образ.
+- **📁 Контекст**:
+  - `custom_addons/ai_assistant/__manifest__.py` — `external_dependencies`
+  - `docker-compose.local.yml`, `CLAUDE.md` — команды установки зависимостей
+- **Шаги выполнения**:
+  - [x] В `__manifest__.py` добавить `'external_dependencies': {'python': ['pdfplumber']}`
+  - [x] Способ установки: создан `Dockerfile` поверх `odoo:19.0` с `pip install pdfplumber>=0.11`; `docker-compose.local.yml` переключён на `build: .`; создан `custom_addons/ai_assistant/requirements.txt`
+  - [x] Зафиксировать установку в `CLAUDE.md` (раздел «Команды»/«Установить зависимости»)
+- **🚫 Запрещено**: тянуть тяжёлые vision-зависимости (PyMuPDF/Pillow) на этом этапе — vision-fallback в backlog.
+- **✅ DoD**: `docker exec odoo19-local python -c "import pdfplumber"` без ошибки; модуль ставится с объявленной зависимостью.
+- **⛓ Зависит от**: —
+
+---
+
+### Задача: AIA-055 — Порт парсера счетов в `services/invoice_parsing/`
+
+- **Статус**: Не начата
+- **Приоритет**: Критический
+- **Описание**: Перенести в Odoo логику извлечения из `extraction_specific_PDF/services/invoice-extractor` (text-first): таблица + эвристики, шапка (номер счёта с префиксом `НФ-504`/`УТ-1132`, поставщик/покупатель по `extract_party_name`), фильтр мусорных строк, нормализация и арифметическая валидация.
+- **📁 Контекст**:
+  - `~/projects/extraction_specific_PDF/services/invoice-extractor/backend/app/` — `extractor.py`, `invoice_utils.py`, `normalizer.py`, `validators.py` (источник, уже исправлен под НФ-504)
+  - `custom_addons/ai_assistant/services/` — куда переносим
+- **Шаги выполнения**:
+  - [ ] Создать пакет `services/invoice_parsing/` (`__init__.py`, `extractor.py`, `invoice_utils.py`, `normalizer.py`, `validators.py`)
+  - [ ] Перенести text-first парс (pdfplumber `extract_tables` + эвристика по строкам)
+  - [ ] Перенести фиксы НФ-504: regex номера с кириллическим префиксом, `extract_party_name` (до `, ИНН`), `is_garbage_item`
+  - [ ] Перенести `validate_invoice_data` (qty×price=sum, сумма строк=итого)
+  - [ ] (XLSX) опционально через openpyxl (есть в Odoo); иначе только PDF в v1
+  - [ ] Тесты `tests/test_invoice_parsing.py`: фикстура-текст НФ-504, 14 позиций, поставщик «ИП Татаринов…», 0 warning по арифметике
+- **🚫 Запрещено**: сетевые вызовы; vision-fallback (backlog — см. [`technical-debt.md` TD-005](technical-debt.md)).
+- **✅ DoD**: на фикстуре НФ-504 извлекается 14 позиций, верная шапка, сумма 72 096,22; мусорная строка отфильтрована.
+- **⛓ Зависит от**: AIA-054
+
+---
+
+### Задача: AIA-056 — Эндпоинт `/ai_assistant/upload_invoice` + кнопка-скрепка в виджете
+
+- **Статус**: Не начата
+- **Приоритет**: Критический
+- **Описание**: Дать пользователю прикрепить файл счёта в чат; backend валидирует, парсит (AIA-055) и возвращает сводку + токен извлечения для последующего сообщения.
+- **📁 Контекст**:
+  - `custom_addons/ai_assistant/controllers/chat_controller.py` — образец (`/ai_assistant/chat`, `_parse_screenshot`)
+  - `custom_addons/ai_assistant/static/src/js/ai_chat_service.js`, `ai_chat_actions.js`, `static/src/xml/ai_chat_widget.xml`
+- **Шаги выполнения**:
+  - [ ] Backend: `/ai_assistant/upload_invoice` (`type='http'`, multipart, `auth='user'`, проверка `group_ai_assistant_supply`)
+  - [ ] Валидация: расширение `pdf`/`xlsx`, лимит размера, magic bytes (`%PDF-`/zip)
+  - [ ] Вызов `services/invoice_parsing` → нормализованный dict; (опц.) сохранить `ir.attachment`
+  - [ ] Вернуть сводку (`supplier`, число позиций, сумма, warnings) + `extraction_token` (кэш в памяти/`ir.config_parameter`-free store по uid, как `pending_action`)
+  - [ ] Frontend: кнопка-скрепка в `ai_chat_widget.xml` + обработчик загрузки в `ai_chat_actions.js`
+  - [ ] Превью в чате: «счёт распознан: N позиций, сумма …»
+  - [ ] Тесты контроллера: happy-case, отказ для не-supply, отказ по типу/размеру
+- **🚫 Запрещено**: логировать содержимое файла; принимать write-операции без подтверждения.
+- **✅ DoD**: загрузка НФ-504 возвращает сводку 14 позиций; чужой тип/большой файл отклонён; не-supply получает отказ.
+- **⛓ Зависит от**: AIA-055
+
+---
+
+### Задача: AIA-057 — `InvoiceContextHelper` + инъекция данных счёта в промпт
+
+- **Статус**: Не начата
+- **Приоритет**: Критический
+- **Описание**: По образцу `NavigationHelper`/`WarehouseStockLinkHelper` сформировать system-блок с распознанными данными счёта и сопоставлением: поставщик (через `find_partner` по ИНН), кандидаты товаров (через `search_products` по каждой позиции), цены; правило — уточнять объект/склад (D3).
+- **📁 Контекст**:
+  - `custom_addons/ai_assistant/services/navigation_helper.py`, `warehouse_stock_link_helper.py` — образец `build_context_message`
+  - `custom_addons/ai_assistant/controllers/chat_controller.py::_get_tools_response`
+  - `custom_addons/ai_assistant/services/prompt_builder.py` — `_ACTIONS_RULES_BLOCK`
+- **Шаги выполнения**:
+  - [ ] `services/invoice_context_helper.py`: по `extraction_token` собрать структурный JSON (supplier match, item→product кандидаты, итоги)
+  - [ ] Подключить в `_get_tools_response` рядом с `nav_result`/`stock_result`
+  - [ ] Дополнить `_ACTIONS_RULES_BLOCK`: «при данных счёта — сопоставь позиции, **уточни объект/склад**, предложи план PO, отметь позиции без совпадения (кандидат на create_product_draft)»
+  - [ ] Тест: в actions-режиме после загрузки счёта LLM получает контекст-блок с `product_id`/`partner_id`
+- **🚫 Запрещено**: подставлять склад по умолчанию (D3); создавать записи без подтверждения.
+- **✅ DoD**: ассистент строит план PO с реальными id и спрашивает объект/склад перед записью.
+- **⛓ Зависит от**: AIA-055, AIA-056
+
+---
+
+### Задача: AIA-058 — Write-tool `create_product_draft`
+
+- **Статус**: Не начата
+- **Приоритет**: Высокий
+- **Описание**: Инструмент для создания недостающей номенклатуры (D2): `product.product` (storable, `categ_id`, `uom_id`, `purchase_ok`). Через стандартную карточку подтверждения, денилист-safe.
+- **📁 Контекст**:
+  - `custom_addons/ai_assistant/services/action_tools/write_tools.py` — образец write-tool + регистрация
+  - `custom_addons/ai_assistant/services/action_tools/executor.py` — денилист (`_FORBIDDEN_WRITE_FIELDS`)
+- **Шаги выполнения**:
+  - [ ] `CreateProductDraftTool` (name `create_product_draft`, группа `group_ai_assistant_supply`)
+  - [ ] Schema: `name` (required), `categ_id`, `uom_id`, `purchase_ok`, `sale_ok`; без `state`
+  - [ ] `idempotency_key` по `name`+`categ_id`; проверка дубля по имени перед созданием
+  - [ ] `message_post` «создано AI-ассистентом по запросу <user>»
+  - [ ] Регистрация в `registry`; тесты happy-case + отказ для не-supply + денилист
+- **🚫 Запрещено**: поля `state`/`company_id`/`currency_id`; создание без подтверждения.
+- **✅ DoD**: товар «Тройник 76х3,5-45х3-20 ГОСТ 17376-2001» создаётся как storable-черновик после подтверждения.
+- **⛓ Зависит от**: AIA-031, AIA-032
+
+---
+
+### Задача: AIA-059 — Обогащение `ResultCard` инструкциями UI
+
+- **Статус**: Не начата
+- **Приоритет**: Средний
+- **Описание**: После создания PO-черновика выдавать пошаговую инструкцию для завершения в UI (требование 4): Confirm PO → открыть Приход → Проверить/Провести (Validate); напоминание про оплату в 1С.
+- **📁 Контекст**:
+  - `custom_addons/ai_assistant/controllers/chat_controller.py` — `_result_card_success`, `next_hint`
+  - `docs/instruction-warehouse-supply-cycle.md` — §6 шаги Confirm/Validate
+- **Шаги выполнения**:
+  - [ ] Для `create_purchase_order_draft` — расширенный `next_hint`/`steps`: «Откройте черновик → **Подтвердить** → откройте **Приход** → **Проверить/Провести**»
+  - [ ] Путь меню + напоминание про оплату/счёт в 1С
+  - [ ] (Опц.) рендер шагов в OWL ResultCard
+  - [ ] Тест: карточка PO содержит шаги Confirm + Validate
+- **🚫 Запрещено**: обещать автоматический Confirm/Validate.
+- **✅ DoD**: после создания PO пользователь видит конкретные шаги завершения в UI.
+- **⛓ Зависит от**: AIA-057, AIA-058
+
+---
+
+### Задача: AIA-060 — E2E-тест «НФ-504 → PO draft»
+
+- **Статус**: Не начата
+- **Приоритет**: Высокий
+- **Описание**: Сквозной тест по образцу `test_e2e_supply_cycle.py`: фикстура распознанного счёта → маппинг → `create_product_draft` (1 позиция) → `create_purchase_order_draft` (14 строк) → проверка `state=draft`, сумма 72 096,22.
+- **📁 Контекст**:
+  - `custom_addons/ai_assistant/tests/test_e2e_supply_cycle.py` — образец
+  - `services/invoice_parsing/` (AIA-055), `create_product_draft` (AIA-058)
+- **Шаги выполнения**:
+  - [ ] Фикстура НФ-504 (нормализованный dict, без реального файла/HTTP)
+  - [ ] Прогон: парс → сопоставление → создание товара → PO draft
+  - [ ] Ассерты: `state='draft'`, 14 строк, сумма 72 096,22, заметка в chatter
+  - [ ] Обновить `changelog.md`, статус задач в трекере; при изменении архитектуры — `project.md`
+- **🚫 Запрещено**: реальные сетевые/файловые операции в тесте.
+- **✅ DoD**: e2e зелёный; документация обновлена.
+- **⛓ Зависит от**: AIA-055, AIA-056, AIA-057, AIA-058
+
+---
+
 ## 13. Сводная таблица задач
 
 | ID | Название | Этап | Приоритет | Статус | Context7 | Зависит от |
@@ -966,6 +1110,13 @@
 | AIA-050 | pilot_results_v3 + docs | V3-8 | Средний | ✅ | — | AIA-049 |
 | AIA-051 | find_warehouse: поиск по name | V3-9 | Высокий | ✅ | — | AIA-034 |
 | AIA-053 | get_navigation_link (consult-ссылки) | V3-9 | Высокий | ✅ | 🔧 | AIA-030, AIA-031, AIA-033, AIA-034 |
+| AIA-054 | pdfplumber external dependency | V3-10 | Критический | ✅ | 2026-05-30 | — |
+| AIA-055 | порт парсера счетов в services/invoice_parsing | V3-10 | Критический | ⏳ | — | AIA-054 |
+| AIA-056 | /upload_invoice + кнопка-скрепка | V3-10 | Критический | ⏳ | — | AIA-055 |
+| AIA-057 | InvoiceContextHelper + инъекция в промпт | V3-10 | Критический | ⏳ | — | AIA-055, AIA-056 |
+| AIA-058 | create_product_draft (write-tool) | V3-10 | Высокий | ⏳ | — | AIA-031, AIA-032 |
+| AIA-059 | ResultCard инструкции UI (Confirm→Validate) | V3-10 | Средний | ⏳ | — | AIA-057, AIA-058 |
+| AIA-060 | E2E НФ-504 → PO draft | V3-10 | Высокий | ⏳ | — | AIA-055..058 |
 
 ---
 
@@ -990,6 +1141,10 @@ AIA-051 →
 **Инкремент 5 — «рабочие ссылки в consult» (post-v3):**
 AIA-053.1 → AIA-053.2 → AIA-053.3 → (опц.) AIA-053.UI →
 демо: «как посмотреть заказы поставщикам?» — ассистент даёт объяснение + кликабельную markdown-ссылку, которую открывает в один клик; параллельно AIA-052 (`get_warehouse_stock_link`) для остатков по складу.
+
+**Инкремент 6 — «приёмка из счёта» (V3-10):**
+AIA-054 → AIA-055 → AIA-058 → AIA-056 → AIA-057 → AIA-059 → AIA-060 →
+демо: пользователь прикрепляет счёт НФ-504 в чат → ассистент распознаёт 14 позиций, спрашивает объект/склад, создаёт черновик товара и PO после подтверждения, выдаёт шаги Confirm → Validate для UI.
 
 ---
 
