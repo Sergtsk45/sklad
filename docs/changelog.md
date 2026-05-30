@@ -1,3 +1,15 @@
+## [2026-05-31] — chore: prod Docker Compose и Dockerfile для VPS
+
+### Добавлено
+- `docker-compose.yml` — production-стек Odoo + Postgres (сеть `n8n_web` для reverse proxy на VPS).
+- `docker-compose.override.yml` — сборка кастомного образа `project-odoo-odoo:latest` с pdfplumber.
+
+### Изменено
+- `Dockerfile`: `pip install --break-system-packages` для Odoo 19 (Debian Bookworm).
+- `.gitignore`: исключены `backups/` и `Dockerfile.bak.*`.
+
+---
+
 ## [2026-05-31] — fix(ai_assistant): дефолтная категория товара для Odoo 19
 
 ### Исправлено

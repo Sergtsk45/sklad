@@ -38,3 +38,6 @@ __pycache__/
 !.claude/commands/
 !.claude/settings.json
 
+# Odoo backups (создаются скриптом, хранить не в git)
+backups/
+Dockerfile.bak.*
