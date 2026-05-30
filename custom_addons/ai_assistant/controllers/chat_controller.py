@@ -694,6 +694,7 @@ class AiAssistantController(http.Controller):
 
     def _result_card_success(self, tool_name, result):
         model, record_id = self._result_record(tool_name, result)
+        steps = self._next_steps(tool_name)
         return {
             'type': 'result',
             'status': 'success',
@@ -703,8 +704,34 @@ class AiAssistantController(http.Controller):
                 'name': result.get('name') or '',
                 'url': result.get('url') or '',
             },
-            'next_hint': 'Откройте черновик и проверьте данные.',
+            'next_hint': steps[0] if steps else 'Откройте черновик.',
+            'steps': steps,
         }
+
+    def _next_steps(self, tool_name):
+        if tool_name == 'create_purchase_order_draft':
+            return [
+                'Откройте черновик и проверьте строки и склад.',
+                'Нажмите «Подтвердить» (Confirm) — PO перейдёт в статус «В процессе».',
+                'Откройте вкладку «Приход» (Receipt) — появится входящее поступление.',
+                'В поступлении: «Проверить наличие» → «Провести» (Validate).',
+                '⚠ Оплата счёта — в 1С, не в Odoo.',
+            ]
+        if tool_name == 'create_internal_picking_draft':
+            return [
+                'Откройте черновик перемещения и проверьте строки.',
+                '«Проверить наличие» → «Провести» (Validate).',
+            ]
+        if tool_name == 'create_object_request_draft':
+            return [
+                'Откройте черновик требования и проверьте позиции.',
+                'Переведите в статус «В работе» для снабженца.',
+            ]
+        if tool_name == 'create_product_draft':
+            return [
+                'Откройте карточку товара и дозаполните поля (цена, категория).',
+            ]
+        return ['Откройте черновик и проверьте данные.']
 
     def _result_card_error(self, error):
         return {

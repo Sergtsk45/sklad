@@ -88,6 +88,7 @@
                                             record="card.record"
                                             error="card.error"
                                             nextHint="card.next_hint"
+                                            steps="card.steps"
                                         />
                                     </t>
                                 </t>
@@ -232,9 +233,18 @@
             <div t-if="!isSuccess" class="o_ai_result_error_message">
                 <t t-esc="errorMessage"/>
             </div>
-            <div t-if="props.nextHint" class="o_ai_result_hint">
-                <t t-esc="props.nextHint"/>
-            </div>
+            <t t-if="isSuccess and props.steps and props.steps.length">
+                <ol class="o_ai_result_steps">
+                    <t t-foreach="props.steps" t-as="step" t-key="step_index">
+                        <li t-esc="step"/>
+                    </t>
+                </ol>
+            </t>
+            <t t-elif="props.nextHint">
+                <div class="o_ai_result_hint">
+                    <t t-esc="props.nextHint"/>
+                </div>
+            </t>
         </div>
     </t>
 </templates>

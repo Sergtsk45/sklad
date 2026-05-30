@@ -1,3 +1,18 @@
+## [2026-05-30] — feat(AIA-059): ResultCard — инструкции Confirm→Validate после создания PO
+
+### Добавлено
+- `_next_steps(tool_name)` в `chat_controller.py` — пошаговые инструкции для каждого write-tool: PO (5 шагов: Confirm → Receipt → Validate → напоминание 1С), internal picking, OR, product draft.
+- Поле `steps` в `ResultCard` (backend JSON, OWL props, XML-рендер нумерованным списком, SCSS `.o_ai_result_steps`).
+- Тест `test_result_card_po_has_confirm_validate_steps` в `test_chat_controller.py`.
+
+### Изменено
+- `controllers/chat_controller.py`: `_result_card_success` возвращает `steps` + `next_hint = steps[0]`.
+- `static/src/js/ai_chat_actions.js`: `ResultCard.props` — добавлен `steps: Array (optional)`.
+- `static/src/xml/ai_chat_widget.xml`: рендер `steps` как `<ol>` при наличии, иначе `next_hint`.
+- `static/src/scss/ai_chat_widget.scss`: стили `.o_ai_result_steps`.
+
+---
+
 ## [2026-05-30] — feat(AIA-057): InvoiceContextHelper + инъекция данных счёта в промпт
 
 ### Добавлено

@@ -529,6 +529,91 @@ class TestChatController(HttpCase):
         self.assertIn('"partner_id": %d' % supplier.id, system_contents)
         self.assertIn('"product_id": %d' % product.id, system_contents)
 
+    def test_result_card_po_has_confirm_validate_steps(self):
+        """AIA-059: ResultCard для PO содержит шаги Confirm и Validate."""
+        supplier = self.env['res.partner'].create({
+            'name': 'ООО Шаги PO Test',
+            'supplier_rank': 1,
+        })
+        warehouse = self.env['stock.warehouse'].search(
+            [('code', '=', 'ОбМ-4')], limit=1,
+        )
+        if not warehouse:
+            warehouse = self.env['stock.warehouse'].create({
+                'name': 'ОбМ-4 steps test',
+                'code': 'ОбМ-4',
+            })
+        product = self.env['product.product'].create({
+            'name': 'Труба steps test',
+            'is_storable': True,
+            'purchase_ok': True,
+        })
+        response = {
+            'type': 'tool_calls',
+            'content': '',
+            'tool_calls': [{
+                'id': 'call_po',
+                'name': 'create_purchase_order_draft',
+                'arguments': {
+                    'partner_id': supplier.id,
+                    'picking_type_id': warehouse.in_type_id.id,
+                    'origin': 'OR/TEST',
+                    'partner_ref': 'НФ-504',
+                    'lines': [{
+                        'product_id': product.id,
+                        'product_qty': 5.0,
+                        'price_unit': 100.0,
+                    }],
+                },
+            }],
+            'model_used': 'test-model',
+        }
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'AiAssistantController._resolve_mode',
+            return_value='actions',
+        ), patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat_with_tools',
+            return_value=response,
+        ):
+            result = self._post_chat({'message': 'Создай PO'})
+
+        cards = result.get('result', {}).get('cards', [])
+        self.assertTrue(cards, 'Ожидали карточку подтверждения PO')
+        pending_key = cards[0]['pending_key']
+
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'ToolExecutor.execute',
+            return_value={
+                'success': True,
+                'result': {
+                    'po_id': 99,
+                    'name': 'PO/2026/TEST',
+                    'url': '/odoo/purchase.order/99',
+                },
+            },
+        ):
+            confirm_result = self._post_confirm({
+                'pending_key': pending_key,
+                'decision': 'confirm',
+            })
+
+        data = confirm_result.get('result', {})
+        result_cards = data.get('cards', [])
+        self.assertTrue(result_cards, 'Ожидали ResultCard после подтверждения')
+        card = result_cards[0]
+        self.assertEqual(card['type'], 'result')
+        self.assertEqual(card['status'], 'success')
+
+        steps = card.get('steps', [])
+        self.assertTrue(steps, 'steps должны быть непустым списком')
+        steps_text = '\n'.join(steps)
+        self.assertIn('Подтвердить', steps_text)
+        self.assertIn('Провести', steps_text)
+        self.assertIn('1С', steps_text)
+
     def _post_confirm(self, payload):
         body = json.dumps(
             {'jsonrpc': '2.0', 'method': 'call', 'params': payload}

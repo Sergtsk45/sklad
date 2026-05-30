@@ -27,6 +27,7 @@ export class ResultCard extends Component {
         record: { type: Object, optional: true },
         error: { type: Object, optional: true },
         nextHint: { type: String, optional: true },
+        steps: { type: Array, optional: true },
     };
 
     get isSuccess() {

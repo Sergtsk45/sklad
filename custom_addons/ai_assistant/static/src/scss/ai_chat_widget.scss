@@ -378,6 +378,22 @@
     margin-top: 8px;
 }
 
+.o_ai_result_steps {
+    margin: 8px 0 0 0;
+    padding-left: 18px;
+    font-size: 12px;
+    color: #444;
+
+    li {
+        margin-bottom: 4px;
+        line-height: 1.4;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
+}
+
 // ─── Typing indicator ────────────────────────────────────────────────────────
 
 .o_ai_typing {
