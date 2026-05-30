@@ -1,3 +1,15 @@
+## [2026-05-31] — feat(ai_assistant): PO на любой склад (не только ОбМ-*)
+
+### Изменено
+- `create_purchase_order_draft`: вместо `validate_picking_type_is_object` — `validate_picking_type_for_purchase` (любой склад с incoming picking type).
+- Промпт, `invoice_context_helper`, `supply_cycle_context.md`: уточнение склада через `find_warehouse` по коду/названию (`Ос.ск`, «Основной склад» и т.д.).
+- Внутренние перемещения по-прежнему только на склады объектов `ОбМ-*`.
+
+### Добавлено
+- Тесты `validate_picking_type_for_purchase_*`, `test_create_purchase_order_accepts_non_object_picking_type`.
+
+---
+
 ## [2026-05-31] — chore: prod Docker Compose и Dockerfile для VPS
 
 ### Добавлено

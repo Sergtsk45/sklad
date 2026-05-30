@@ -7,7 +7,7 @@ from .base import AbstractWriteTool
 from .registry import default_registry
 from .validators import (
     validate_partner_is_supplier,
-    validate_picking_type_is_object,
+    validate_picking_type_for_purchase,
     validate_product_is_storable,
     validate_uom_is_meter,
 )
@@ -137,7 +137,7 @@ default_registry.register(
 
 class CreatePurchaseOrderDraftTool(AbstractWriteTool):
     name = 'create_purchase_order_draft'
-    description = 'Создать черновик заказа поставщику на склад объекта.'
+    description = 'Создать черновик заказа поставщику на указанный склад.'
     required_groups = ['ai_assistant.group_ai_assistant_supply']
     parameters_schema = {
         'type': 'object',
@@ -256,7 +256,7 @@ class CreatePurchaseOrderDraftTool(AbstractWriteTool):
 
     def _validate_header(self, env, args):
         validate_partner_is_supplier(env, args['partner_id'])
-        validate_picking_type_is_object(env, args['picking_type_id'])
+        validate_picking_type_for_purchase(env, args['picking_type_id'])
         picking_type = env['stock.picking.type'].browse(
             args['picking_type_id']
         )

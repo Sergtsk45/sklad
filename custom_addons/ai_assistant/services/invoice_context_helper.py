@@ -164,7 +164,8 @@ class InvoiceContextHelper:
         return (
             '%s\n%s\n'
             'Правила: не подставляй склад/объект по умолчанию (D3) — '
-            'уточни у пользователя код склада объекта (ОбМ-N) перед PO; '
+            'уточни у пользователя склад приёмки (код или название, '
+            'find_warehouse) перед PO; '
             'позиции с needs_create_product_draft=true — кандидаты на '
             'create_product_draft.'
         ) % (self._CONTEXT_HEADER, payload)

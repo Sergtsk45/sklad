@@ -99,7 +99,7 @@ class TestInvoiceContextHelper(TransactionCase):
         self.assertIn('"partner_id": %d' % self.supplier.id, message)
         self.assertIn('"product_id": %d' % self.product.id, message)
         self.assertIn('needs_create_product_draft', message)
-        self.assertIn('ОбМ-N', message)
+        self.assertIn('find_warehouse', message)
 
     def test_fetch_context_returns_none_for_unknown_token(self):
         self.assertIsNone(

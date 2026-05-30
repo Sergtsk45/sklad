@@ -4,6 +4,7 @@ from odoo.tests import tagged
 
 from odoo.addons.ai_assistant.services.action_tools.validators import (
     validate_partner_is_supplier,
+    validate_picking_type_for_purchase,
     validate_picking_type_is_object,
     validate_product_is_storable,
     validate_state_in,
@@ -55,6 +56,16 @@ class TestActionToolValidators(TransactionCase):
             'name': 'Не поставщик validator',
             'supplier_rank': 0,
         })
+
+    def test_validate_picking_type_for_purchase_happy_object(self):
+        validate_picking_type_for_purchase(
+            self.env, self.object_warehouse.in_type_id.id
+        )
+
+    def test_validate_picking_type_for_purchase_happy_default(self):
+        validate_picking_type_for_purchase(
+            self.env, self.default_warehouse.in_type_id.id
+        )
 
     def test_validate_picking_type_is_object_happy(self):
         validate_picking_type_is_object(

@@ -169,13 +169,15 @@ class TestActionWriteTools(TransactionCase):
         self.assertEqual(sum(po.order_line.mapped('product_qty')), 1098)
         self.assertEqual(result['warnings'], [])
 
-    def test_create_purchase_order_rejects_non_object_picking_type(self):
+    def test_create_purchase_order_accepts_non_object_picking_type(self):
         tool = CreatePurchaseOrderDraftTool()
         args = self._purchase_args()
         args['picking_type_id'] = self.default_warehouse.in_type_id.id
 
-        with self.assertRaises(ValidationError):
-            tool.execute(self.env(user=self.supply_user), args)
+        result = tool.execute(self.env(user=self.supply_user), args)
+
+        po = self.env['purchase.order'].browse(result['po_id'])
+        self.assertEqual(po.picking_type_id, self.default_warehouse.in_type_id)
 
     def test_create_purchase_order_rejects_non_storable_product(self):
         tool = CreatePurchaseOrderDraftTool()

@@ -5,6 +5,15 @@ OBJECT_WAREHOUSE_PREFIX = 'ОбМ-'
 METER_UOM_NAMES = {'m', 'meter', 'meters', 'метр', 'метры', 'м'}
 
 
+def validate_picking_type_for_purchase(env, picking_type_id):
+    """Проверить incoming picking type для черновика закупки (любой склад)."""
+    picking_type = env['stock.picking.type'].browse(picking_type_id)
+    if not picking_type.exists():
+        raise ValidationError('Тип операции склада не найден.')
+    if not picking_type.warehouse_id:
+        raise ValidationError('У типа операции не указан склад.')
+
+
 def validate_picking_type_is_object(env, picking_type_id):
     picking_type = env['stock.picking.type'].browse(picking_type_id)
     if not picking_type.exists():
