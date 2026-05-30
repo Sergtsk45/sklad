@@ -234,6 +234,24 @@ class TestActionWriteTools(TransactionCase):
         body = '\n'.join(product.product_tmpl_id.message_ids.mapped('body'))
         self.assertIn('AI-ассистентом', body)
 
+    def test_create_product_draft_uses_default_category_when_omitted(self):
+        tool = CreateProductDraftTool()
+        product_name = 'ЗРК 25ч945п-25-4,0-1,6-150-УХЛ4 default categ'
+
+        result = tool.execute(
+            self.env(user=self.supply_user),
+            {
+                'name': product_name,
+                'purchase_ok': True,
+            },
+        )
+
+        product = self.env['product.product'].browse(result['product_id'])
+        default_categ = self.env.ref('product.product_category_goods')
+        self.assertEqual(product.categ_id, default_categ)
+        self.assertEqual(product.uom_id, self.env.ref('uom.product_uom_unit'))
+        self.assertTrue(product.purchase_ok)
+
     def test_create_product_draft_rejects_without_supply_group(self):
         tool = CreateProductDraftTool()
 

@@ -1,3 +1,17 @@
+## [2026-05-31] — fix(ai_assistant): дефолтная категория товара для Odoo 19
+
+### Исправлено
+- `CreateProductDraftTool._default_category_id`: заменён устаревший XML ID `product.product_category_all` (Odoo ≤16) на `product.product_category_goods` с fallback через `search`.
+- `object_request/data/demo_data.xml`: родитель категории «Строительные материалы» — `product.product_category_goods`.
+
+### Добавлено
+- Тест `test_create_product_draft_uses_default_category_when_omitted` — проверка создания товара без явного `categ_id`.
+
+### Изменено
+- `group_ai_assistant_supply`: добавлено право `product.group_product_manager` для `create_product_draft`.
+
+---
+
 ## [2026-05-30] — feat(AIA-060): E2E «НФ-504 → PO draft»
 
 ### Добавлено

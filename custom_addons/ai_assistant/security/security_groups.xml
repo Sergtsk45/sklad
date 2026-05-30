@@ -24,7 +24,8 @@
         <field name="implied_ids" eval="[
             (4, ref('group_ai_assistant_user')),
             (4, ref('purchase.group_purchase_user')),
-            (4, ref('stock.group_stock_user'))
+            (4, ref('stock.group_stock_user')),
+            (4, ref('product.group_product_manager'))
         ]"/>
         <field name="comment">
             Пользователь может подтверждать ограниченные actions AI-ассистента

@@ -353,7 +353,16 @@ class CreateProductDraftTool(AbstractWriteTool):
         return hashlib.sha256(raw_payload.encode('utf-8')).hexdigest()
 
     def _default_category_id(self, env):
-        return env.ref('product.product_category_all').id
+        category = env.ref(
+            'product.product_category_goods',
+            raise_if_not_found=False,
+        )
+        if category:
+            return category.id
+        category = env['product.category'].search([], limit=1)
+        if not category:
+            raise ValidationError('Категория товаров по умолчанию не найдена.')
+        return category.id
 
     def _default_uom_id(self, env):
         return env.ref('uom.product_uom_unit').id
