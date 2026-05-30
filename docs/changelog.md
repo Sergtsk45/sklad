@@ -1,3 +1,10 @@
+## [2026-05-30] — feat(AIA-060): E2E «НФ-504 → PO draft»
+
+### Добавлено
+- `tests/test_e2e_nf504_invoice_to_po.py` — сквозной тест: фикстура нормализованного счёта НФ-504 (14 позиций, поставщик ИП Татаринов, 72 096,22 ₽) → `InvoiceContextHelper` (partner matched, 1 not_found) → `create_product_draft` → `create_purchase_order_draft` (14 строк) → state=draft, chatter.
+
+---
+
 ## [2026-05-30] — feat(AIA-059): ResultCard — инструкции Confirm→Validate после создания PO
 
 ### Добавлено

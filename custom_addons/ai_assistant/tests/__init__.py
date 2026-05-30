@@ -20,3 +20,4 @@ from . import test_e2e_supply_cycle  # noqa: F401
 from . import test_invoice_parsing  # noqa: F401
 from . import test_upload_invoice  # noqa: F401
 from . import test_invoice_context_helper  # noqa: F401
+from . import test_e2e_nf504_invoice_to_po  # noqa: F401
