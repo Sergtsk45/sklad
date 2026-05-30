@@ -1,3 +1,16 @@
+## [2026-05-30] — feat(AIA-057): InvoiceContextHelper + инъекция данных счёта в промпт
+
+### Добавлено
+- `services/invoice_context_helper.py` — сопоставление счёта с `find_partner` (ИНН) и `search_products` (позиции), system-блок `INVOICE_CONTEXT`.
+- Тесты `tests/test_invoice_context_helper.py` и интеграционный тест инъекции в `test_chat_controller.py`.
+
+### Изменено
+- `controllers/chat_controller.py`: параметр `extraction_token` в `/ai_assistant/chat`, инъекция контекста в `_get_tools_response` (actions-режим).
+- `services/prompt_builder.py`: правило §7 в `_ACTIONS_RULES_BLOCK` — сопоставление позиций, уточнение объекта/склад (D3), план PO, `create_product_draft`.
+- `static/src/js/ai_chat_boot.js`: хранение и передача `extraction_token` после загрузки счёта.
+
+---
+
 ## [2026-05-30] — feat(AIA-058): write-tool create_product_draft
 
 ### Добавлено

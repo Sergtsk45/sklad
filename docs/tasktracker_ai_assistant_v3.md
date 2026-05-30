@@ -1005,7 +1005,7 @@
 
 ### Задача: AIA-057 — `InvoiceContextHelper` + инъекция данных счёта в промпт
 
-- **Статус**: Не начата
+- **Статус**: Завершена ✅ (2026-05-30)
 - **Приоритет**: Критический
 - **Описание**: По образцу `NavigationHelper`/`WarehouseStockLinkHelper` сформировать system-блок с распознанными данными счёта и сопоставлением: поставщик (через `find_partner` по ИНН), кандидаты товаров (через `search_products` по каждой позиции), цены; правило — уточнять объект/склад (D3).
 - **📁 Контекст**:
@@ -1013,10 +1013,10 @@
   - `custom_addons/ai_assistant/controllers/chat_controller.py::_get_tools_response`
   - `custom_addons/ai_assistant/services/prompt_builder.py` — `_ACTIONS_RULES_BLOCK`
 - **Шаги выполнения**:
-  - [ ] `services/invoice_context_helper.py`: по `extraction_token` собрать структурный JSON (supplier match, item→product кандидаты, итоги)
-  - [ ] Подключить в `_get_tools_response` рядом с `nav_result`/`stock_result`
-  - [ ] Дополнить `_ACTIONS_RULES_BLOCK`: «при данных счёта — сопоставь позиции, **уточни объект/склад**, предложи план PO, отметь позиции без совпадения (кандидат на create_product_draft)»
-  - [ ] Тест: в actions-режиме после загрузки счёта LLM получает контекст-блок с `product_id`/`partner_id`
+  - [x] `services/invoice_context_helper.py`: по `extraction_token` собрать структурный JSON (supplier match, item→product кандидаты, итоги)
+  - [x] Подключить в `_get_tools_response` рядом с `nav_result`/`stock_result`
+  - [x] Дополнить `_ACTIONS_RULES_BLOCK`: «при данных счёта — сопоставь позиции, **уточни объект/склад**, предложи план PO, отметь позиции без совпадения (кандидат на create_product_draft)»
+  - [x] Тест: в actions-режиме после загрузки счёта LLM получает контекст-блок с `product_id`/`partner_id`
 - **🚫 Запрещено**: подставлять склад по умолчанию (D3); создавать записи без подтверждения.
 - **✅ DoD**: ассистент строит план PO с реальными id и спрашивает объект/склад перед записью.
 - **⛓ Зависит от**: AIA-055, AIA-056
@@ -1113,7 +1113,7 @@
 | AIA-054 | pdfplumber external dependency | V3-10 | Критический | ✅ | 2026-05-30 | — |
 | AIA-055 | порт парсера счетов в services/invoice_parsing | V3-10 | Критический | ✅ | 2026-05-30 | AIA-054 |
 | AIA-056 | /upload_invoice + кнопка-скрепка | V3-10 | Критический | ✅ | 2026-05-30 | AIA-055 |
-| AIA-057 | InvoiceContextHelper + инъекция в промпт | V3-10 | Критический | ⏳ | — | AIA-055, AIA-056 |
+| AIA-057 | InvoiceContextHelper + инъекция в промпт | V3-10 | Критический | ✅ | 2026-05-30 | AIA-055, AIA-056 |
 | AIA-058 | create_product_draft (write-tool) | V3-10 | Высокий | ✅ | 2026-05-30 | AIA-031, AIA-032 |
 | AIA-059 | ResultCard инструкции UI (Confirm→Validate) | V3-10 | Средний | ⏳ | — | AIA-057, AIA-058 |
 | AIA-060 | E2E НФ-504 → PO draft | V3-10 | Высокий | ⏳ | — | AIA-055..058 |

@@ -31,6 +31,7 @@ export class AiChatWidget extends Component {
             isLoading: false,
             isCapturing: false,   // идёт захват скриншота
             isUploading: false,   // AIA-056: идёт загрузка счёта
+            extractionToken: null, // AIA-057: токен распознанного счёта
             status: "online",
             hasAccess: false,
             hasSupply: false,     // AIA-056: группа снабжение
@@ -156,6 +157,7 @@ export class AiChatWidget extends Component {
         try {
             const result = await this.chatService.uploadInvoice(file);
             if (result && result.success) {
+                this.state.extractionToken = result.extraction_token || null;
                 this._addMessage("assistant", result.summary || "Счёт распознан.");
             } else {
                 const errMsg = (result && result.error) || "Не удалось распознать счёт.";
@@ -176,6 +178,7 @@ export class AiChatWidget extends Component {
         this.state.inputText = "";
         this.state.isLoading = false;
         this.state.isCapturing = false;
+        this.state.extractionToken = null;
     }
 
     _doSend() {
@@ -277,6 +280,10 @@ export class AiChatWidget extends Component {
             context,
             history: this._buildHistory(),
         };
+
+        if (this.state.extractionToken) {
+            params.extraction_token = this.state.extractionToken;
+        }
 
         // Добавить скриншот в payload только если захват удался
         if (screenshot) {

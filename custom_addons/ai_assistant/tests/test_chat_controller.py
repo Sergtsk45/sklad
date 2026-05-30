@@ -458,6 +458,77 @@ class TestChatController(HttpCase):
             for link in data.get('links', [])
         ))
 
+    def test_actions_mode_injects_invoice_context(self):
+        from odoo.addons.ai_assistant.controllers import chat_controller
+
+        supplier = self.env['res.partner'].create({
+            'name': 'ИП Татаринов chat test',
+            'vat': '280110406399',
+            'supplier_rank': 1,
+        })
+        product = self.env['product.product'].create({
+            'name': 'Труба chat invoice context',
+            'is_storable': True,
+            'purchase_ok': True,
+        })
+        invoice_data = {
+            'invoice_number': 'НФ-CTX-1',
+            'invoice_date': '2026-05-20',
+            'supplier': {
+                'name': supplier.name,
+                'inn': supplier.vat,
+            },
+            'items': [{
+                'line_no': 1,
+                'name': product.name,
+                'unit': 'м',
+                'qty': 3.0,
+                'price': 100.0,
+                'amount_w_vat': 360.0,
+                'article': '',
+            }],
+            'totals': {'total_w_vat': 360.0},
+        }
+        token = chat_controller._invoice_store.put(
+            self.env.ref('base.user_admin').id,
+            invoice_data,
+        )
+        captured_messages = []
+
+        def _capture_send(messages, tools, model_override=None):
+            captured_messages.extend(messages)
+            return {
+                'type': 'message',
+                'content': 'План PO готов.',
+                'tool_calls': [],
+                'model_used': 'test-model',
+            }
+
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'AiAssistantController._resolve_mode',
+            return_value='actions',
+        ), patch(
+            'odoo.addons.ai_assistant.services.openrouter_client.'
+            'OpenRouterClient.send_chat_with_tools',
+            side_effect=_capture_send,
+        ):
+            result = self._post_chat({
+                'message': 'Создай PO по загруженному счёту',
+                'extraction_token': token,
+            })
+
+        data = result.get('result', {})
+        self.assertEqual(data.get('answer'), 'План PO готов.')
+        system_contents = '\n'.join(
+            msg.get('content', '')
+            for msg in captured_messages
+            if msg.get('role') == 'system'
+        )
+        self.assertIn('INVOICE_CONTEXT', system_contents)
+        self.assertIn('"partner_id": %d' % supplier.id, system_contents)
+        self.assertIn('"product_id": %d' % product.id, system_contents)
+
     def _post_confirm(self, payload):
         body = json.dumps(
             {'jsonrpc': '2.0', 'method': 'call', 'params': payload}

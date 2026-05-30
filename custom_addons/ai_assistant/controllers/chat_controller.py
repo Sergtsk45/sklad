@@ -36,6 +36,9 @@ from odoo.addons.ai_assistant.services.warehouse_stock_link_helper import (
 from odoo.addons.ai_assistant.services.invoice_extraction_store import (
     InvoiceExtractionStore,
 )
+from odoo.addons.ai_assistant.services.invoice_context_helper import (
+    InvoiceContextHelper,
+)
 from odoo.addons.ai_assistant.services.invoice_parsing import (
     extract_invoice,
     validate_invoice_data,
@@ -196,7 +199,7 @@ class AiAssistantController(http.Controller):
     @http.route('/ai_assistant/chat', type='jsonrpc', auth='user',
                 methods=['POST'])
     def chat(self, message=None, context=None, history=None,
-             screenshot=None, **kwargs):
+             screenshot=None, extraction_token=None, **kwargs):
         try:
             if not request.env.user.has_group(_GROUP_USER):
                 return {'error': 'Доступ запрещён'}
@@ -252,6 +255,7 @@ class AiAssistantController(http.Controller):
                 image_data=image_data,
                 model_override=model_override,
                 params=params,
+                extraction_token=extraction_token,
             )
 
             if 'answer' in result:
@@ -314,7 +318,7 @@ class AiAssistantController(http.Controller):
 
     def _get_ai_response(self, message, history, context=None,
                          override=None, image_data=None, model_override=None,
-                         params=None):
+                         params=None, extraction_token=None):
         try:
             mode = self._resolve_mode(params)
             messages = self._build_messages(
@@ -327,8 +331,16 @@ class AiAssistantController(http.Controller):
                 vision_model = model_override if image_data else None
                 nav_helper = NavigationHelper(request.env)
                 stock_helper = WarehouseStockLinkHelper(request.env)
+                invoice_helper = InvoiceContextHelper(
+                    request.env,
+                    _invoice_store,
+                )
                 nav_result = nav_helper.fetch_link(message)
                 stock_result = stock_helper.fetch_link(message, history)
+                invoice_context = invoice_helper.fetch_context(
+                    request.env.uid,
+                    extraction_token,
+                )
                 return self._get_tools_response(
                     client,
                     messages,
@@ -339,6 +351,8 @@ class AiAssistantController(http.Controller):
                     nav_result=nav_result,
                     stock_helper=stock_helper,
                     stock_result=stock_result,
+                    invoice_helper=invoice_helper,
+                    invoice_context=invoice_context,
                 )
             vision_model = model_override if image_data else None
             nav_helper = NavigationHelper(request.env)
@@ -425,6 +439,8 @@ class AiAssistantController(http.Controller):
         nav_result=None,
         stock_helper=None,
         stock_result=None,
+        invoice_helper=None,
+        invoice_context=None,
     ):
         executor = ToolExecutor(request.env)
         context_messages = []
@@ -434,6 +450,10 @@ class AiAssistantController(http.Controller):
                 context_messages.append(ctx_msg)
         if stock_result and stock_helper:
             ctx_msg = stock_helper.build_context_message(stock_result)
+            if ctx_msg:
+                context_messages.append(ctx_msg)
+        if invoice_context and invoice_helper:
+            ctx_msg = invoice_helper.build_context_message(invoice_context)
             if ctx_msg:
                 context_messages.append(ctx_msg)
         if context_messages:
