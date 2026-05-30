@@ -17,3 +17,5 @@ from . import test_warehouse_stock_action  # noqa: F401
 from . import test_write_tools  # noqa: F401
 from . import test_tool_executor_security  # noqa: F401
 from . import test_e2e_supply_cycle  # noqa: F401
+from . import test_invoice_parsing  # noqa: F401
+from . import test_upload_invoice  # noqa: F401

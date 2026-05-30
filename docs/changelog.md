@@ -7,6 +7,24 @@
 
 ---
 
+## [2026-05-30] — feat(AIA-056): эндпоинт /upload_invoice + кнопка-скрепка в чат-виджете
+
+### Добавлено
+- `services/invoice_extraction_store.py` — TTL-хранилище (30 мин) результатов парсинга счетов по uid+token.
+- `controllers/chat_controller.py`: маршрут `POST /ai_assistant/upload_invoice` (multipart, auth=user, только supply); валидация расширения/размера (5 МБ)/magic bytes; сводка + `extraction_token` в ответе.
+- `static/src/js/ai_chat_service.js`: функция `uploadInvoice(file)` — fetch multipart к эндпоинту.
+- `static/src/js/ai_chat_boot.js`: `hasSupply` state, `fileInputRef`, `onAttachClick`, `onFileSelected`, `_uploadInvoice` — полный цикл загрузки с превью в чате.
+- `static/src/xml/ai_chat_widget.xml`: кнопка-скрепка + hidden `<input type="file">` (только для supply).
+- `static/src/scss/ai_chat_widget.scss`: стили `.o_ai_attach_btn`, `.o_ai_file_input_hidden`.
+- `tests/test_upload_invoice.py` — 8 HttpCase тестов: happy-case (mock), отказ по типу/размеру/magic, parse error, access control.
+
+### Изменено
+- `controllers/chat_controller.py`: `check_access` теперь возвращает `has_supply`; добавлен `import json` в заголовок.
+- `security/security_groups.xml`: добавлен `base.user_admin` в `group_ai_assistant_supply` (паритет с admin group).
+- `tests/__init__.py`: добавлен `test_upload_invoice`.
+
+---
+
 ## [2026-05-30] — feat(AIA-055): порт парсера счетов в services/invoice_parsing/
 
 ### Добавлено

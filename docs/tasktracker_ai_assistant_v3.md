@@ -983,20 +983,20 @@
 
 ### Задача: AIA-056 — Эндпоинт `/ai_assistant/upload_invoice` + кнопка-скрепка в виджете
 
-- **Статус**: Не начата
+- **Статус**: Завершена ✅ (2026-05-30)
 - **Приоритет**: Критический
 - **Описание**: Дать пользователю прикрепить файл счёта в чат; backend валидирует, парсит (AIA-055) и возвращает сводку + токен извлечения для последующего сообщения.
 - **📁 Контекст**:
   - `custom_addons/ai_assistant/controllers/chat_controller.py` — образец (`/ai_assistant/chat`, `_parse_screenshot`)
   - `custom_addons/ai_assistant/static/src/js/ai_chat_service.js`, `ai_chat_actions.js`, `static/src/xml/ai_chat_widget.xml`
 - **Шаги выполнения**:
-  - [ ] Backend: `/ai_assistant/upload_invoice` (`type='http'`, multipart, `auth='user'`, проверка `group_ai_assistant_supply`)
-  - [ ] Валидация: расширение `pdf`/`xlsx`, лимит размера, magic bytes (`%PDF-`/zip)
-  - [ ] Вызов `services/invoice_parsing` → нормализованный dict; (опц.) сохранить `ir.attachment`
-  - [ ] Вернуть сводку (`supplier`, число позиций, сумма, warnings) + `extraction_token` (кэш в памяти/`ir.config_parameter`-free store по uid, как `pending_action`)
-  - [ ] Frontend: кнопка-скрепка в `ai_chat_widget.xml` + обработчик загрузки в `ai_chat_actions.js`
-  - [ ] Превью в чате: «счёт распознан: N позиций, сумма …»
-  - [ ] Тесты контроллера: happy-case, отказ для не-supply, отказ по типу/размеру
+  - [x] Backend: `/ai_assistant/upload_invoice` (`type='http'`, multipart, `auth='user'`, проверка `group_ai_assistant_supply`)
+  - [x] Валидация: расширение `pdf`/`xlsx`, лимит 5 МБ, magic bytes (`%PDF-`/zip)
+  - [x] Вызов `services/invoice_parsing` → нормализованный dict; хранение в `InvoiceExtractionStore`
+  - [x] Вернуть сводку (`supplier`, число позиций, сумма, warnings) + `extraction_token`
+  - [x] Frontend: кнопка-скрепка в `ai_chat_widget.xml` + обработчик загрузки в `ai_chat_boot.js` + `uploadInvoice` в `ai_chat_service.js`
+  - [x] Превью в чате: «Счёт распознан: N позиций, сумма …»
+  - [x] Тесты контроллера: 8 тестов (happy-case, отказ для не-supply, отказ по типу/размеру/magic, parse error)
 - **🚫 Запрещено**: логировать содержимое файла; принимать write-операции без подтверждения.
 - **✅ DoD**: загрузка НФ-504 возвращает сводку 14 позиций; чужой тип/большой файл отклонён; не-supply получает отказ.
 - **⛓ Зависит от**: AIA-055
@@ -1111,8 +1111,8 @@
 | AIA-051 | find_warehouse: поиск по name | V3-9 | Высокий | ✅ | — | AIA-034 |
 | AIA-053 | get_navigation_link (consult-ссылки) | V3-9 | Высокий | ✅ | 🔧 | AIA-030, AIA-031, AIA-033, AIA-034 |
 | AIA-054 | pdfplumber external dependency | V3-10 | Критический | ✅ | 2026-05-30 | — |
-| AIA-055 | порт парсера счетов в services/invoice_parsing | V3-10 | Критический | ⏳ | — | AIA-054 |
-| AIA-056 | /upload_invoice + кнопка-скрепка | V3-10 | Критический | ⏳ | — | AIA-055 |
+| AIA-055 | порт парсера счетов в services/invoice_parsing | V3-10 | Критический | ✅ | 2026-05-30 | AIA-054 |
+| AIA-056 | /upload_invoice + кнопка-скрепка | V3-10 | Критический | ✅ | 2026-05-30 | AIA-055 |
 | AIA-057 | InvoiceContextHelper + инъекция в промпт | V3-10 | Критический | ⏳ | — | AIA-055, AIA-056 |
 | AIA-058 | create_product_draft (write-tool) | V3-10 | Высокий | ✅ | 2026-05-30 | AIA-031, AIA-032 |
 | AIA-059 | ResultCard инструкции UI (Confirm→Validate) | V3-10 | Средний | ⏳ | — | AIA-057, AIA-058 |

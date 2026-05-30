@@ -108,6 +108,24 @@
 
                 <!-- Footer -->
                 <div class="o_ai_assistant_footer">
+                    <!-- AIA-056: скрытый файловый input для счетов (только supply) -->
+                    <input
+                        t-if="state.hasSupply"
+                        t-ref="fileInput"
+                        type="file"
+                        accept=".pdf,.xlsx"
+                        class="o_ai_file_input_hidden"
+                        t-on-change="onFileSelected"
+                    />
+                    <button
+                        t-if="state.hasSupply"
+                        class="o_ai_attach_btn"
+                        t-on-click="onAttachClick"
+                        t-att-disabled="state.isLoading"
+                        title="Прикрепить счёт (PDF)"
+                    >
+                        <i class="fa fa-paperclip"/>
+                    </button>
                     <textarea
                         t-ref="textarea"
                         class="o_ai_input"

@@ -224,6 +224,25 @@ export const aiChatService = {
             return captureScreen();
         }
 
+        /**
+         * AIA-056: Загрузить файл счёта на /ai_assistant/upload_invoice.
+         * @param {File} file
+         * @returns {Promise<{success, extraction_token, summary, meta}>}
+         */
+        async function uploadInvoice(file) {
+            const formData = new FormData();
+            formData.append("file", file, file.name);
+            const response = await fetch("/ai_assistant/upload_invoice", {
+                method: "POST",
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+                body: formData,
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        }
+
         async function confirmAction(pendingKey, decision) {
             const response = await fetch("/ai_assistant/confirm", {
                 method: "POST",
@@ -259,6 +278,7 @@ export const aiChatService = {
             captureScreen,
             maybeCapture,
             confirmAction,
+            uploadInvoice,
             needsScreenshot,
         };
     },

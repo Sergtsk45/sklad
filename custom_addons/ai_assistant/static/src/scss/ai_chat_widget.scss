@@ -500,3 +500,35 @@
     padding: 0 12px 8px;
     flex-shrink: 0;
 }
+
+// ─── AIA-056: Invoice attachment button ──────────────────────────────────────
+
+.o_ai_file_input_hidden {
+    display: none;
+}
+
+.o_ai_attach_btn {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: #875a7b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    transition: background 0.15s, color 0.15s;
+
+    &:hover:not(:disabled) {
+        background: #f3eaf0;
+        color: #6b4761;
+    }
+
+    &:disabled {
+        color: #ccc;
+        cursor: not-allowed;
+    }
+}

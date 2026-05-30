@@ -30,11 +30,14 @@ export class AiChatWidget extends Component {
             inputText: "",
             isLoading: false,
             isCapturing: false,   // идёт захват скриншота
+            isUploading: false,   // AIA-056: идёт загрузка счёта
             status: "online",
             hasAccess: false,
+            hasSupply: false,     // AIA-056: группа снабжение
         });
         this.messagesEndRef = useRef("messagesEnd");
         this.textareaRef = useRef("textarea");
+        this.fileInputRef = useRef("fileInput");  // AIA-056
         onMounted(async () => {
             this._scrollToBottom();
             try {
@@ -53,8 +56,11 @@ export class AiChatWidget extends Component {
                 const data = await result.json();
                 this.state.hasAccess =
                     data && data.result && data.result.has_access === true;
+                this.state.hasSupply =
+                    data && data.result && data.result.has_supply === true;
             } catch {
                 this.state.hasAccess = false;
+                this.state.hasSupply = false;
             }
         });
     }
@@ -68,6 +74,9 @@ export class AiChatWidget extends Component {
     }
 
     get loadingLabel() {
+        if (this.state.isUploading) {
+            return "Распознаю счёт...";
+        }
         return this.state.isCapturing
             ? "Делаю скриншот..."
             : "Думаю...";
@@ -116,6 +125,50 @@ export class AiChatWidget extends Component {
 
     sendMessage() {
         this._doSend();
+    }
+
+    /** AIA-056: Клик по кнопке-скрепке — открываем файловый диалог. */
+    onAttachClick() {
+        const input = this.fileInputRef.el;
+        if (input && !this.state.isLoading) {
+            input.value = "";
+            input.click();
+        }
+    }
+
+    /** AIA-056: Файл выбран в input[type=file] — загружаем счёт. */
+    async onFileSelected(ev) {
+        const file = ev.target && ev.target.files && ev.target.files[0];
+        if (!file) {
+            return;
+        }
+        await this._uploadInvoice(file);
+    }
+
+    /** AIA-056: Загрузить счёт и показать сводку в чате. */
+    async _uploadInvoice(file) {
+        if (this.state.isLoading) {
+            return;
+        }
+        this.state.isLoading = true;
+        this.state.isUploading = true;
+        this._addMessage("user", `📎 ${file.name}`);
+        try {
+            const result = await this.chatService.uploadInvoice(file);
+            if (result && result.success) {
+                this._addMessage("assistant", result.summary || "Счёт распознан.");
+            } else {
+                const errMsg = (result && result.error) || "Не удалось распознать счёт.";
+                this._addMessage("assistant", `⚠ ${errMsg}`);
+            }
+            this.state.status = "online";
+        } catch (_err) {
+            this._addMessage("assistant", "Ошибка при загрузке файла. Попробуйте позже.");
+            this.state.status = "error";
+        } finally {
+            this.state.isLoading = false;
+            this.state.isUploading = false;
+        }
     }
 
     clearSession() {

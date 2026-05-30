@@ -91,6 +91,108 @@ class AiAssistantController(http.Controller):
         )
         return {'has_access': has_access, 'has_supply': has_supply}
 
+    @http.route('/ai_assistant/upload_invoice', type='http', auth='user',
+                methods=['POST'], csrf=False)
+    def upload_invoice(self, **kwargs):
+        """
+        AIA-056: Принять PDF/XLSX счёт, распарсить, вернуть сводку + extraction_token.
+        Доступно только группе group_ai_assistant_supply.
+        Не логируем содержимое файла (PII).
+        """
+        def _json_error(msg, status=400):
+            return request.make_json_response(
+                {'success': False, 'error': msg}, status=status
+            )
+
+        if not request.env.user.has_group(_GROUP_SUPPLY):
+            return _json_error('Доступ запрещён: требуется группа «Снабжение»', 403)
+
+        uploaded_file = request.httprequest.files.get('file')
+        if not uploaded_file:
+            return _json_error('Файл не передан')
+
+        filename = (uploaded_file.filename or '').strip()
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+        if ext not in ALLOWED_INVOICE_EXTENSIONS:
+            return _json_error(
+                f'Недопустимый тип файла «{ext}». '
+                f'Разрешены: {", ".join(sorted(ALLOWED_INVOICE_EXTENSIONS))}'
+            )
+
+        file_bytes = uploaded_file.read()
+        if len(file_bytes) > MAX_INVOICE_BYTES:
+            return _json_error(
+                f'Файл слишком большой: {len(file_bytes) // 1024} КБ. '
+                f'Максимум: {MAX_INVOICE_BYTES // 1024 // 1024} МБ'
+            )
+
+        if ext == 'pdf' and not file_bytes.startswith(b'%PDF'):
+            return _json_error('Файл не является PDF (неверный заголовок)')
+        if ext == 'xlsx' and not file_bytes[:4] in (b'PK\x03\x04', b'PK\x05\x06'):
+            return _json_error('Файл не является XLSX (неверный заголовок)')
+        if ext == 'xlsx':
+            return _json_error('XLSX-формат будет поддержан в следующей версии. '
+                               'Пожалуйста, используйте PDF.')
+
+        try:
+            invoice_data = extract_invoice(file_bytes)
+        except ValueError as exc:
+            _logger.warning(
+                '[AI Assistant] upload_invoice: parse error for file=%s: %s',
+                filename, exc,
+            )
+            return _json_error(f'Не удалось распознать счёт: {exc}')
+        except Exception:
+            _logger.exception(
+                '[AI Assistant] upload_invoice: unexpected error for file=%s',
+                filename,
+            )
+            return _json_error('Ошибка при обработке файла')
+
+        warnings = validate_invoice_data(invoice_data)
+        uid = request.env.uid
+        extraction_token = _invoice_store.put(uid, invoice_data)
+
+        totals = invoice_data.get('totals', {})
+        total_w_vat = totals.get('total_w_vat', '')
+        supplier_name = (
+            invoice_data.get('supplier', {}).get('name', '') or
+            invoice_data.get('invoice_number', '') or
+            'неизвестен'
+        )
+        item_count = len(invoice_data.get('items', []))
+
+        _logger.info(
+            '[AI Assistant] upload_invoice: uid=%s file=%s items=%d '
+            'total=%s warnings=%d',
+            uid, filename, item_count, total_w_vat, len(warnings),
+        )
+
+        summary_parts = [f'Счёт распознан: {item_count} позиций']
+        if total_w_vat:
+            try:
+                summary_parts.append(f'сумма {float(total_w_vat):,.2f} ₽'.replace(',', '\u00a0'))
+            except (ValueError, TypeError):
+                summary_parts.append(f'сумма {total_w_vat}')
+        if supplier_name:
+            summary_parts.append(f'поставщик: {supplier_name}')
+        if warnings:
+            summary_parts.append(f'⚠ предупреждений: {len(warnings)}')
+
+        return request.make_json_response({
+            'success': True,
+            'extraction_token': extraction_token,
+            'summary': '. '.join(summary_parts) + '.',
+            'meta': {
+                'item_count': item_count,
+                'total_w_vat': total_w_vat,
+                'supplier_name': supplier_name,
+                'invoice_number': invoice_data.get('invoice_number', ''),
+                'invoice_date': invoice_data.get('invoice_date', ''),
+                'warnings_count': len(warnings),
+            },
+        })
+
     @http.route('/ai_assistant/chat', type='jsonrpc', auth='user',
                 methods=['POST'])
     def chat(self, message=None, context=None, history=None,
@@ -604,7 +706,6 @@ class AiAssistantController(http.Controller):
         return '', result.get('record_id')
 
     def _json_dumps(self, value):
-        import json
         return json.dumps(value, ensure_ascii=False)
 
     def _resolve_module(self, context):
