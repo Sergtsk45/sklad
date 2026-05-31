@@ -1,5 +1,6 @@
 import hashlib
 import json
+from datetime import datetime, timedelta
 
 from odoo.exceptions import AccessError, ValidationError
 
@@ -197,7 +198,11 @@ class CreatePurchaseOrderDraftTool(AbstractWriteTool):
             po_vals['date_planned'] = args['date_planned']
 
         po = env['purchase.order'].create(po_vals)
-        date_planned = args.get('date_planned') or po.date_planned
+        date_planned = (
+            args.get('date_planned')
+            or po.date_planned
+            or (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d 08:00:00')
+        )
         warnings = []
         for line in lines:
             warning = validate_uom_is_meter(env, line['product_id'])
