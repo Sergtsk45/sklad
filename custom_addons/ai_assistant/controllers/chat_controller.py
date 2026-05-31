@@ -43,6 +43,9 @@ from odoo.addons.ai_assistant.services.invoice_parsing import (
     extract_invoice,
     validate_invoice_data,
 )
+from odoo.addons.ai_assistant.services.invoice_workflow import (
+    InvoiceWorkflow,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -199,10 +202,31 @@ class AiAssistantController(http.Controller):
     @http.route('/ai_assistant/chat', type='jsonrpc', auth='user',
                 methods=['POST'])
     def chat(self, message=None, context=None, history=None,
-             screenshot=None, extraction_token=None, **kwargs):
+             screenshot=None, extraction_token=None,
+             invoice_workflow_action=None, invoice_po_warehouse=None,
+             awaiting_po_warehouse=None, **kwargs):
         try:
             if not request.env.user.has_group(_GROUP_USER):
                 return {'error': 'Доступ запрещён'}
+
+            workflow_result = self._dispatch_invoice_workflow(
+                extraction_token=extraction_token,
+                invoice_workflow_action=invoice_workflow_action,
+                invoice_po_warehouse=invoice_po_warehouse,
+                awaiting_po_warehouse=awaiting_po_warehouse,
+                message=message,
+            )
+            if workflow_result is not None:
+                if 'answer' in workflow_result:
+                    workflow_result['answer'] = ResponseGuard().filter_response(
+                        workflow_result['answer']
+                    )
+                return workflow_result
+
+            guard = ResponseGuard()
+            is_valid, error = guard.validate_request(message, history)
+            if not is_valid:
+                return {'error': error}
 
             params = request.env['ir.config_parameter'].sudo()
             enabled = params.get_param('ai_assistant.enabled', '1')
@@ -212,11 +236,6 @@ class AiAssistantController(http.Controller):
                     'suggestions': [],
                     'meta': {},
                 }
-
-            guard = ResponseGuard()
-            is_valid, error = guard.validate_request(message, history)
-            if not is_valid:
-                return {'error': error}
 
             history = self._trim_history(history)
             _logger.info(
@@ -296,9 +315,33 @@ class AiAssistantController(http.Controller):
                     'cards': [self._result_card_error(result['error'])],
                     'meta': {'status': 'error'},
                 }
+            metadata = item.get('metadata') or {}
+            suggestions = []
+            extraction_token = metadata.get('extraction_token')
+            if (
+                extraction_token and
+                item['tool_name'] == 'create_product_draft' and
+                metadata.get('invoice_line_key') is not None
+            ):
+                workflow = InvoiceWorkflow(request.env, _invoice_store)
+                workflow.record_product_created(
+                    request.env.uid,
+                    extraction_token,
+                    metadata['invoice_line_key'],
+                    result['result']['product_id'],
+                )
+                suggestions = workflow.suggestions_after_product_created(
+                    request.env.uid,
+                    extraction_token,
+                )
+            elif (
+                extraction_token and
+                item['tool_name'] == 'create_purchase_order_draft'
+            ):
+                suggestions = []
             return {
                 'answer': 'Готово. Черновик создан.',
-                'suggestions': [],
+                'suggestions': suggestions,
                 'cards': [
                     self._result_card_success(
                         item['tool_name'],
@@ -353,6 +396,7 @@ class AiAssistantController(http.Controller):
                     stock_result=stock_result,
                     invoice_helper=invoice_helper,
                     invoice_context=invoice_context,
+                    extraction_token=extraction_token,
                 )
             vision_model = model_override if image_data else None
             nav_helper = NavigationHelper(request.env)
@@ -441,6 +485,7 @@ class AiAssistantController(http.Controller):
         stock_result=None,
         invoice_helper=None,
         invoice_context=None,
+        extraction_token=None,
     ):
         executor = ToolExecutor(request.env)
         context_messages = []
@@ -519,6 +564,15 @@ class AiAssistantController(http.Controller):
                 continue
             if write_call:
                 args = write_call.get('arguments') or {}
+                metadata = {}
+                if extraction_token and write_call['name'] == 'create_product_draft':
+                    workflow = InvoiceWorkflow(request.env, _invoice_store)
+                    args, metadata = workflow.attach_to_product_draft(
+                        request.env.uid,
+                        extraction_token,
+                        args,
+                    )
+                    write_call['arguments'] = args
                 pending_key = _pending_actions.put(
                     request.env.uid,
                     write_call['name'],
@@ -527,6 +581,7 @@ class AiAssistantController(http.Controller):
                         write_call['name'],
                         args,
                     ),
+                    metadata=metadata,
                 )
                 return {
                     'answer': 'Проверьте план и подтвердите действие.',
@@ -780,6 +835,88 @@ class AiAssistantController(http.Controller):
                     action, module
                 )
         return module
+
+    def _dispatch_invoice_workflow(
+        self,
+        extraction_token=None,
+        invoice_workflow_action=None,
+        invoice_po_warehouse=None,
+        awaiting_po_warehouse=None,
+        message=None,
+    ):
+        if not request.env.user.has_group(_GROUP_SUPPLY):
+            return None
+        token = extraction_token
+        if not token:
+            return None
+        workflow = InvoiceWorkflow(request.env, _invoice_store)
+        uid = request.env.uid
+
+        if invoice_workflow_action == InvoiceWorkflow.ACTION_NEXT_PRODUCT:
+            draft = workflow.next_product_draft(uid, token)
+            if not draft:
+                return workflow.all_products_done_payload()
+            return self._pending_write_response(
+                'create_product_draft',
+                draft['args'],
+                metadata={
+                    'extraction_token': token,
+                    'invoice_line_key': draft['line_key'],
+                },
+                answer=(
+                    'Следующая позиция счёта. Проверьте карточку и подтвердите.'
+                ),
+            )
+
+        warehouse_query = (invoice_po_warehouse or '').strip()
+        if awaiting_po_warehouse and not warehouse_query and message:
+            warehouse_query = (message or '').strip()
+        if (
+            invoice_workflow_action == InvoiceWorkflow.ACTION_PREPARE_PO or
+            (awaiting_po_warehouse and warehouse_query)
+        ):
+            payload = workflow.prepare_po_draft(uid, token, warehouse_query)
+            status = payload.get('status')
+            if status == 'pending':
+                return self._pending_write_response(
+                    'create_purchase_order_draft',
+                    payload['po_args'],
+                    metadata={'extraction_token': token},
+                    answer=payload['answer'],
+                )
+            response = {
+                'answer': payload.get('answer', ''),
+                'suggestions': payload.get('suggestions') or [],
+                'cards': [],
+                'meta': payload.get('meta') or {'status': status},
+            }
+            if status == 'products_incomplete':
+                response['suggestions'] = payload.get('suggestions') or []
+            return response
+
+        return None
+
+    def _pending_write_response(
+        self,
+        tool_name,
+        args,
+        metadata=None,
+        answer='Проверьте план и подтвердите действие.',
+    ):
+        pending_key = _pending_actions.put(
+            request.env.uid,
+            tool_name,
+            args,
+            idempotency_key=self._idempotency_key(tool_name, args),
+            metadata=metadata or {},
+        )
+        write_call = {'name': tool_name, 'arguments': args}
+        return {
+            'answer': answer,
+            'suggestions': [],
+            'cards': [self._confirmation_card(write_call, pending_key)],
+            'meta': {'status': 'pending'},
+        }
 
     # AIA-024 ──────────────────────────────────────────────────────────
 

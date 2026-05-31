@@ -73,6 +73,18 @@
                                         </a>
                                     </div>
                                 </t>
+                                <t t-if="msg.suggestions and msg.suggestions.length">
+                                    <div class="o_ai_message_suggestions">
+                                        <t t-foreach="msg.suggestions" t-as="suggestion" t-key="suggestion_index">
+                                            <button
+                                                class="o_ai_suggested_chip"
+                                                t-on-click="() => this.onMessageSuggestion(suggestion)"
+                                            >
+                                                <t t-esc="suggestion.label"/>
+                                            </button>
+                                        </t>
+                                    </div>
+                                </t>
                                 <t t-if="msg.cards">
                                     <t t-foreach="msg.cards" t-as="card" t-key="cardKey(card, card_index)">
                                         <ConfirmationCard

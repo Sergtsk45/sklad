@@ -32,6 +32,7 @@ export class AiChatWidget extends Component {
             isCapturing: false,   // идёт захват скриншота
             isUploading: false,   // AIA-056: идёт загрузка счёта
             extractionToken: null, // AIA-057: токен распознанного счёта
+            awaitingPoWarehouse: false,
             status: "online",
             hasAccess: false,
             hasSupply: false,     // AIA-056: группа снабжение
@@ -113,6 +114,20 @@ export class AiChatWidget extends Component {
         this._doSend();
     }
 
+    onMessageSuggestion(suggestion) {
+        if (!suggestion || this.state.isLoading) {
+            return;
+        }
+        if (suggestion.action) {
+            this._runInvoiceWorkflowAction(suggestion.action);
+            return;
+        }
+        if (suggestion.label) {
+            this.state.inputText = suggestion.label;
+            this._doSend();
+        }
+    }
+
     onInputKeydown(ev) {
         if (ev.key === "Enter" && !ev.shiftKey) {
             ev.preventDefault();
@@ -179,6 +194,7 @@ export class AiChatWidget extends Component {
         this.state.isLoading = false;
         this.state.isCapturing = false;
         this.state.extractionToken = null;
+        this.state.awaitingPoWarehouse = false;
     }
 
     _doSend() {
@@ -206,6 +222,11 @@ export class AiChatWidget extends Component {
             content,
             extra
         );
+        if (extra.meta && extra.meta.awaiting_po_warehouse) {
+            this.state.awaitingPoWarehouse = true;
+        } else if (extra.meta && extra.meta.awaiting_po_warehouse === false) {
+            this.state.awaitingPoWarehouse = false;
+        }
         setTimeout(() => this._scrollToBottom(), 20);
     }
 
@@ -215,9 +236,12 @@ export class AiChatWidget extends Component {
         try {
             const result = await this._callBackend(userMessage);
             await this._cancelActiveConfirmations(this._extractCards(result));
+            this._applyResponseMeta(result);
             this._addMessage("assistant", result.answer || "", {
                 cards: this._extractCards(result),
                 links: this._extractLinks(result),
+                suggestions: result.suggestions || [],
+                meta: result.meta || {},
             });
             this.state.status = "online";
         } catch (_err) {
@@ -245,7 +269,12 @@ export class AiChatWidget extends Component {
                 decision,
                 this._extractCards(result)
             );
-            this._addMessage("assistant", result.answer || "");
+            this._applyResponseMeta(result);
+            this._addMessage("assistant", result.answer || "", {
+                cards: this._extractCards(result),
+                suggestions: result.suggestions || [],
+                meta: result.meta || {},
+            });
             this.state.status = "online";
         } catch (_err) {
             this._addMessage(
@@ -283,6 +312,9 @@ export class AiChatWidget extends Component {
 
         if (this.state.extractionToken) {
             params.extraction_token = this.state.extractionToken;
+        }
+        if (this.state.awaitingPoWarehouse) {
+            params.awaiting_po_warehouse = true;
         }
 
         // Добавить скриншот в payload только если захват удался
@@ -391,6 +423,46 @@ export class AiChatWidget extends Component {
             role: m.role,
             content: m.content,
         }));
+    }
+
+    _applyResponseMeta(result) {
+        const meta = (result && result.meta) || {};
+        if (meta.awaiting_po_warehouse) {
+            this.state.awaitingPoWarehouse = true;
+        }
+        if (meta.warehouse_id !== undefined) {
+            this.state.awaitingPoWarehouse = false;
+        }
+    }
+
+    async _runInvoiceWorkflowAction(action) {
+        if (this.state.isLoading || !this.state.extractionToken) {
+            return;
+        }
+        this.state.isLoading = true;
+        this.state.isCapturing = false;
+        try {
+            const result = await this.chatService.workflowAction(
+                this.state.extractionToken,
+                action
+            );
+            await this._cancelActiveConfirmations(this._extractCards(result));
+            this._applyResponseMeta(result);
+            this._addMessage("assistant", result.answer || "", {
+                cards: this._extractCards(result),
+                suggestions: result.suggestions || [],
+                meta: result.meta || {},
+            });
+            this.state.status = "online";
+        } catch (_err) {
+            this._addMessage(
+                "assistant",
+                "Не удалось выполнить действие. Попробуйте повторить запрос."
+            );
+            this.state.status = "error";
+        } finally {
+            this.state.isLoading = false;
+        }
     }
 
     _scrollToBottom() {

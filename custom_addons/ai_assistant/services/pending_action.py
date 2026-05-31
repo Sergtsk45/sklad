@@ -9,7 +9,7 @@ class PendingActionStore:
         self._items = {}
         self._ttl_seconds = ttl_seconds
 
-    def put(self, uid, tool_name, args, idempotency_key=None):
+    def put(self, uid, tool_name, args, idempotency_key=None, metadata=None):
         self._purge_expired()
         if idempotency_key:
             existing_key = self._find_existing(
@@ -24,6 +24,7 @@ class PendingActionStore:
             'tool_name': tool_name,
             'args': args,
             'idempotency_key': idempotency_key,
+            'metadata': metadata or {},
             'expires_at': time.time() + self._ttl_seconds,
         }
         return key

@@ -166,6 +166,7 @@ class InvoiceContextHelper:
             'Правила: не подставляй склад/объект по умолчанию (D3) — '
             'уточни у пользователя склад приёмки (код или название, '
             'find_warehouse) перед PO; '
-            'позиции с needs_create_product_draft=true — кандидаты на '
-            'create_product_draft.'
+            'позиции с needs_create_product_draft=true — create_product_draft '
+            'по одной строке с list_price из счёта; далее кнопки workflow '
+            '(следующий товар / закупка на склад).'
         ) % (self._CONTEXT_HEADER, payload)

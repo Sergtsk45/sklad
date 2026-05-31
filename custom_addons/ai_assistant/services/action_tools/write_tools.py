@@ -299,6 +299,9 @@ class CreateProductDraftTool(AbstractWriteTool):
             'name': {'type': 'string', 'minLength': 1},
             'categ_id': {'type': ['integer', 'null']},
             'uom_id': {'type': ['integer', 'null']},
+            'list_price': {'type': ['number', 'null']},
+            'standard_price': {'type': ['number', 'null']},
+            'default_code': {'type': ['string', 'null']},
             'purchase_ok': {'type': 'boolean'},
             'sale_ok': {'type': 'boolean'},
         },
@@ -318,14 +321,27 @@ class CreateProductDraftTool(AbstractWriteTool):
         self._validate_uom(env, uom_id)
         self._ensure_no_duplicate(env, name, categ_id)
 
-        product = env['product.product'].create({
+        product_vals = {
             'name': name,
             'is_storable': True,
             'categ_id': categ_id,
             'uom_id': uom_id,
             'purchase_ok': args.get('purchase_ok', True),
             'sale_ok': args.get('sale_ok', False),
-        })
+        }
+        list_price = args.get('list_price')
+        if list_price is not None:
+            product_vals['list_price'] = list_price
+        standard_price = args.get('standard_price')
+        if standard_price is not None:
+            product_vals['standard_price'] = standard_price
+        elif list_price is not None:
+            product_vals['standard_price'] = list_price
+        default_code = (args.get('default_code') or '').strip()
+        if default_code:
+            product_vals['default_code'] = default_code
+
+        product = env['product.product'].create(product_vals)
         product.product_tmpl_id.message_post(
             body=(
                 'Товар создан AI-ассистентом по запросу %s.'

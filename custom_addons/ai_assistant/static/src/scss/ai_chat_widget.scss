@@ -450,6 +450,13 @@
     }
 }
 
+.o_ai_message_suggestions {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
 // ─── Footer ──────────────────────────────────────────────────────────────────
 
 .o_ai_assistant_footer {

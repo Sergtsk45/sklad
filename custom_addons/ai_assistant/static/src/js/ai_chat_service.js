@@ -48,6 +48,9 @@ export const aiChatService = {
                     if (Array.isArray(m.links) && m.links.length) {
                         msg.links = m.links;
                     }
+                    if (Array.isArray(m.suggestions) && m.suggestions.length) {
+                        msg.suggestions = m.suggestions;
+                    }
                     return msg;
                 });
 
@@ -88,6 +91,9 @@ export const aiChatService = {
             }
             if (Array.isArray(extra.links) && extra.links.length) {
                 newMsg.links = extra.links;
+            }
+            if (Array.isArray(extra.suggestions) && extra.suggestions.length) {
+                newMsg.suggestions = extra.suggestions;
             }
             const updated = [...messages, newMsg];
             return saveHistory(updated);
@@ -243,6 +249,34 @@ export const aiChatService = {
             return response.json();
         }
 
+        async function workflowAction(extractionToken, action) {
+            const response = await fetch("/ai_assistant/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        message: "",
+                        history: [],
+                        extraction_token: extractionToken,
+                        invoice_workflow_action: action,
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            return data.result || {};
+        }
+
         async function confirmAction(pendingKey, decision) {
             const response = await fetch("/ai_assistant/confirm", {
                 method: "POST",
@@ -278,6 +312,7 @@ export const aiChatService = {
             captureScreen,
             maybeCapture,
             confirmAction,
+            workflowAction,
             uploadInvoice,
             needsScreenshot,
         };

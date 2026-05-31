@@ -236,6 +236,20 @@ class TestActionWriteTools(TransactionCase):
         body = '\n'.join(product.product_tmpl_id.message_ids.mapped('body'))
         self.assertIn('AI-ассистентом', body)
 
+    def test_create_product_draft_with_list_price(self):
+        tool = CreateProductDraftTool()
+        result = tool.execute(
+            self.env(user=self.supply_user),
+            {
+                'name': 'ЗРК тест цена',
+                'list_price': 1500.0,
+                'purchase_ok': True,
+            },
+        )
+        product = self.env['product.product'].browse(result['product_id'])
+        self.assertEqual(product.list_price, 1500.0)
+        self.assertEqual(product.standard_price, 1500.0)
+
     def test_create_product_draft_uses_default_category_when_omitted(self):
         tool = CreateProductDraftTool()
         product_name = 'ЗРК 25ч945п-25-4,0-1,6-150-УХЛ4 default categ'

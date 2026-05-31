@@ -1,3 +1,18 @@
+## [2026-05-31] — feat(ai_assistant): пошаговый workflow счёта (товар → PO)
+
+### Добавлено
+- `InvoiceWorkflow` и сессия `created_by_line` в `InvoiceExtractionStore`.
+- `create_product_draft`: `list_price`, `standard_price`, `default_code`; цена подтягивается из счёта при pending.
+- После каждого товара — кнопки «Создать следующий» / «Создать закупку на склад»; PO с qty/price из счёта.
+- UI: chips suggestions в сообщениях ассистента.
+- Тесты `test_invoice_workflow.py`.
+
+### Изменено
+- `/ai_assistant/confirm` — suggestions и tracking по `extraction_token`.
+- Промпт: один товар за подтверждение.
+
+---
+
 ## [2026-05-31] — feat(ai_assistant): PO на любой склад (не только ОбМ-*)
 
 ### Изменено
