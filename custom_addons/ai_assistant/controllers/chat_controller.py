@@ -868,6 +868,34 @@ class AiAssistantController(http.Controller):
                 ),
             )
 
+        # Перехватываем намерение «добавь на склад» / «создай закупку»
+        # раньше, чем LLM сделает это минуя workflow.
+        if message and self._message_intends_po(message):
+            if not workflow.all_products_ready(uid, token):
+                draft = workflow.next_product_draft(uid, token)
+                if draft:
+                    return self._pending_write_response(
+                        'create_product_draft',
+                        draft['args'],
+                        metadata={
+                            'extraction_token': token,
+                            'invoice_line_key': draft['line_key'],
+                        },
+                        answer=(
+                            'Сначала нужно создать карточки для новых товаров из счёта. '
+                            'Начнём с первого:'
+                        ),
+                    )
+            else:
+                # Все карточки готовы — запрашиваем склад
+                payload = workflow.prepare_po_draft(uid, token, '')
+                return {
+                    'answer': payload.get('answer', ''),
+                    'suggestions': payload.get('suggestions') or [],
+                    'cards': [],
+                    'meta': payload.get('meta') or {'awaiting_po_warehouse': True},
+                }
+
         warehouse_query = (invoice_po_warehouse or '').strip()
         if awaiting_po_warehouse and not warehouse_query and message:
             warehouse_query = (message or '').strip()
@@ -917,6 +945,21 @@ class AiAssistantController(http.Controller):
             'cards': [self._confirmation_card(write_call, pending_key)],
             'meta': {'status': 'pending'},
         }
+
+    _PO_INTENT_KEYWORDS = (
+        'добавь на склад', 'добавить на склад',
+        'внеси на склад', 'внести на склад',
+        'создай закупку', 'создать закупку',
+        'оформи закупку', 'оформить закупку',
+        'сделай po', 'создай po', 'create po',
+        'занеси на склад', 'занести на склад',
+        'закупку на склад', 'приёмку', 'приемку',
+        'добавь товары', 'добавить товары',
+    )
+
+    def _message_intends_po(self, message):
+        text = (message or '').lower().strip()
+        return any(kw in text for kw in self._PO_INTENT_KEYWORDS)
 
     # AIA-024 ──────────────────────────────────────────────────────────
 

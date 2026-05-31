@@ -1,3 +1,14 @@
+## [2026-05-31] — fix(ai_assistant): дублирование карточки, LLM обходит workflow
+
+### Исправлено
+- `_confirmPending` (JS): убрано дублирование result card — карточка теперь вставляется только в исходное сообщение через `_markPendingCardResolved`.
+- `_dispatch_invoice_workflow`: перехват ключевых фраз «добавь на склад», «создай закупку» и т.д. до LLM — если есть незавершённые карточки, сначала workflow товаров.
+
+### Изменено
+- Промпт INVOICE_CONTEXT: жёсткий порядок (шаг A — все карточки, шаг Б — PO); запрет `create_purchase_order_draft` при наличии `needs_create_product_draft=true`.
+
+---
+
 ## [2026-05-31] — feat(ai_assistant): пошаговый workflow счёта (товар → PO)
 
 ### Добавлено

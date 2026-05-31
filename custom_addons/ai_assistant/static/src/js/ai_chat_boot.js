@@ -270,11 +270,16 @@ export class AiChatWidget extends Component {
                 this._extractCards(result)
             );
             this._applyResponseMeta(result);
-            this._addMessage("assistant", result.answer || "", {
-                cards: this._extractCards(result),
-                suggestions: result.suggestions || [],
-                meta: result.meta || {},
-            });
+            // Карточка уже вставлена в старое сообщение через _markPendingCardResolved
+            // Добавляем только текстовый ответ + suggestions
+            const answer = result.answer || "";
+            const suggestions = result.suggestions || [];
+            if (answer || suggestions.length) {
+                this._addMessage("assistant", answer, {
+                    suggestions,
+                    meta: result.meta || {},
+                });
+            }
             this.state.status = "online";
         } catch (_err) {
             this._addMessage(
