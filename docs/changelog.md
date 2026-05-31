@@ -9,6 +9,13 @@
 
 ---
 
+## [2026-06-01] — fix(ai_assistant): увеличен rate limit write-операций
+
+### Изменено
+- `ToolRateLimiter`: `write_max` увеличен с 5 до 25 для workflow создания карточек по счёту (9+ товаров).
+
+---
+
 ## [2026-05-31] — feat(ai_assistant): пошаговый workflow счёта (товар → PO)
 
 ### Добавлено

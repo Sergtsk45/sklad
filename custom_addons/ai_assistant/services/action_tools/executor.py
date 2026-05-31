@@ -21,7 +21,7 @@ _FORBIDDEN_WRITE_FIELDS = {'state', 'company_id', 'currency_id'}
 class ToolRateLimiter:
     """Small in-memory per-user limiter for action tools."""
 
-    def __init__(self, read_max=30, write_max=5, window_seconds=60):
+    def __init__(self, read_max=30, write_max=25, window_seconds=60):
         self._limits = {
             'read': read_max,
             'write': write_max,
