@@ -143,4 +143,35 @@
 
 ---
 
+## TD-005: Vision-fallback парсинга счетов через существующий OpenRouterClient
+
+- **Статус**: открыто
+- **Контекст**: при внедрении приёмки товаров из счёта (этап **V3-10**, [`roadmap_ai_assistant_v3_invoice.md`](roadmap_ai_assistant_v3_invoice.md)) принято решение **D1** — парсить счета внутри Odoo (порт text-first логики `invoice-extractor`: pdfplumber + эвристики). В исходном сервисе `extraction_specific_PDF` для сложных/сканированных PDF был **Vision-fallback** через отдельный LLM-вызов (`llm_client.call_vision_llm`, рендер страниц в изображения PyMuPDF). При портировании в Odoo этот fallback **намеренно отложен** (text-first MVP в AIA-055), иначе пришлось бы тянуть тяжёлые зависимости (PyMuPDF/Pillow) и дублировать LLM-клиент.
+- **Синергия**: в модуле `ai_assistant` **уже есть** `services/openrouter_client.py` с поддержкой vision (используется для скриншотов экрана, см. AIA-024/025). Vision-fallback для счетов-сканов можно реализовать **через этот же клиент**, без отдельного LLM-сервиса и без сетевой зависимости от `invoice-extractor`: text-first (pdfplumber) → при пустом/некачественном результате рендер страницы в изображение → vision-запрос через существующий `OpenRouterClient` → нормализация тем же `services/invoice_parsing/normalizer.py`.
+- **Цель**: единый путь извлечения данных из счёта (текст + скан) внутри Odoo, переиспользующий существующий vision-клиент и нормализатор, без внешнего сервиса.
+
+### Подзадачи
+
+1. Детектор «нужен ли vision»: text-first дал 0 позиций / провалил арифметическую валидацию (`validate_invoice_data`) → триггер fallback.
+2. Рендер PDF-страницы в изображение: оценить зависимость (PyMuPDF `fitz` или `pdf2image`+poppler) и объявить как `external_dependencies` только при включении fallback.
+3. Vision-запрос через существующий `OpenRouterClient` (vision-модель из `ir.config_parameter ai_assistant.vision_model`), промпт — портировать `VISION_PROMPT` из `invoice-extractor/extractor.py`.
+4. Нормализация результата тем же `normalizer.py` (общий формат с text-first), повторная валидация.
+5. Rate-limit/размер: переиспользовать существующие лимиты vision-запросов чата (`_VISION_RATE`).
+6. Тесты: фикстура «скан без текстового слоя» → fallback вызывается; мок vision-клиента.
+
+### Критерии готовности (Definition of Done)
+
+- [ ] Скан-PDF без текстового слоя распознаётся через `OpenRouterClient` vision, результат в общем формате.
+- [ ] Нет отдельного LLM-клиента/сервиса для счетов — переиспользован существующий.
+- [ ] Тяжёлые зависимости рендера объявлены и подключаются только при включённом fallback.
+- [ ] Покрыто тестом с мок-vision; text-first остаётся путём по умолчанию.
+
+### Ссылки
+
+- План: [`roadmap_ai_assistant_v3_invoice.md`](roadmap_ai_assistant_v3_invoice.md), задачи **AIA-055** (text-first), AIA-057.
+- Существующий vision: `custom_addons/ai_assistant/services/openrouter_client.py`, `controllers/chat_controller.py` (AIA-024/025/026).
+- Источник логики: `~/projects/extraction_specific_PDF/services/invoice-extractor/backend/app/extractor.py` (`VISION_PROMPT`, `_extract_vision_mode`), `llm_client.py`.
+
+---
+
 *Шаблон новой записи: скопировать блок с новым ID `TD-00N`, заполнить статус, контекст, шаги/критерии.*
