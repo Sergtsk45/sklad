@@ -122,6 +122,48 @@ class TestOBR006ImportWizard(TransactionCase):
         self.assertEqual(line.supplier_raw, "ООО Стройснаб")
         self.assertFalse(line.has_error)
 
+    def test_validate_standard_header_format_message(self):
+        """Стандартный формат wizard распознаётся по заголовкам."""
+        file_b64 = _make_xlsx(
+            [
+                ["№", "Артикул", "Наименование", "Ед.", "Кол-во"],
+                [1, "ART-001", "Цемент М500", "шт.", 10],
+            ]
+        )
+        if file_b64 is None:
+            self.skipTest("openpyxl не установлен")
+        wizard = self._create_wizard({"file": file_b64})
+        wizard.action_validate()
+        self.assertEqual(wizard.validation_state, "valid")
+        self.assertIn("стандартный импорт wizard", wizard.validation_messages)
+
+    def test_validate_uute_header_format_maps_columns(self):
+        """Формат УУТЭ не путает наименование и обозначение."""
+        file_b64 = _make_xlsx(
+            [
+                [
+                    "№",
+                    "Наименование",
+                    "Обозначение",
+                    "Единица измерения",
+                    "Количество",
+                ],
+                [1, "Кран муфтовый 15 мм", "11Б27п1", "шт.", 4],
+            ]
+        )
+        if file_b64 is None:
+            self.skipTest("openpyxl не установлен")
+        wizard = self._create_wizard({"file": file_b64})
+        wizard.action_validate()
+        self.assertEqual(wizard.validation_state, "valid")
+        line = wizard.preview_line_ids[0]
+        self.assertEqual(line.name_raw, "Кран муфтовый 15 мм")
+        self.assertEqual(line.supplier_article, "11Б27п1")
+        self.assertEqual(line.uom_raw, "шт.")
+        self.assertAlmostEqual(line.qty, 4.0)
+        self.assertIn("спецификация УУТЭ", wizard.validation_messages)
+        self.assertIn("Обозначение используется", wizard.validation_messages)
+
     def test_validate_skips_empty_rows(self):
         """Полностью пустые строки пропускаются при парсинге."""
         file_b64 = _make_xlsx(
@@ -168,6 +210,39 @@ class TestOBR006ImportWizard(TransactionCase):
         wizard.action_validate()
         self.assertEqual(wizard.validation_state, "invalid")
         self.assertEqual(wizard.line_preview_count, 0)
+        self.assertIn("обязательные колонки", wizard.validation_messages)
+
+    def test_validate_missing_qty_column_returns_supported_headers(self):
+        """Файл без количества объясняет, какие заголовки поддержаны."""
+        file_b64 = _make_xlsx(
+            [
+                ["№", "Наименование", "Единица измерения"],
+                [1, "Кран муфтовый 15 мм", "шт."],
+            ]
+        )
+        if file_b64 is None:
+            self.skipTest("openpyxl не установлен")
+        wizard = self._create_wizard({"file": file_b64})
+        wizard.action_validate()
+        self.assertEqual(wizard.validation_state, "invalid")
+        self.assertIn("количество", wizard.validation_messages)
+        self.assertIn("кол-во", wizard.validation_messages)
+
+    def test_validate_missing_name_column_returns_supported_headers(self):
+        """Файл без наименования объясняет, какие заголовки поддержаны."""
+        file_b64 = _make_xlsx(
+            [
+                ["№", "Обозначение", "Количество"],
+                [1, "11Б27п1", 4],
+            ]
+        )
+        if file_b64 is None:
+            self.skipTest("openpyxl не установлен")
+        wizard = self._create_wizard({"file": file_b64})
+        wizard.action_validate()
+        self.assertEqual(wizard.validation_state, "invalid")
+        self.assertIn("наименование", wizard.validation_messages)
+        self.assertIn("наименование товара", wizard.validation_messages)
 
     def test_validate_only_header_no_data_rows(self):
         """Файл только с заголовком → validation_state='invalid'."""

@@ -1,3 +1,20 @@
+## [2026-06-10] — feat(object_request): гибкий Excel-импорт Wizard V2
+
+### Добавлено
+- `object.request.import.wizard` определяет назначение колонок Excel по заголовкам и поддерживает синонимы для артикула/обозначения, наименования, единицы измерения, количества, цены, комментария и поставщика.
+- Поддержан формат спецификации УУТЭ: `Наименование`, `Обозначение`, `Единица измерения`, `Количество`; `Обозначение` сохраняется как артикул поставщика.
+- Сообщения валидации показывают распознанный формат, найденные заголовки и поддерживаемые варианты при отсутствии обязательных колонок.
+
+### Изменено
+- Preview импорта показывает колонку `Артикул / Обозначение`.
+- `_build_preview_vals()` читает строки через mapping колонок, сохраняя существующую нормализацию, matching товаров/поставщиков и номера строк Excel.
+
+### Проверено
+- `docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request/wizards/import_excel_wizard.py /mnt/extra-addons/object_request/tests/test_obr006_wizard.py`
+- `docker exec odoo19-local odoo --test-enable -u object_request -d odoo19_local --stop-after-init --http-port=8071`
+
+---
+
 ## [2026-06-09] — chore(warehouse): финализация WHM-005/WHM-010 и legacy остатки
 
 ### Выполнено

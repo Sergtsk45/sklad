@@ -1,5 +1,6 @@
 import base64
 import io
+import re
 
 from odoo import models, fields
 from odoo.exceptions import UserError
@@ -120,6 +121,40 @@ class ObjectRequestImportWizard(models.TransientModel):
         readonly=True,
     )
 
+    _COLUMN_SYNONYMS = {
+        "supplier_article": ("артикул", "арт", "арт.", "обозначение"),
+        "name_raw": ("наименование", "наим", "наим.", "наименование товара"),
+        "uom_raw": (
+            "ед",
+            "ед.",
+            "ед изм",
+            "ед. изм.",
+            "единица измерения",
+        ),
+        "qty": ("кол-во", "кол", "кол.", "количество"),
+        "price": ("цена", "цена за ед", "цена за единицу"),
+        "comment": (
+            "ком",
+            "ком.",
+            "комм",
+            "комм.",
+            "комментарий",
+            "примечание",
+        ),
+        "supplier_raw": ("пост", "пост.", "поставщик"),
+    }
+
+    _REQUIRED_COLUMNS = ("name_raw", "qty")
+    _COLUMN_LABELS = {
+        "supplier_article": "артикул / обозначение",
+        "name_raw": "наименование",
+        "uom_raw": "единица измерения",
+        "qty": "количество",
+        "price": "цена",
+        "comment": "комментарий",
+        "supplier_raw": "поставщик",
+    }
+
     # --- Приватные методы ---
 
     def _parse_excel(self):
@@ -151,15 +186,110 @@ class ObjectRequestImportWizard(models.TransientModel):
 
         return rows, None
 
-    def _validate_columns(self, header_row):
+    @classmethod
+    def _normalize_header(cls, value):
+        """Нормализует заголовок Excel для устойчивого сопоставления."""
+        header = cls._to_str(value).lower().replace("\xa0", " ")
+        header = re.sub(r"\s+", " ", header).strip()
+        return header.replace(".", "")
+
+    @classmethod
+    def _column_synonyms_normalized(cls):
+        return {
+            field_name: {
+                cls._normalize_header(synonym)
+                for synonym in synonyms
+            }
+            for field_name, synonyms in cls._COLUMN_SYNONYMS.items()
+        }
+
+    def _map_columns(self, header_row):
+        """Возвращает mapping полей импорта на индексы колонок Excel."""
+        synonyms = self._column_synonyms_normalized()
+        mapping = {}
+        for idx, header in enumerate(header_row):
+            normalized = self._normalize_header(header)
+            if not normalized:
+                continue
+            for field_name, variants in synonyms.items():
+                if field_name not in mapping and normalized in variants:
+                    mapping[field_name] = idx
+                    break
+        return mapping
+
+    def _get_mapped_header(self, header_row, mapping, field_name):
+        idx = mapping.get(field_name)
+        if idx is None or idx >= len(header_row):
+            return ""
+        return self._normalize_header(header_row[idx])
+
+    def _describe_import_format(self, header_row, mapping):
+        name_header = self._get_mapped_header(header_row, mapping, "name_raw")
+        article_header = self._get_mapped_header(
+            header_row,
+            mapping,
+            "supplier_article",
+        )
+        uom_header = self._get_mapped_header(header_row, mapping, "uom_raw")
+        qty_header = self._get_mapped_header(header_row, mapping, "qty")
+
+        if (
+            name_header == "наименование"
+            and article_header == "обозначение"
+            and uom_header == "единица измерения"
+            and qty_header == "количество"
+        ):
+            return (
+                "Распознан формат: спецификация УУТЭ "
+                "(Обозначение используется как артикул поставщика)"
+            )
+        if (
+            article_header == "артикул"
+            and name_header == "наименование"
+            and uom_header in {"ед", "ед изм"}
+            and qty_header == "кол-во"
+        ):
+            return "Распознан формат: стандартный импорт wizard"
+        return "Распознан формат: гибкий импорт по заголовкам"
+
+    def _format_supported_headers(self, field_names):
+        lines = []
+        for field_name in field_names:
+            label = self._COLUMN_LABELS[field_name]
+            variants = ", ".join(self._COLUMN_SYNONYMS[field_name])
+            lines.append(f"- {label}: {variants}")
+        return "\n".join(lines)
+
+    def _format_found_headers(self, header_row):
+        headers = [
+            self._to_str(header)
+            for header in header_row
+            if self._to_str(header)
+        ]
+        return ", ".join(headers) if headers else "нет заголовков"
+
+    def _validate_columns(self, header_row, mapping):
         """Проверяет структуру заголовка. Возвращает список ошибок."""
         errors = []
-        min_cols = 5
-        if len(header_row) < min_cols:
+        missing_required = [
+            field_name
+            for field_name in self._REQUIRED_COLUMNS
+            if field_name not in mapping
+        ]
+        if missing_required:
+            labels = [
+                self._COLUMN_LABELS[field_name]
+                for field_name in missing_required
+            ]
             errors.append(
-                f"Слишком мало колонок: {len(header_row)}. "
-                f"Ожидается минимум {min_cols} "
-                "(п/п, артикул, наименование, ед.изм., количество)."
+                "Не найдены обязательные колонки: %s.\n"
+                "Найденные заголовки: %s.\n"
+                "Поддерживаемые варианты заголовков:\n%s"
+                % (
+                    ", ".join(labels),
+                    self._format_found_headers(header_row),
+                    self._format_supported_headers(missing_required),
+                )
             )
         return errors
 
@@ -176,7 +306,14 @@ class ObjectRequestImportWizard(models.TransientModel):
         except (ValueError, TypeError):
             return 0.0
 
-    def _build_preview_vals(self, rows):
+    @classmethod
+    def _get_mapped_cell(cls, row, mapping, field_name, default=""):
+        idx = mapping.get(field_name)
+        if idx is None or idx >= len(row):
+            return default
+        return row[idx]
+
+    def _build_preview_vals(self, rows, column_mapping):
         """Парсит строки Excel с автосопоставлением.
 
         Returns:
@@ -193,17 +330,35 @@ class ObjectRequestImportWizard(models.TransientModel):
 
             seq += 1
             supplier_article = parser.normalize_str(
-                self._to_str(row[1]) if len(row) > 1 else ""
+                self._to_str(
+                    self._get_mapped_cell(
+                        row,
+                        column_mapping,
+                        "supplier_article",
+                    )
+                )
             )
-            name_raw = self._to_str(row[2]) if len(row) > 2 else ""
+            name_raw = self._to_str(
+                self._get_mapped_cell(row, column_mapping, "name_raw")
+            )
             uom_raw = parser.normalize_uom(
-                self._to_str(row[3]) if len(row) > 3 else ""
+                self._to_str(
+                    self._get_mapped_cell(row, column_mapping, "uom_raw")
+                )
             )
-            qty = self._to_float(row[4]) if len(row) > 4 else 0.0
-            price = self._to_float(row[5]) if len(row) > 5 else 0.0
-            comment = self._to_str(row[6]) if len(row) > 6 else ""
+            qty = self._to_float(
+                self._get_mapped_cell(row, column_mapping, "qty", 0.0)
+            )
+            price = self._to_float(
+                self._get_mapped_cell(row, column_mapping, "price", 0.0)
+            )
+            comment = self._to_str(
+                self._get_mapped_cell(row, column_mapping, "comment")
+            )
             supplier_raw = parser.normalize_str(
-                self._to_str(row[7]) if len(row) > 7 else ""
+                self._to_str(
+                    self._get_mapped_cell(row, column_mapping, "supplier_raw")
+                )
             )
 
             has_error, error_msg = False, ""
@@ -276,7 +431,8 @@ class ObjectRequestImportWizard(models.TransientModel):
             )
             return self._reopen()
 
-        col_errors = self._validate_columns(rows[0])
+        column_mapping = self._map_columns(rows[0])
+        col_errors = self._validate_columns(rows[0], column_mapping)
         if col_errors:
             self.write(
                 {
@@ -288,7 +444,10 @@ class ObjectRequestImportWizard(models.TransientModel):
             )
             return self._reopen()
 
-        preview_vals, problem_count = self._build_preview_vals(rows)
+        preview_vals, problem_count = self._build_preview_vals(
+            rows,
+            column_mapping,
+        )
 
         if not preview_vals:
             self.write(
@@ -307,11 +466,17 @@ class ObjectRequestImportWizard(models.TransientModel):
         matched = sum(1 for v in preview_vals if not v["matching_required"])
         unmatched = total - matched
         messages = [
+            self._describe_import_format(rows[0], column_mapping),
             f"Распознано строк: {total}",
             f"Сопоставлено товаров: {matched}",
         ]
         if unmatched:
             messages.append(f"Требуют сопоставления: {unmatched}")
+        if "uom_raw" not in column_mapping:
+            messages.append(
+                "Предупреждение: колонка единицы измерения не распознана; "
+                "строки будут импортированы без ед. изм. из файла."
+            )
         if problem_count:
             messages.append(
                 f"Строк с ошибками (предупреждение): {problem_count}"

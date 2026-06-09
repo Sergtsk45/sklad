@@ -64,7 +64,10 @@
                                 >
                                     <field name="sequence" string="№"/>
                                     <field name="source_row_no" string="Стр. Excel"/>
-                                    <field name="supplier_article" string="Артикул"/>
+                                    <field
+                                        name="supplier_article"
+                                        string="Артикул / Обозначение"
+                                    />
                                     <field name="name_raw" string="Наименование"/>
                                     <field name="uom_raw" string="Ед. изм."/>
                                     <field name="qty" string="Кол-во"/>
