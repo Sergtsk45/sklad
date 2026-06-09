@@ -1,0 +1,1358 @@
+{
+  "before": {
+    "created_at": "2026-06-08T21:37:48Z",
+    "database": "odoo19",
+    "modules": [
+      {
+        "name": "stock",
+        "state": "installed",
+        "latest_version": "19.0.1.1",
+        "installed_version": "19.0.1.1"
+      },
+      {
+        "name": "purchase",
+        "state": "installed",
+        "latest_version": "19.0.1.2",
+        "installed_version": "19.0.1.2"
+      },
+      {
+        "name": "object_request",
+        "state": "installed",
+        "latest_version": "19.0.1.1.0",
+        "installed_version": "19.0.1.1.0"
+      },
+      {
+        "name": "ai_assistant",
+        "state": "installed",
+        "latest_version": "19.0.1.0.0",
+        "installed_version": "19.0.1.0.0"
+      }
+    ],
+    "sequence": {
+      "id": 99,
+      "code": "object.request.project.code",
+      "prefix": "O",
+      "padding": 3,
+      "number_next_actual": 5
+    },
+    "warehouses": [
+      {
+        "id": 16,
+        "code": "ОбМ-4",
+        "name": "Б. Хмельницкого, 112",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 99,
+        "lot_stock_id": 100,
+        "in_type_id": 121,
+        "int_type_id": 127,
+        "picking_type_ids": [
+          121,
+          127,
+          122
+        ],
+        "quant_count": 16,
+        "picking_count": 2,
+        "purchase_order_count": 2
+      },
+      {
+        "id": 8,
+        "code": "ОбМ-1",
+        "name": "Амурком (Островского 234)",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 51,
+        "lot_stock_id": 52,
+        "in_type_id": 57,
+        "int_type_id": 63,
+        "picking_type_ids": [
+          57,
+          63
+        ],
+        "quant_count": 11,
+        "picking_count": 2,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 10,
+        "code": "ОбМ-2",
+        "name": "Ломоносова 164",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 63,
+        "lot_stock_id": 64,
+        "in_type_id": 73,
+        "int_type_id": 79,
+        "picking_type_ids": [
+          73,
+          79,
+          74
+        ],
+        "quant_count": 17,
+        "picking_count": 1,
+        "purchase_order_count": 1
+      },
+      {
+        "id": 11,
+        "code": "ОбМ-3",
+        "name": "Ленина 231",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 69,
+        "lot_stock_id": 70,
+        "in_type_id": 81,
+        "int_type_id": 87,
+        "picking_type_ids": [
+          81,
+          87,
+          82
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 1
+      },
+      {
+        "id": 12,
+        "code": "O001",
+        "name": "Амурком склад",
+        "active": false,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 75,
+        "lot_stock_id": 76,
+        "in_type_id": false,
+        "int_type_id": false,
+        "picking_type_ids": [],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 13,
+        "code": "O002",
+        "name": "База (2-х этажное здание) склад",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 81,
+        "lot_stock_id": 82,
+        "in_type_id": 97,
+        "int_type_id": 103,
+        "picking_type_ids": [
+          97,
+          103,
+          98
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 14,
+        "code": "O003",
+        "name": "Изготовления мостов склад",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 87,
+        "lot_stock_id": 88,
+        "in_type_id": 105,
+        "int_type_id": 111,
+        "picking_type_ids": [
+          105,
+          111,
+          106
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 15,
+        "code": "O004",
+        "name": "офис склад",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 93,
+        "lot_stock_id": 94,
+        "in_type_id": 113,
+        "int_type_id": 119,
+        "picking_type_ids": [
+          113,
+          119,
+          114
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 17,
+        "code": "ОбМ-5",
+        "name": "Северная, 165 т/сеть от гаража до магазина",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 105,
+        "lot_stock_id": 106,
+        "in_type_id": 129,
+        "int_type_id": 135,
+        "picking_type_ids": [
+          129,
+          135,
+          130
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      }
+    ],
+    "target_quants": [
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 239,
+        "product": "Кран латунный Ду20 В-В бабочка   (1/22)",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 270,
+        "product": "Кран  фланцевый Ду100 Н/П",
+        "quantity": 9.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 502,
+        "product": "Фильтр  магнитный фланцевый 100",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 175,
+        "product": "Затвор  ду80 ру16 чугун",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 176,
+        "product": "Затвор ду100 ру16 чугун",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 115,
+        "product": "Тройник 108х4 ст.",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 450,
+        "product": "Резьба 15 длинная",
+        "quantity": 10.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 451,
+        "product": "Резьба 20 длинная",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 426,
+        "product": "Прокладка паронит  65",
+        "quantity": 12.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 427,
+        "product": "Прокладка паронит  80",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 428,
+        "product": "Прокладка паронит 100",
+        "quantity": 20.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 114,
+        "product": "Отвод 108х4",
+        "quantity": 10.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 125,
+        "product": "Болт 16х 70",
+        "quantity": 56.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 132,
+        "product": "Гайка М16",
+        "quantity": 56.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 466,
+        "product": "Муфта стальная Ду15",
+        "quantity": 3.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 550,
+        "product": "Фланец  65-16 кованый",
+        "quantity": 12.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "location_id": 64,
+        "location": "ОбМ-2/Склад объекта",
+        "product_id": 551,
+        "product": "Фланец  80-16 кованый",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 583,
+        "product": "Труба стальная электросварная (э/с) 89×3,5 (Ду 80) ГОСТ 10704-91",
+        "quantity": 18.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 582,
+        "product": "Труба стальная электросварная (э/с) 76×3,5 (Ду 65) ГОСТ 10704-91",
+        "quantity": 180.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 587,
+        "product": "Труба стальная водогазопроводная (ВГП) 15×2,8 (наружный диаметр 21,3 мм) ГОСТ 3262-75",
+        "quantity": 336.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 588,
+        "product": "Труба стальная водогазопроводная (ВГП) 20×2,8 (наружный диаметр 26,8 мм) ГОСТ 3262-75",
+        "quantity": 180.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 590,
+        "product": "Труба стальная водогазопроводная (ВГП) 40×3,5 (наружный диаметр 48,0 мм) ГОСТ 3262-75",
+        "quantity": 306.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 591,
+        "product": "Труба стальная водогазопроводная (ВГП) 50×3,5 (наружный диаметр 60,0 мм) ГОСТ 3262-75",
+        "quantity": 78.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 66,
+        "product": "Кран латунный LD Ду20 ру40 В-В бабочка",
+        "quantity": 30.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 609,
+        "product": "Кран латунный LD Ду15 ру40 В-Н бабочка",
+        "quantity": 90.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 610,
+        "product": "Бочонок 20 L=55mm",
+        "quantity": 90.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 611,
+        "product": "Бочонок 15 гост 6357-81 L=55mm",
+        "quantity": 50.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 612,
+        "product": "Сгон Ду20 8969-75",
+        "quantity": 60.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 613,
+        "product": "Сгон Ду15 ГОСТ 8969-75",
+        "quantity": 40.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 614,
+        "product": "Контргайка стальная 15мм ГОСТ 8968-75",
+        "quantity": 40.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 615,
+        "product": "Контргайка стальная 20мм ГОСТ 8968-75",
+        "quantity": 65.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 616,
+        "product": "Муфта стальная Ду15 ГОСТ 8966-75",
+        "quantity": 40.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "location_id": 100,
+        "location": "ОбМ-4/Наличие",
+        "product_id": 617,
+        "product": "Муфта стальная Ду20 ГОСТ 8966-75",
+        "quantity": 65.0,
+        "reserved_quantity": 0.0
+      }
+    ],
+    "target_documents": [
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "ОбМ-2",
+        "picking_type_ids": [
+          73,
+          79,
+          74
+        ],
+        "pickings": [
+          {
+            "id": 34,
+            "name": "ОбМ-2/IN/00001",
+            "state": "done",
+            "picking_type_id": 73,
+            "origin": "P00005"
+          }
+        ],
+        "purchase_orders": [
+          {
+            "id": 5,
+            "name": "P00005",
+            "state": "purchase",
+            "picking_type_id": 73,
+            "partner_ref": false
+          }
+        ]
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "ОбМ-4",
+        "picking_type_ids": [
+          121,
+          127,
+          122
+        ],
+        "pickings": [
+          {
+            "id": 38,
+            "name": "ОбМ-4/IN/00001",
+            "state": "cancel",
+            "picking_type_id": 121,
+            "origin": "P00010 / Счёт УТ-1132"
+          },
+          {
+            "id": 45,
+            "name": "ОбМ-4/IN/00002",
+            "state": "done",
+            "picking_type_id": 121,
+            "origin": "P00014"
+          }
+        ],
+        "purchase_orders": [
+          {
+            "id": 14,
+            "name": "P00014",
+            "state": "purchase",
+            "picking_type_id": 121,
+            "partner_ref": "554"
+          },
+          {
+            "id": 10,
+            "name": "P00010",
+            "state": "purchase",
+            "picking_type_id": 121,
+            "partner_ref": "УТ-1132"
+          }
+        ]
+      }
+    ],
+    "projects": [
+      {
+        "id": 2,
+        "code": "O001",
+        "name": "Амурком",
+        "active": true,
+        "warehouse_id": 12,
+        "warehouse_code": "O001",
+        "request_count": 1,
+        "request_ids": [
+          4
+        ]
+      },
+      {
+        "id": 4,
+        "code": "O002",
+        "name": "База (2-х этажное здание)",
+        "active": true,
+        "warehouse_id": 13,
+        "warehouse_code": "O002",
+        "request_count": 1,
+        "request_ids": [
+          3
+        ]
+      },
+      {
+        "id": 3,
+        "code": "O003",
+        "name": "Изготовления мостов",
+        "active": true,
+        "warehouse_id": 14,
+        "warehouse_code": "O003",
+        "request_count": 3,
+        "request_ids": [
+          7,
+          5,
+          2
+        ]
+      },
+      {
+        "id": 1,
+        "code": "O004",
+        "name": "офис",
+        "active": true,
+        "warehouse_id": 15,
+        "warehouse_code": "O004",
+        "request_count": 1,
+        "request_ids": [
+          1
+        ]
+      }
+    ]
+  },
+  "actions": [
+    {
+      "action": "archive_project",
+      "project_id": 2,
+      "old_code": "O001",
+      "new_code": "X001"
+    },
+    {
+      "action": "archive_project",
+      "project_id": 4,
+      "old_code": "O002",
+      "new_code": "X002"
+    },
+    {
+      "action": "archive_project",
+      "project_id": 3,
+      "old_code": "O003",
+      "new_code": "X003"
+    },
+    {
+      "action": "archive_project",
+      "project_id": 1,
+      "old_code": "O004",
+      "new_code": "X004"
+    },
+    {
+      "action": "create_project",
+      "project_id": 5,
+      "code": "O001",
+      "warehouse_id": 10
+    },
+    {
+      "action": "update_warehouse",
+      "warehouse_id": 10,
+      "legacy_code": "ОбМ-2",
+      "code": "O001",
+      "name": "Ломоносова 164 склад"
+    },
+    {
+      "action": "create_project",
+      "project_id": 6,
+      "code": "O002",
+      "warehouse_id": 16
+    },
+    {
+      "action": "update_warehouse",
+      "warehouse_id": 16,
+      "legacy_code": "ОбМ-4",
+      "code": "O002",
+      "name": "Б. Хмельницкого, 112 склад"
+    }
+  ],
+  "validations": [
+    {
+      "warehouse_id": 10,
+      "expected_code": "O001",
+      "warehouse_code": "O001",
+      "warehouse_name": "Ломоносова 164 склад",
+      "project_ids": [
+        5
+      ],
+      "project_count": 1,
+      "ok": true
+    },
+    {
+      "warehouse_id": 16,
+      "expected_code": "O002",
+      "warehouse_code": "O002",
+      "warehouse_name": "Б. Хмельницкого, 112 склад",
+      "project_ids": [
+        6
+      ],
+      "project_count": 1,
+      "ok": true
+    }
+  ],
+  "after": {
+    "created_at": "2026-06-08T21:37:48Z",
+    "database": "odoo19",
+    "modules": [
+      {
+        "name": "stock",
+        "state": "installed",
+        "latest_version": "19.0.1.1",
+        "installed_version": "19.0.1.1"
+      },
+      {
+        "name": "purchase",
+        "state": "installed",
+        "latest_version": "19.0.1.2",
+        "installed_version": "19.0.1.2"
+      },
+      {
+        "name": "object_request",
+        "state": "installed",
+        "latest_version": "19.0.1.1.0",
+        "installed_version": "19.0.1.1.0"
+      },
+      {
+        "name": "ai_assistant",
+        "state": "installed",
+        "latest_version": "19.0.1.0.0",
+        "installed_version": "19.0.1.0.0"
+      }
+    ],
+    "sequence": {
+      "id": 99,
+      "code": "object.request.project.code",
+      "prefix": "O",
+      "padding": 3,
+      "number_next_actual": 5
+    },
+    "warehouses": [
+      {
+        "id": 16,
+        "code": "O002",
+        "name": "Б. Хмельницкого, 112 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 99,
+        "lot_stock_id": 100,
+        "in_type_id": 121,
+        "int_type_id": 127,
+        "picking_type_ids": [
+          121,
+          127,
+          122
+        ],
+        "quant_count": 16,
+        "picking_count": 2,
+        "purchase_order_count": 2
+      },
+      {
+        "id": 8,
+        "code": "ОбМ-1",
+        "name": "Амурком (Островского 234)",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 51,
+        "lot_stock_id": 52,
+        "in_type_id": 57,
+        "int_type_id": 63,
+        "picking_type_ids": [
+          57,
+          63
+        ],
+        "quant_count": 11,
+        "picking_count": 2,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 10,
+        "code": "O001",
+        "name": "Ломоносова 164 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 63,
+        "lot_stock_id": 64,
+        "in_type_id": 73,
+        "int_type_id": 79,
+        "picking_type_ids": [
+          73,
+          79,
+          74
+        ],
+        "quant_count": 17,
+        "picking_count": 1,
+        "purchase_order_count": 1
+      },
+      {
+        "id": 11,
+        "code": "ОбМ-3",
+        "name": "Ленина 231",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 69,
+        "lot_stock_id": 70,
+        "in_type_id": 81,
+        "int_type_id": 87,
+        "picking_type_ids": [
+          81,
+          87,
+          82
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 1
+      },
+      {
+        "id": 17,
+        "code": "ОбМ-5",
+        "name": "Северная, 165 т/сеть от гаража до магазина",
+        "active": true,
+        "company_id": 1,
+        "company": "Теплосервис-Комплект ООО",
+        "view_location_id": 105,
+        "lot_stock_id": 106,
+        "in_type_id": 129,
+        "int_type_id": 135,
+        "picking_type_ids": [
+          129,
+          135,
+          130
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      }
+    ],
+    "target_quants": [
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 239,
+        "product": "Кран латунный Ду20 В-В бабочка   (1/22)",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 270,
+        "product": "Кран  фланцевый Ду100 Н/П",
+        "quantity": 9.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 502,
+        "product": "Фильтр  магнитный фланцевый 100",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 175,
+        "product": "Затвор  ду80 ру16 чугун",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 176,
+        "product": "Затвор ду100 ру16 чугун",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 115,
+        "product": "Тройник 108х4 ст.",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 450,
+        "product": "Резьба 15 длинная",
+        "quantity": 10.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 451,
+        "product": "Резьба 20 длинная",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 426,
+        "product": "Прокладка паронит  65",
+        "quantity": 12.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 427,
+        "product": "Прокладка паронит  80",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 428,
+        "product": "Прокладка паронит 100",
+        "quantity": 20.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 114,
+        "product": "Отвод 108х4",
+        "quantity": 10.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 125,
+        "product": "Болт 16х 70",
+        "quantity": 56.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 132,
+        "product": "Гайка М16",
+        "quantity": 56.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 466,
+        "product": "Муфта стальная Ду15",
+        "quantity": 3.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 550,
+        "product": "Фланец  65-16 кованый",
+        "quantity": 12.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "location_id": 64,
+        "location": "O001/Склад объекта",
+        "product_id": 551,
+        "product": "Фланец  80-16 кованый",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 583,
+        "product": "Труба стальная электросварная (э/с) 89×3,5 (Ду 80) ГОСТ 10704-91",
+        "quantity": 18.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 582,
+        "product": "Труба стальная электросварная (э/с) 76×3,5 (Ду 65) ГОСТ 10704-91",
+        "quantity": 180.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 587,
+        "product": "Труба стальная водогазопроводная (ВГП) 15×2,8 (наружный диаметр 21,3 мм) ГОСТ 3262-75",
+        "quantity": 336.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 588,
+        "product": "Труба стальная водогазопроводная (ВГП) 20×2,8 (наружный диаметр 26,8 мм) ГОСТ 3262-75",
+        "quantity": 180.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 590,
+        "product": "Труба стальная водогазопроводная (ВГП) 40×3,5 (наружный диаметр 48,0 мм) ГОСТ 3262-75",
+        "quantity": 306.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 591,
+        "product": "Труба стальная водогазопроводная (ВГП) 50×3,5 (наружный диаметр 60,0 мм) ГОСТ 3262-75",
+        "quantity": 78.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 66,
+        "product": "Кран латунный LD Ду20 ру40 В-В бабочка",
+        "quantity": 30.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 609,
+        "product": "Кран латунный LD Ду15 ру40 В-Н бабочка",
+        "quantity": 90.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 610,
+        "product": "Бочонок 20 L=55mm",
+        "quantity": 90.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 611,
+        "product": "Бочонок 15 гост 6357-81 L=55mm",
+        "quantity": 50.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 612,
+        "product": "Сгон Ду20 8969-75",
+        "quantity": 60.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 613,
+        "product": "Сгон Ду15 ГОСТ 8969-75",
+        "quantity": 40.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 614,
+        "product": "Контргайка стальная 15мм ГОСТ 8968-75",
+        "quantity": 40.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 615,
+        "product": "Контргайка стальная 20мм ГОСТ 8968-75",
+        "quantity": 65.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 616,
+        "product": "Муфта стальная Ду15 ГОСТ 8966-75",
+        "quantity": 40.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "location_id": 100,
+        "location": "O002/Наличие",
+        "product_id": 617,
+        "product": "Муфта стальная Ду20 ГОСТ 8966-75",
+        "quantity": 65.0,
+        "reserved_quantity": 0.0
+      }
+    ],
+    "target_documents": [
+      {
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "picking_type_ids": [
+          73,
+          79,
+          74
+        ],
+        "pickings": [
+          {
+            "id": 34,
+            "name": "ОбМ-2/IN/00001",
+            "state": "done",
+            "picking_type_id": 73,
+            "origin": "P00005"
+          }
+        ],
+        "purchase_orders": [
+          {
+            "id": 5,
+            "name": "P00005",
+            "state": "purchase",
+            "picking_type_id": 73,
+            "partner_ref": false
+          }
+        ]
+      },
+      {
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "picking_type_ids": [
+          121,
+          127,
+          122
+        ],
+        "pickings": [
+          {
+            "id": 38,
+            "name": "ОбМ-4/IN/00001",
+            "state": "cancel",
+            "picking_type_id": 121,
+            "origin": "P00010 / Счёт УТ-1132"
+          },
+          {
+            "id": 45,
+            "name": "ОбМ-4/IN/00002",
+            "state": "done",
+            "picking_type_id": 121,
+            "origin": "P00014"
+          }
+        ],
+        "purchase_orders": [
+          {
+            "id": 14,
+            "name": "P00014",
+            "state": "purchase",
+            "picking_type_id": 121,
+            "partner_ref": "554"
+          },
+          {
+            "id": 10,
+            "name": "P00010",
+            "state": "purchase",
+            "picking_type_id": 121,
+            "partner_ref": "УТ-1132"
+          }
+        ]
+      }
+    ],
+    "projects": [
+      {
+        "id": 2,
+        "code": "X001",
+        "name": "Амурком [архив O001]",
+        "active": false,
+        "warehouse_id": 12,
+        "warehouse_code": "X001",
+        "request_count": 1,
+        "request_ids": [
+          4
+        ]
+      },
+      {
+        "id": 4,
+        "code": "X002",
+        "name": "База (2-х этажное здание) [архив O002]",
+        "active": false,
+        "warehouse_id": 13,
+        "warehouse_code": "X002",
+        "request_count": 1,
+        "request_ids": [
+          3
+        ]
+      },
+      {
+        "id": 6,
+        "code": "O002",
+        "name": "Б. Хмельницкого, 112",
+        "active": true,
+        "warehouse_id": 16,
+        "warehouse_code": "O002",
+        "request_count": 0,
+        "request_ids": []
+      },
+      {
+        "id": 3,
+        "code": "X003",
+        "name": "Изготовления мостов [архив O003]",
+        "active": false,
+        "warehouse_id": 14,
+        "warehouse_code": "X003",
+        "request_count": 3,
+        "request_ids": [
+          7,
+          5,
+          2
+        ]
+      },
+      {
+        "id": 5,
+        "code": "O001",
+        "name": "Ломоносова 164",
+        "active": true,
+        "warehouse_id": 10,
+        "warehouse_code": "O001",
+        "request_count": 0,
+        "request_ids": []
+      },
+      {
+        "id": 1,
+        "code": "X004",
+        "name": "офис [архив O004]",
+        "active": false,
+        "warehouse_id": 15,
+        "warehouse_code": "X004",
+        "request_count": 1,
+        "request_ids": [
+          1
+        ]
+      }
+    ]
+  }
+}

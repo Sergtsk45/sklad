@@ -9,13 +9,13 @@ class TestWarehouseStockAction(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.warehouse = cls.env['stock.warehouse'].search(
-            [('code', '=', 'ОбМ-4')],
+            [('code', '=', 'O002')],
             limit=1,
         )
         if not cls.warehouse:
             cls.warehouse = cls.env['stock.warehouse'].create({
                 'name': 'Б. Хмельницкого, 112',
-                'code': 'ОбМ-4',
+                'code': 'O002',
             })
 
     def test_action_sets_warehouse_context(self):
@@ -27,14 +27,23 @@ class TestWarehouseStockAction(TransactionCase):
             action['context']['search_warehouse'],
             self.warehouse.id,
         )
-        self.assertEqual(action['context']['search_default_real_stock_available'], 1)
+        self.assertEqual(
+            action['context']['search_default_real_stock_available'],
+            1,
+        )
 
     def test_action_without_available_filter(self):
         action = self.env['stock.warehouse'].with_context(
             active_ids=[self.warehouse.id, 0],
         ).action_ai_open_warehouse_stock()
-        self.assertEqual(action['context']['search_warehouse'], self.warehouse.id)
-        self.assertNotIn('search_default_real_stock_available', action['context'])
+        self.assertEqual(
+            action['context']['search_warehouse'],
+            self.warehouse.id,
+        )
+        self.assertNotIn(
+            'search_default_real_stock_available',
+            action['context'],
+        )
 
     def test_action_missing_warehouse_raises(self):
         with self.assertRaises(UserError):

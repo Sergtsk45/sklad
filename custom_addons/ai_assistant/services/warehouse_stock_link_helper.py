@@ -5,7 +5,10 @@ from odoo.addons.ai_assistant.services.action_tools.read_tools import (
     GetWarehouseStockLinkTool,
 )
 
-_WAREHOUSE_CODE = re.compile(r'ОбМ-\d+', re.IGNORECASE | re.UNICODE)
+_WAREHOUSE_CODE = re.compile(
+    r'(?:ОбМ-\d+|O\d{3})',
+    re.IGNORECASE | re.UNICODE,
+)
 _STOCK_LINK_INTENT = re.compile(
     r'(?:'
     r'(?:дай|дайте|нужна|нужен|предостав|получ).{0,20}(?:ссылк|url|фильтр)|'

@@ -15,8 +15,9 @@ class TestUT1132PipelineDraft(TransactionCase):
         super().setUpClass()
         cls.project = cls.env['object.request.project'].create({
             'name': 'Б. Хмельницкого, 112',
+            'code': 'O002',
         })
-        cls.warehouse = cls._get_or_create_obm4_warehouse()
+        cls.warehouse = cls.project.warehouse_id
         cls.vendor = cls.env['res.partner'].create({
             'name': 'ООО ПроМеталл',
             'vat': '1435000360',
@@ -35,19 +36,6 @@ class TestUT1132PipelineDraft(TransactionCase):
                 'object_request.group_supply_manager',
             ],
         )
-
-    @classmethod
-    def _get_or_create_obm4_warehouse(cls):
-        warehouse = cls.env['stock.warehouse'].search(
-            [('code', '=', 'ОбМ-4')],
-            limit=1,
-        )
-        if warehouse:
-            return warehouse
-        return cls.env['stock.warehouse'].create({
-            'name': 'Б. Хмельницкого, 112',
-            'code': 'ОбМ-4',
-        })
 
     @classmethod
     def _create_pipe_products(cls):
@@ -150,7 +138,7 @@ class TestUT1132PipelineDraft(TransactionCase):
             po_result['result']['po_id']
         )
         self.assertEqual(po.state, 'draft')
-        self.assertEqual(po.picking_type_id.warehouse_id.code, 'ОбМ-4')
+        self.assertEqual(po.picking_type_id.warehouse_id.code, 'O002')
         self.assertEqual(po.origin, 'OR/2026/05/0007')
         self.assertEqual(po.partner_ref, 'УТ-1132')
         self.assertEqual(sum(po.order_line.mapped('product_qty')), 1098)

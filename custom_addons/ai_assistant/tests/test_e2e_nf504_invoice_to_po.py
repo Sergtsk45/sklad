@@ -99,7 +99,7 @@ class TestNF504InvoiceToPODraft(TransactionCase):
             'vat': '280110406377',
             'supplier_rank': 1,
         })
-        cls.warehouse = cls._get_or_create_obm4_warehouse()
+        cls.warehouse = cls._get_or_create_o002_warehouse()
         cls.uom_unit = cls.env.ref('uom.product_uom_unit')
         cls.uom_meter = cls.env.ref('uom.product_uom_meter')
         cls.category = cls.env['product.category'].create({
@@ -109,15 +109,15 @@ class TestNF504InvoiceToPODraft(TransactionCase):
         cls.supply_user = cls._create_supply_user()
 
     @classmethod
-    def _get_or_create_obm4_warehouse(cls):
+    def _get_or_create_o002_warehouse(cls):
         wh = cls.env['stock.warehouse'].search(
-            [('code', '=', 'ОбМ-4')], limit=1,
+            [('code', '=', 'O002')], limit=1,
         )
         if wh:
             return wh
         return cls.env['stock.warehouse'].create({
             'name': 'Б. Хмельницкого, 112',
-            'code': 'ОбМ-4',
+            'code': 'O002',
         })
 
     @classmethod

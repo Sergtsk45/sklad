@@ -25,8 +25,13 @@ class TestActionToolValidators(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.object_warehouse = cls.env['stock.warehouse'].create({
-            'name': 'ОбМ Validator Test',
-            'code': 'ОбМ-V',
+            'name': 'O777 Validator Test',
+            'code': 'O777',
+        })
+        cls.object_project = cls.env['object.request.project'].create({
+            'name': 'Validator Object',
+            'code': 'O777',
+            'warehouse_id': cls.object_warehouse.id,
         })
         cls.default_warehouse = cls.env.ref('stock.warehouse0')
         cls.pipe_category = cls.env['product.category'].create({
@@ -97,7 +102,10 @@ class TestActionToolValidators(TransactionCase):
 
     def test_validate_warehouse_code_pattern_rejects_non_object(self):
         with self.assertRaises(ValidationError):
-            validate_warehouse_code_pattern(self.env, self.default_warehouse.id)
+            validate_warehouse_code_pattern(
+                self.env,
+                self.default_warehouse.id,
+            )
 
     def test_validate_partner_is_supplier_happy(self):
         validate_partner_is_supplier(self.env, self.supplier.id)

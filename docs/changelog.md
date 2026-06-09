@@ -1,3 +1,72 @@
+## [2026-06-09] — chore(warehouse): финализация WHM-005/WHM-010 и legacy остатки
+
+### Выполнено
+- WHM-005: тестовый `ОбМ-1/INT/00002` отменён штатным `stock.picking.action_cancel`; тестовые остатки `ОбМ-1` обнулены через inventory adjustment; `ОбМ-1` архивирован.
+- `ОбМ-1`, `ОбМ-3`, `ОбМ-5` теперь inactive; на тестовых складах нет ненулевых quants.
+- WHM-010: регламент обновлён под production-схему `O001` (Ломоносова 164) и `O002` (Б. Хмельницкого, 112).
+
+### Изменено
+- `search_stock_quants` нормализует legacy `warehouse_codes`: `ОбМ-2` → `O001`, `ОбМ-4` → `O002`.
+- Документация снабжения и technical debt обновлены: новые операции должны использовать `O001/O002`, legacy `ОбМ-*` остаются только как временные aliases.
+
+### Проверено
+- Prod: `ОбМ-1/INT/00002` в `cancel`; `ОбМ-1`, `ОбМ-3`, `ОбМ-5` inactive; ненулевые quants на них отсутствуют.
+
+---
+
+## [2026-06-09] — chore(warehouse): WHM-008–WHM-009 stage/prod validation
+
+### Выполнено
+- WHM-008: свежий prod dump восстановлен в локальную stage-БД `odoo19_whm_stage`; upgrade `object_request,ai_assistant` прошёл без ошибок.
+- WHM-009: финальный prod smoke выполнен на базе `odoo19` после деплоя и рестарта контейнера `odoo`.
+- `find_warehouse("O")` исправлен как односимвольный префикс для production-складов `O001/O002`; обычные слишком короткие запросы по-прежнему отклоняются.
+- Rollback-smoke создает OR/PO/internal picking для `O001` и `O002` и затем откатывает транзакцию.
+
+### Проверено
+- Stage report: `docs/reports/whm_008_2026-06-09-stage.json`.
+- Prod report: `docs/reports/whm_009_2026-06-09-prod-smoke.json`.
+- Prod validation: `O001` — 17 quant rows / total qty `200.00`; `O002` — 16 quant rows / total qty `1668.00`.
+- AI Assistant: `O001`, `O002`, `O`, `Ломоносова`, `Хмельницкого`, `ОбМ-2`, `ОбМ-4`.
+
+### Backup
+- WHM-008/009: `/opt/project_odoo/backups/whm-008-009-20260609-220424/`.
+
+---
+
+## [2026-06-09] — chore(warehouse): WHM-005–WHM-007 prod follow-up
+
+### Выполнено
+- WHM-005: архивированы тестовые склады `ОбМ-3` и `ОбМ-5`; физического удаления складов, документов и остатков не выполнялось.
+- `ОбМ-1` оставлен активным: архивирование заблокировано незавершенным `ОбМ-1/INT/00002` (`confirmed`, origin `OR/2026/05/0004`), остатки сохранены.
+- WHM-006: добавлена migration `object_request` `19.0.1.2.0/post-migrate.py`, версия модуля поднята до `19.0.1.2.0`.
+- WHM-007: AI Assistant переведен на определение объектного склада через `object.request.project.warehouse_id`, добавлены legacy aliases `ОбМ-2 -> O001`, `ОбМ-4 -> O002`.
+- Prod upgrade `object_request,ai_assistant` выполнен, контейнер `odoo` перезапущен.
+
+### Проверено
+- Local `/ai_assistant`: 327 post-tests, 0 failed, 0 errors.
+- Prod smoke: `find_warehouse("ОбМ-4") -> O002`, `find_warehouse("ОбМ-2") -> O001`, validators проходят для `O001/O002`.
+
+### Backup
+- WHM-005: `/opt/project_odoo/backups/whm-005-20260609-214301/`.
+- WHM-006/007: `/opt/project_odoo/backups/whm-006-007-20260609-215752/`.
+
+---
+
+## [2026-06-09] — chore(object_request): WHM-001–WHM-004 prod warehouse migration
+
+### Выполнено
+- Production backup перед миграцией: `/opt/project_odoo/backups/whm-001-004-20260609-0636/`.
+- Warehouse id `10`: `ОбМ-2` → `O001`, имя → `Ломоносова 164 склад`; локации и picking types сохранены.
+- Warehouse id `16`: `ОбМ-4` → `O002`, имя → `Б. Хмельницкого, 112 склад`; локации и picking types сохранены.
+- Созданы production projects `O001`/`O002`, привязанные к warehouse id `10`/`16`.
+- Тестовые projects `O001`–`O004` архивированы как `X001`–`X004`; физического удаления складов/остатков не выполнялось.
+
+### Отчеты
+- `docs/reports/whm_001_004_2026-06-09-prod.json` — prod audit/action/validation report.
+- `docs/reports/whm_001_004_2026-06-09.json` — локальный diagnostic run.
+
+---
+
 ## [2026-05-31] — fix(ai_assistant): дублирование карточки, LLM обходит workflow
 
 ### Исправлено

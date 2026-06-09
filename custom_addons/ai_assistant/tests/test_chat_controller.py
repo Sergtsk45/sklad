@@ -11,10 +11,13 @@ class TestChatController(HttpCase):
     def setUp(self):
         super().setUp()
         self.authenticate('admin', 'admin')
-        if not self.env['stock.warehouse'].search([('code', '=', 'ОбМ-4')], limit=1):
+        if not self.env['stock.warehouse'].search(
+            [('code', '=', 'O002')],
+            limit=1,
+        ):
             self.env['stock.warehouse'].create({
                 'name': 'Б. Хмельницкого, 112',
-                'code': 'ОбМ-4',
+                'code': 'O002',
             })
 
     def _post_chat(self, payload, authenticated=True):
@@ -445,7 +448,7 @@ class TestChatController(HttpCase):
                 'history': [{
                     'role': 'assistant',
                     'content': (
-                        'Найдено: Склад Б. Хмельницкого, 112 (ОбМ-4).'
+                        'Найдено: Склад Б. Хмельницкого, 112 (O002).'
                     ),
                 }],
             })
@@ -514,7 +517,7 @@ class TestChatController(HttpCase):
             side_effect=_capture_send,
         ):
             result = self._post_chat({
-                'message': 'Создай PO по загруженному счёту',
+                'message': 'Покажи контекст загруженного счёта',
                 'extraction_token': token,
             })
 
@@ -536,12 +539,12 @@ class TestChatController(HttpCase):
             'supplier_rank': 1,
         })
         warehouse = self.env['stock.warehouse'].search(
-            [('code', '=', 'ОбМ-4')], limit=1,
+            [('code', '=', 'O002')], limit=1,
         )
         if not warehouse:
             warehouse = self.env['stock.warehouse'].create({
-                'name': 'ОбМ-4 steps test',
-                'code': 'ОбМ-4',
+                'name': 'O002 steps test',
+                'code': 'O002',
             })
         product = self.env['product.product'].create({
             'name': 'Труба steps test',

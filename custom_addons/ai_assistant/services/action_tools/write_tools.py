@@ -201,7 +201,9 @@ class CreatePurchaseOrderDraftTool(AbstractWriteTool):
         date_planned = (
             args.get('date_planned')
             or po.date_planned
-            or (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d 08:00:00')
+            or (datetime.now() + timedelta(days=1)).strftime(
+                '%Y-%m-%d 08:00:00'
+            )
         )
         warnings = []
         for line in lines:
@@ -295,7 +297,8 @@ default_registry.register(
 class CreateProductDraftTool(AbstractWriteTool):
     name = 'create_product_draft'
     description = (
-        'Создать черновик номенклатуры product.product (storable, purchase_ok).'
+        'Создать черновик номенклатуры product.product '
+        '(storable, purchase_ok).'
     )
     required_groups = ['ai_assistant.group_ai_assistant_supply']
     parameters_schema = {
@@ -548,16 +551,16 @@ class CreateInternalPickingDraftTool(AbstractWriteTool):
         location = env['stock.location'].browse(location_dest_id)
         if not location.exists():
             raise ValidationError('Локация назначения не найдена.')
-        warehouses = env['stock.warehouse'].search([
-            ('code', 'ilike', 'ОбМ-'),
-        ])
-        for warehouse in warehouses:
+        projects = env['object.request.project'].with_context(
+            active_test=False
+        ).search([('warehouse_id', '!=', False)])
+        for warehouse in projects.mapped('warehouse_id'):
             if location.id in env['stock.location'].search([
                 ('id', 'child_of', warehouse.view_location_id.id),
             ]).ids:
                 return
         raise ValidationError(
-            'Локация назначения должна относиться к складу объекта ОбМ-*.'
+            'Локация назначения должна относиться к складу объекта.'
         )
 
     def _validate_moves(self, env, moves):

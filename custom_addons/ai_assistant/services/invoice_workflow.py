@@ -1,5 +1,5 @@
 # @file: invoice_workflow.py
-# @description: Пошаговое создание номенклатуры и PO по счёту (extraction_token).
+# @description: Пошаговое создание номенклатуры и PO по счёту.
 # @dependencies: invoice_context_helper, invoice_extraction_store
 # @created: 2026-05-31
 
@@ -73,7 +73,9 @@ class InvoiceWorkflow:
             args['uom_id'] = uom_id
         return args
 
-    def record_product_created(self, uid, extraction_token, line_key, product_id):
+    def record_product_created(
+        self, uid, extraction_token, line_key, product_id
+    ):
         session = self._store.ensure_session(uid, extraction_token)
         session['created_by_line'][str(line_key)] = product_id
 
@@ -129,7 +131,7 @@ class InvoiceWorkflow:
 
     def prepare_po_draft(self, uid, extraction_token, warehouse_query=None):
         """
-        Подготовить args для create_purchase_order_draft или вернуть ошибку/уточнение.
+        Подготовить args для create_purchase_order_draft.
         """
         query = (warehouse_query or '').strip()
         if not query:
@@ -137,7 +139,8 @@ class InvoiceWorkflow:
                 'status': 'awaiting_po_warehouse',
                 'answer': (
                     'Укажите код или название склада приёмки '
-                    '(например, Ос.ск или ОбМ-4).'
+                    '(например, Ос.ск или O002; '
+                    'legacy ОбМ-4 тоже работает).'
                 ),
                 'meta': {'awaiting_po_warehouse': True},
             }
@@ -277,7 +280,9 @@ class InvoiceWorkflow:
                 price = float(price)
             except (TypeError, ValueError):
                 price = 0.0
-            uom_id = self._resolve_uom_id(item.get('unit')) or product.uom_id.id
+            uom_id = (
+                self._resolve_uom_id(item.get('unit')) or product.uom_id.id
+            )
             lines.append({
                 'product_id': product_id,
                 'product_qty': qty,
@@ -288,7 +293,9 @@ class InvoiceWorkflow:
         invoice_number = context.get('invoice_number') or 'INVOICE'
         origin = '%s/AIA' % invoice_number
         in_type = warehouse.get('in_type_id')
-        picking_type_id = in_type[0] if isinstance(in_type, (list, tuple)) else in_type
+        picking_type_id = (
+            in_type[0] if isinstance(in_type, (list, tuple)) else in_type
+        )
         return {
             'partner_id': partner_id,
             'picking_type_id': picking_type_id,

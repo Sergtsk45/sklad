@@ -51,14 +51,20 @@ class TestActionReadTools(TransactionCase):
         })
         cls.address_warehouse = cls._get_or_create_warehouse(
             'Б. Хмельницкого, 112',
-            'ОбМ-4',
+            'O002',
         )
         cls.prefix_warehouse = cls._get_or_create_warehouse(
             'Ломоносова 164',
-            'ОбМ-2',
+            'O001',
         )
         cls.env['stock.quant']._update_available_quantity(
             cls.product, cls.warehouse.lot_stock_id, 7.0
+        )
+        cls.env['stock.quant']._update_available_quantity(
+            cls.product, cls.address_warehouse.lot_stock_id, 3.0
+        )
+        cls.env['stock.quant']._update_available_quantity(
+            cls.product, cls.prefix_warehouse.lot_stock_id, 2.0
         )
         cls.project = cls.env['object.request.project'].create({
             'name': 'Read Tools Object',
@@ -162,6 +168,18 @@ class TestActionReadTools(TransactionCase):
         self.assertTrue(result['quants'])
         self.assertEqual(result['quants'][0]['quantity'], 7.0)
 
+    def test_search_stock_quants_uses_legacy_warehouse_alias(self):
+        result = SearchStockQuantsTool().execute(self.env, {
+            'product_id': self.product.id,
+            'warehouse_codes': ['ОбМ-4'],
+            'only_positive': True,
+        })
+        warehouse_ids = {
+            quant['warehouse_id'][0]
+            for quant in result['quants']
+        }
+        self.assertIn(self.address_warehouse.id, warehouse_ids)
+
     def test_find_warehouse_by_code(self):
         result = FindWarehouseTool().execute(
             self.env, {'query': 'ОбМ-R'}
@@ -199,6 +217,14 @@ class TestActionReadTools(TransactionCase):
     def test_find_warehouse_obm_prefix_list(self):
         result = FindWarehouseTool().execute(
             self.env, {'query': 'ОбМ-'}
+        )
+        warehouse_ids = [item['id'] for item in result['warehouses']]
+        self.assertIn(self.address_warehouse.id, warehouse_ids)
+        self.assertIn(self.prefix_warehouse.id, warehouse_ids)
+
+    def test_find_warehouse_object_prefix_list(self):
+        result = FindWarehouseTool().execute(
+            self.env, {'query': 'O'}
         )
         warehouse_ids = [item['id'] for item in result['warehouses']]
         self.assertIn(self.address_warehouse.id, warehouse_ids)
@@ -307,9 +333,12 @@ class TestActionReadTools(TransactionCase):
             {'warehouse_id': self.address_warehouse.id},
         )
         self.assertTrue(result['url'].startswith('/odoo/ai-warehouse-stock?'))
-        self.assertIn('active_id=%s' % self.address_warehouse.id, result['url'])
+        self.assertIn(
+            'active_id=%s' % self.address_warehouse.id,
+            result['url'],
+        )
         self.assertNotIn('search_warehouse', result['url'])
-        self.assertIn('ОбМ-4', result['label'])
+        self.assertIn('O002', result['label'])
 
     def test_get_warehouse_stock_link_by_query(self):
         result = GetWarehouseStockLinkTool().execute(

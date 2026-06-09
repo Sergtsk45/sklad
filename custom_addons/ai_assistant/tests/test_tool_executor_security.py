@@ -177,7 +177,7 @@ class TestToolExecutorSecurity(TransactionCase):
         executor = ToolExecutor(
             self.env(user=self.supply_user),
             registry=registry,
-            rate_limiter=ToolRateLimiter(),
+            rate_limiter=ToolRateLimiter(write_max=5),
         )
 
         for index in range(5):

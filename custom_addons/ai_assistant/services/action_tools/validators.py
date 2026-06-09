@@ -2,6 +2,10 @@ from odoo.exceptions import ValidationError
 
 
 OBJECT_WAREHOUSE_PREFIX = 'ОбМ-'
+LEGACY_OBJECT_WAREHOUSE_ALIASES = {
+    'обм-2': 'O001',
+    'обм-4': 'O002',
+}
 METER_UOM_NAMES = {'m', 'meter', 'meters', 'метр', 'метры', 'м'}
 
 
@@ -50,9 +54,13 @@ def validate_warehouse_code_pattern(env, warehouse_id):
     warehouse = env['stock.warehouse'].browse(warehouse_id)
     if not warehouse.exists():
         raise ValidationError('Склад не найден.')
-    if not (warehouse.code or '').startswith(OBJECT_WAREHOUSE_PREFIX):
+    project = env['object.request.project'].with_context(
+        active_test=False
+    ).search([('warehouse_id', '=', warehouse.id)], limit=1)
+    if not project:
         raise ValidationError(
-            'Склад должен быть складом объекта с кодом ОбМ-*; текущий код: %s.'
+            'Склад должен быть связан с объектом комплектации; '
+            'текущий код: %s.'
             % (warehouse.code or 'не задан')
         )
 
@@ -81,7 +89,8 @@ def validate_uom_is_meter(env, product_id):
         return ''
 
     return (
-        'Для труб ожидается единица измерения "метр"; у товара "%s" сейчас "%s". '
+        'Для труб ожидается единица измерения "метр"; '
+        'у товара "%s" сейчас "%s". '
         'До закрытия TD-002 пересчет должен подтвердить пользователь.'
         % (product.display_name, product.uom_id.display_name)
     )

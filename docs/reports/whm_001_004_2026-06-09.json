@@ -1,0 +1,735 @@
+{
+  "status": "blocked_missing_target_warehouses",
+  "missing_warehouse_ids": [
+    10,
+    16
+  ],
+  "before": {
+    "created_at": "2026-06-08T21:30:08Z",
+    "database": "odoo19_local",
+    "modules": [
+      {
+        "name": "stock",
+        "state": "installed",
+        "latest_version": "19.0.1.1",
+        "installed_version": "19.0.1.1"
+      },
+      {
+        "name": "purchase",
+        "state": "installed",
+        "latest_version": "19.0.1.2",
+        "installed_version": "19.0.1.2"
+      },
+      {
+        "name": "object_request",
+        "state": "installed",
+        "latest_version": "19.0.1.1.0",
+        "installed_version": "19.0.1.1.0"
+      },
+      {
+        "name": "ai_assistant",
+        "state": "installed",
+        "latest_version": "19.0.1.0.0",
+        "installed_version": "19.0.1.0.0"
+      }
+    ],
+    "sequence": {
+      "id": 921,
+      "code": "object.request.project.code",
+      "prefix": "O",
+      "padding": 3,
+      "number_next_actual": 2907
+    },
+    "warehouses": [
+      {
+        "id": 3704,
+        "code": "O1898",
+        "name": "SMOKE Object 20260512-u1 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22225,
+        "lot_stock_id": 22226,
+        "in_type_id": 29577,
+        "int_type_id": 29583,
+        "picking_type_ids": [
+          29577,
+          29583,
+          29578
+        ],
+        "quant_count": 1,
+        "picking_count": 1,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3706,
+        "code": "O1900",
+        "name": "SMOK2 Proj Purchase 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22237,
+        "lot_stock_id": 22238,
+        "in_type_id": 29593,
+        "int_type_id": 29599,
+        "picking_type_ids": [
+          29593,
+          29599,
+          29594
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 1
+      },
+      {
+        "id": 3707,
+        "code": "O1901",
+        "name": "SMOK2 Proj EmptyIssue 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22243,
+        "lot_stock_id": 22244,
+        "in_type_id": 29601,
+        "int_type_id": 29607,
+        "picking_type_ids": [
+          29601,
+          29607,
+          29602
+        ],
+        "quant_count": 1,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3708,
+        "code": "O1902",
+        "name": "SMOK2 Proj Preview 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22249,
+        "lot_stock_id": 22250,
+        "in_type_id": 29609,
+        "int_type_id": 29615,
+        "picking_type_ids": [
+          29609,
+          29615,
+          29610
+        ],
+        "quant_count": 1,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3709,
+        "code": "O1903",
+        "name": "SMOK3 Browser PUR 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22255,
+        "lot_stock_id": 22256,
+        "in_type_id": 29617,
+        "int_type_id": 29623,
+        "picking_type_ids": [
+          29617,
+          29623,
+          29618
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3710,
+        "code": "O1904",
+        "name": "SMOK3 Browser EMPTY 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22261,
+        "lot_stock_id": 22262,
+        "in_type_id": 29625,
+        "int_type_id": 29631,
+        "picking_type_ids": [
+          29625,
+          29631,
+          29626
+        ],
+        "quant_count": 1,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3711,
+        "code": "O1905",
+        "name": "SMOK3 Browser MULTI 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22267,
+        "lot_stock_id": 22268,
+        "in_type_id": 29633,
+        "int_type_id": 29639,
+        "picking_type_ids": [
+          29633,
+          29639,
+          29634
+        ],
+        "quant_count": 1,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3713,
+        "code": "O1907",
+        "name": "SMOK3 PUR 20260511-214929-713169 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22279,
+        "lot_stock_id": 22280,
+        "in_type_id": 29641,
+        "int_type_id": 29647,
+        "picking_type_ids": [
+          29641,
+          29647,
+          29642
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 1
+      },
+      {
+        "id": 3714,
+        "code": "O1908",
+        "name": "SMOK3 EMP 20260511-214929-713169 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22285,
+        "lot_stock_id": 22286,
+        "in_type_id": 29649,
+        "int_type_id": 29655,
+        "picking_type_ids": [
+          29649,
+          29655,
+          29650
+        ],
+        "quant_count": 1,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3715,
+        "code": "O1909",
+        "name": "SMOK3 MLT 20260511-214929-713169 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22291,
+        "lot_stock_id": 22292,
+        "in_type_id": 29657,
+        "int_type_id": 29663,
+        "picking_type_ids": [
+          29657,
+          29663,
+          29658
+        ],
+        "quant_count": 1,
+        "picking_count": 1,
+        "purchase_order_count": 0
+      }
+    ],
+    "target_quants": [],
+    "target_documents": [],
+    "projects": [
+      {
+        "id": 15488,
+        "code": "O1901",
+        "name": "SMOK2 Proj EmptyIssue 20260511",
+        "active": true,
+        "warehouse_id": 3707,
+        "warehouse_code": "O1901",
+        "request_count": 1,
+        "request_ids": [
+          14023
+        ]
+      },
+      {
+        "id": 15489,
+        "code": "O1902",
+        "name": "SMOK2 Proj Preview 20260511",
+        "active": true,
+        "warehouse_id": 3708,
+        "warehouse_code": "O1902",
+        "request_count": 1,
+        "request_ids": [
+          14024
+        ]
+      },
+      {
+        "id": 15487,
+        "code": "O1900",
+        "name": "SMOK2 Proj Purchase 20260511",
+        "active": true,
+        "warehouse_id": 3706,
+        "warehouse_code": "O1900",
+        "request_count": 1,
+        "request_ids": [
+          14022
+        ]
+      },
+      {
+        "id": 15491,
+        "code": "O1904",
+        "name": "SMOK3 Browser EMPTY 20260511",
+        "active": true,
+        "warehouse_id": 3710,
+        "warehouse_code": "O1904",
+        "request_count": 1,
+        "request_ids": [
+          14026
+        ]
+      },
+      {
+        "id": 15492,
+        "code": "O1905",
+        "name": "SMOK3 Browser MULTI 20260511",
+        "active": true,
+        "warehouse_id": 3711,
+        "warehouse_code": "O1905",
+        "request_count": 1,
+        "request_ids": [
+          14027
+        ]
+      },
+      {
+        "id": 15490,
+        "code": "O1903",
+        "name": "SMOK3 Browser PUR 20260511",
+        "active": true,
+        "warehouse_id": 3709,
+        "warehouse_code": "O1903",
+        "request_count": 1,
+        "request_ids": [
+          14025
+        ]
+      },
+      {
+        "id": 15495,
+        "code": "O1908",
+        "name": "SMOK3 EMP 20260511-214929-713169",
+        "active": true,
+        "warehouse_id": 3714,
+        "warehouse_code": "O1908",
+        "request_count": 1,
+        "request_ids": [
+          14029
+        ]
+      },
+      {
+        "id": 15496,
+        "code": "O1909",
+        "name": "SMOK3 MLT 20260511-214929-713169",
+        "active": true,
+        "warehouse_id": 3715,
+        "warehouse_code": "O1909",
+        "request_count": 1,
+        "request_ids": [
+          14030
+        ]
+      },
+      {
+        "id": 15494,
+        "code": "O1907",
+        "name": "SMOK3 PUR 20260511-214929-713169",
+        "active": true,
+        "warehouse_id": 3713,
+        "warehouse_code": "O1907",
+        "request_count": 1,
+        "request_ids": [
+          14028
+        ]
+      },
+      {
+        "id": 15485,
+        "code": "O1898",
+        "name": "SMOKE Object 20260512-u1",
+        "active": true,
+        "warehouse_id": 3704,
+        "warehouse_code": "O1898",
+        "request_count": 1,
+        "request_ids": [
+          14020
+        ]
+      }
+    ]
+  },
+  "actions": [],
+  "validations": [],
+  "after": {
+    "created_at": "2026-06-08T21:30:08Z",
+    "database": "odoo19_local",
+    "modules": [
+      {
+        "name": "stock",
+        "state": "installed",
+        "latest_version": "19.0.1.1",
+        "installed_version": "19.0.1.1"
+      },
+      {
+        "name": "purchase",
+        "state": "installed",
+        "latest_version": "19.0.1.2",
+        "installed_version": "19.0.1.2"
+      },
+      {
+        "name": "object_request",
+        "state": "installed",
+        "latest_version": "19.0.1.1.0",
+        "installed_version": "19.0.1.1.0"
+      },
+      {
+        "name": "ai_assistant",
+        "state": "installed",
+        "latest_version": "19.0.1.0.0",
+        "installed_version": "19.0.1.0.0"
+      }
+    ],
+    "sequence": {
+      "id": 921,
+      "code": "object.request.project.code",
+      "prefix": "O",
+      "padding": 3,
+      "number_next_actual": 2907
+    },
+    "warehouses": [
+      {
+        "id": 3704,
+        "code": "O1898",
+        "name": "SMOKE Object 20260512-u1 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22225,
+        "lot_stock_id": 22226,
+        "in_type_id": 29577,
+        "int_type_id": 29583,
+        "picking_type_ids": [
+          29577,
+          29583,
+          29578
+        ],
+        "quant_count": 1,
+        "picking_count": 1,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3706,
+        "code": "O1900",
+        "name": "SMOK2 Proj Purchase 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22237,
+        "lot_stock_id": 22238,
+        "in_type_id": 29593,
+        "int_type_id": 29599,
+        "picking_type_ids": [
+          29593,
+          29599,
+          29594
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 1
+      },
+      {
+        "id": 3707,
+        "code": "O1901",
+        "name": "SMOK2 Proj EmptyIssue 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22243,
+        "lot_stock_id": 22244,
+        "in_type_id": 29601,
+        "int_type_id": 29607,
+        "picking_type_ids": [
+          29601,
+          29607,
+          29602
+        ],
+        "quant_count": 1,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3708,
+        "code": "O1902",
+        "name": "SMOK2 Proj Preview 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22249,
+        "lot_stock_id": 22250,
+        "in_type_id": 29609,
+        "int_type_id": 29615,
+        "picking_type_ids": [
+          29609,
+          29615,
+          29610
+        ],
+        "quant_count": 1,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3709,
+        "code": "O1903",
+        "name": "SMOK3 Browser PUR 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22255,
+        "lot_stock_id": 22256,
+        "in_type_id": 29617,
+        "int_type_id": 29623,
+        "picking_type_ids": [
+          29617,
+          29623,
+          29618
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3710,
+        "code": "O1904",
+        "name": "SMOK3 Browser EMPTY 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22261,
+        "lot_stock_id": 22262,
+        "in_type_id": 29625,
+        "int_type_id": 29631,
+        "picking_type_ids": [
+          29625,
+          29631,
+          29626
+        ],
+        "quant_count": 1,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3711,
+        "code": "O1905",
+        "name": "SMOK3 Browser MULTI 20260511 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22267,
+        "lot_stock_id": 22268,
+        "in_type_id": 29633,
+        "int_type_id": 29639,
+        "picking_type_ids": [
+          29633,
+          29639,
+          29634
+        ],
+        "quant_count": 1,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3713,
+        "code": "O1907",
+        "name": "SMOK3 PUR 20260511-214929-713169 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22279,
+        "lot_stock_id": 22280,
+        "in_type_id": 29641,
+        "int_type_id": 29647,
+        "picking_type_ids": [
+          29641,
+          29647,
+          29642
+        ],
+        "quant_count": 0,
+        "picking_count": 0,
+        "purchase_order_count": 1
+      },
+      {
+        "id": 3714,
+        "code": "O1908",
+        "name": "SMOK3 EMP 20260511-214929-713169 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22285,
+        "lot_stock_id": 22286,
+        "in_type_id": 29649,
+        "int_type_id": 29655,
+        "picking_type_ids": [
+          29649,
+          29655,
+          29650
+        ],
+        "quant_count": 1,
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 3715,
+        "code": "O1909",
+        "name": "SMOK3 MLT 20260511-214929-713169 склад",
+        "active": true,
+        "company_id": 1,
+        "company": "My Company",
+        "view_location_id": 22291,
+        "lot_stock_id": 22292,
+        "in_type_id": 29657,
+        "int_type_id": 29663,
+        "picking_type_ids": [
+          29657,
+          29663,
+          29658
+        ],
+        "quant_count": 1,
+        "picking_count": 1,
+        "purchase_order_count": 0
+      }
+    ],
+    "target_quants": [],
+    "target_documents": [],
+    "projects": [
+      {
+        "id": 15488,
+        "code": "O1901",
+        "name": "SMOK2 Proj EmptyIssue 20260511",
+        "active": true,
+        "warehouse_id": 3707,
+        "warehouse_code": "O1901",
+        "request_count": 1,
+        "request_ids": [
+          14023
+        ]
+      },
+      {
+        "id": 15489,
+        "code": "O1902",
+        "name": "SMOK2 Proj Preview 20260511",
+        "active": true,
+        "warehouse_id": 3708,
+        "warehouse_code": "O1902",
+        "request_count": 1,
+        "request_ids": [
+          14024
+        ]
+      },
+      {
+        "id": 15487,
+        "code": "O1900",
+        "name": "SMOK2 Proj Purchase 20260511",
+        "active": true,
+        "warehouse_id": 3706,
+        "warehouse_code": "O1900",
+        "request_count": 1,
+        "request_ids": [
+          14022
+        ]
+      },
+      {
+        "id": 15491,
+        "code": "O1904",
+        "name": "SMOK3 Browser EMPTY 20260511",
+        "active": true,
+        "warehouse_id": 3710,
+        "warehouse_code": "O1904",
+        "request_count": 1,
+        "request_ids": [
+          14026
+        ]
+      },
+      {
+        "id": 15492,
+        "code": "O1905",
+        "name": "SMOK3 Browser MULTI 20260511",
+        "active": true,
+        "warehouse_id": 3711,
+        "warehouse_code": "O1905",
+        "request_count": 1,
+        "request_ids": [
+          14027
+        ]
+      },
+      {
+        "id": 15490,
+        "code": "O1903",
+        "name": "SMOK3 Browser PUR 20260511",
+        "active": true,
+        "warehouse_id": 3709,
+        "warehouse_code": "O1903",
+        "request_count": 1,
+        "request_ids": [
+          14025
+        ]
+      },
+      {
+        "id": 15495,
+        "code": "O1908",
+        "name": "SMOK3 EMP 20260511-214929-713169",
+        "active": true,
+        "warehouse_id": 3714,
+        "warehouse_code": "O1908",
+        "request_count": 1,
+        "request_ids": [
+          14029
+        ]
+      },
+      {
+        "id": 15496,
+        "code": "O1909",
+        "name": "SMOK3 MLT 20260511-214929-713169",
+        "active": true,
+        "warehouse_id": 3715,
+        "warehouse_code": "O1909",
+        "request_count": 1,
+        "request_ids": [
+          14030
+        ]
+      },
+      {
+        "id": 15494,
+        "code": "O1907",
+        "name": "SMOK3 PUR 20260511-214929-713169",
+        "active": true,
+        "warehouse_id": 3713,
+        "warehouse_code": "O1907",
+        "request_count": 1,
+        "request_ids": [
+          14028
+        ]
+      },
+      {
+        "id": 15485,
+        "code": "O1898",
+        "name": "SMOKE Object 20260512-u1",
+        "active": true,
+        "warehouse_id": 3704,
+        "warehouse_code": "O1898",
+        "request_count": 1,
+        "request_ids": [
+          14020
+        ]
+      }
+    ]
+  }
+}

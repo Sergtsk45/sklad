@@ -887,13 +887,21 @@ class AiAssistantController(http.Controller):
                         ),
                     )
             else:
-                # Все карточки готовы — запрашиваем склад
-                payload = workflow.prepare_po_draft(uid, token, '')
+                # Все карточки готовы — используем переданный склад или
+                # запрашиваем его, если склад еще не выбран.
+                warehouse_query = (invoice_po_warehouse or '').strip()
+                payload = workflow.prepare_po_draft(
+                    uid,
+                    token,
+                    warehouse_query,
+                )
                 return {
                     'answer': payload.get('answer', ''),
                     'suggestions': payload.get('suggestions') or [],
                     'cards': [],
-                    'meta': payload.get('meta') or {'awaiting_po_warehouse': True},
+                    'meta': payload.get('meta') or {
+                        'awaiting_po_warehouse': True,
+                    },
                 }
 
         warehouse_query = (invoice_po_warehouse or '').strip()

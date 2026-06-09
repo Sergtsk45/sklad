@@ -12,13 +12,13 @@ class TestWarehouseStockLinkHelper(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.warehouse = cls.env['stock.warehouse'].search(
-            [('code', '=', 'ОбМ-4')],
+            [('code', '=', 'O002')],
             limit=1,
         )
         if not cls.warehouse:
             cls.warehouse = cls.env['stock.warehouse'].create({
                 'name': 'Б. Хмельницкого, 112',
-                'code': 'ОбМ-4',
+                'code': 'O002',
             })
 
     def setUp(self):
@@ -41,7 +41,7 @@ class TestWarehouseStockLinkHelper(TransactionCase):
         history = [{
             'role': 'assistant',
             'content': (
-                'Найдено: Склад Б. Хмельницкого, 112 (ОбМ-4).'
+                'Найдено: Склад Б. Хмельницкого, 112 (O002).'
             ),
         }]
         result = self.helper.fetch_link(
@@ -49,7 +49,7 @@ class TestWarehouseStockLinkHelper(TransactionCase):
             history,
         )
         self.assertTrue(result['url'].startswith('/odoo/ai-warehouse-stock?'))
-        self.assertIn('ОбМ-4', result['label'])
+        self.assertIn('O002', result['label'])
 
     def test_enrich_answer_replaces_none(self):
         result = self.helper.fetch_link(

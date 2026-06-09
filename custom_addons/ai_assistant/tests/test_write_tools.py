@@ -34,10 +34,7 @@ class TestActionWriteTools(TransactionCase):
         cls.pipe_category = cls.env['product.category'].create({
             'name': 'Трубы write tools',
         })
-        cls.object_warehouse = cls.env['stock.warehouse'].create({
-            'name': 'ОбМ-4 Write Tools',
-            'code': 'ОбМ-4',
-        })
+        cls.object_warehouse = cls.project.warehouse_id
         cls.default_warehouse = cls.env.ref('stock.warehouse0')
         cls.pipe_products = cls.env['product.product']
         for idx in range(6):

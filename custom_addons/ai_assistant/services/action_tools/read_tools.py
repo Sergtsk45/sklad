@@ -6,6 +6,7 @@ from odoo.exceptions import AccessError
 from .base import AbstractReadTool
 from .navigation_catalog import NAVIGATION_CATALOG
 from .registry import default_registry
+from .validators import LEGACY_OBJECT_WAREHOUSE_ALIASES
 
 
 class SearchProductsTool(AbstractReadTool):
@@ -133,7 +134,13 @@ class SearchStockQuantsTool(AbstractReadTool):
             domain.append(('quantity', '>', 0))
         warehouse_codes = args.get('warehouse_codes')
         if warehouse_codes:
-            domain.append(('warehouse_id.code', 'in', warehouse_codes))
+            domain.append(
+                (
+                    'warehouse_id.code',
+                    'in',
+                    self._normalize_warehouse_codes(warehouse_codes),
+                )
+            )
         quants = env['stock.quant'].search_read(
             domain,
             [
@@ -149,18 +156,30 @@ class SearchStockQuantsTool(AbstractReadTool):
         )
         return {'quants': quants}
 
+    def _normalize_warehouse_codes(self, warehouse_codes):
+        normalized = []
+        for code in warehouse_codes:
+            target = LEGACY_OBJECT_WAREHOUSE_ALIASES.get(
+                (code or '').strip().lower(),
+                code,
+            )
+            if target not in normalized:
+                normalized.append(target)
+        return normalized
+
 
 class FindWarehouseTool(AbstractReadTool):
     name = 'find_warehouse'
     description = (
-        'Найти склад по коду (ОбМ-4, ОбМ-) или по части '
-        'названия/адреса (Хмельницкого, Ломоносова).'
+        'Найти склад по коду (O002, ОбМ-4, O, ОбМ-) или по части '
+        'названия/адреса (Хмельницкого, Ломоносова). Legacy aliases: '
+        'ОбМ-2 -> O001, ОбМ-4 -> O002.'
     )
     parameters_schema = {
         'type': 'object',
         'properties': {
-            'query': {'type': 'string', 'minLength': 2},
-            'code_pattern': {'type': 'string', 'minLength': 2},
+            'query': {'type': 'string', 'minLength': 1},
+            'code_pattern': {'type': 'string', 'minLength': 1},
         },
         'anyOf': [
             {'required': ['query']},
@@ -171,8 +190,17 @@ class FindWarehouseTool(AbstractReadTool):
 
     def execute(self, env, args):
         query = self._get_query(args)
-        if self._is_object_warehouse_code_query(query):
-            operator = 'ilike' if query.endswith('-') else '=ilike'
+        alias_code = self._legacy_alias_code(query)
+        if alias_code:
+            domain = [('code', '=ilike', alias_code)]
+        elif self._is_object_warehouse_prefix_query(query):
+            domain = [('code', 'in', self._legacy_object_alias_targets())]
+        elif self._is_warehouse_code_query(query):
+            operator = (
+                'ilike'
+                if query.endswith('-') or query.upper() == 'O'
+                else '=ilike'
+            )
             domain = [('code', operator, query)]
         else:
             domain = ['|', ('code', 'ilike', query), ('name', 'ilike', query)]
@@ -193,12 +221,26 @@ class FindWarehouseTool(AbstractReadTool):
     def _get_query(self, args):
         # code_pattern is kept for compatibility with existing read tool calls.
         query = (args.get('query') or args.get('code_pattern') or '').strip()
-        if len(query) < 2:
+        if len(query) < 2 and query.upper() != 'O':
             raise ValueError('query must contain at least 2 characters')
         return query
 
     def _is_object_warehouse_code_query(self, query):
         return bool(re.match(r'^ОбМ-\d*$', query))
+
+    def _is_object_warehouse_prefix_query(self, query):
+        return query == 'ОбМ-'
+
+    def _is_warehouse_code_query(self, query):
+        return bool(
+            re.match(r'^(?:ОбМ-\d*|O\d*|O)$', query, re.IGNORECASE)
+        )
+
+    def _legacy_alias_code(self, query):
+        return LEGACY_OBJECT_WAREHOUSE_ALIASES.get(query.lower())
+
+    def _legacy_object_alias_targets(self):
+        return list(LEGACY_OBJECT_WAREHOUSE_ALIASES.values())
 
     def _deduplicate_by_id(self, warehouses):
         warehouse_by_id = {}
