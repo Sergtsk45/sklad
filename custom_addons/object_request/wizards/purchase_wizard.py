@@ -170,11 +170,7 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             else fields.Datetime.now()
         )
         for line in req_lines:
-            uom = (
-                line.uom_id
-                or line.product_id.uom_po_id
-                or line.product_id.uom_id
-            )
+            uom = line.uom_id or line.product_id.uom_id
             pol = self.env["purchase.order.line"].create(
                 {
                     "order_id": po.id,

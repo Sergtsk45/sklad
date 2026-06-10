@@ -1,3 +1,10 @@
+## [2026-06-10] — fix(object_request): закупка из OR в Odoo 19
+
+### Исправлено
+- `object.request.purchase.wizard`: убрана ссылка на удалённое в Odoo 19 поле `product.uom_po_id`; единица закупки берётся из `line.uom_id` или `product.uom_id`.
+
+---
+
 ## [2026-06-10] — feat(object_request): гибкий Excel-импорт Wizard V2
 
 ### Добавлено
