@@ -46,6 +46,16 @@ _CB675_HEADER_TEXT = """
 № Товары (работы, услуги) Количество Цена Сумма
 """
 
+_INV234_HEADER_TEXT = """
+Счет № 237 от 02.04.26
+ИНН 7733816402 КПП 773301001 ООО "ЭСКО 3Э" 125362, г. Москва, ул. Водников, д. 2, стр.
+Поставщик:
+4, Б.1, А, К 16, тел. (499) 929-82-35, 5-000-217
+ИНН 2801138406/280101001 КПП ООО "ДВ ПАРТНЁР" 675002, Амурская Область, г.
+Покупатель:
+Благовещенск, ул. Фрунзе, д. 91, офис 3, тел. (4162) 66-01-06
+"""
+
 _NF504_ITEMS_ROWS = [
     # строка-заголовок
     ["№", "Наименование товара", "Ед.", "Кол-во", "Цена",
@@ -226,6 +236,28 @@ class TestParseHeader(TransactionCase):
         self.assertNotIn("КПП", result["supplier"]["address"])
         self.assertNotIn("тел.", result["supplier"]["address"].lower())
         self.assertEqual(result["buyer"]["name"], "Розничный покупатель")
+
+    def test_supplier_name_after_inn_block_inv234(self):
+        """Сбербанк/1С: ИНН первым, название после него; тел. без двоеточия."""
+        result = {
+            "invoice_number": "",
+            "invoice_date": "",
+            "supplier": {
+                "name": "", "inn": "", "kpp": "", "address": "",
+                "bank": {"name": "", "bik": "", "account": "", "corr_account": ""},
+            },
+            "buyer": {"name": "", "inn": "", "kpp": "", "address": ""},
+        }
+        _parse_header(_INV234_HEADER_TEXT, result)
+        self.assertEqual(result["invoice_number"], "237")
+        self.assertEqual(result["supplier"]["name"], "ООО ЭСКО 3Э")
+        self.assertEqual(result["supplier"]["inn"], "7733816402")
+        self.assertEqual(result["supplier"]["kpp"], "773301001")
+        self.assertIn("Водников", result["supplier"]["address"])
+        self.assertIn("Б.1", result["supplier"]["address"])
+        self.assertNotIn("тел.", result["supplier"]["address"].lower())
+        self.assertNotIn("ДВ ПАРТНЁР", result["supplier"]["address"])
+        self.assertNotIn("ДВ ПАРТНЁР", result["supplier"]["name"])
 
 
 @tagged('post_install', '-at_install')

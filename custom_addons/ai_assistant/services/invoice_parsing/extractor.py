@@ -136,6 +136,15 @@ _BUYER_RE = re.compile(
 )
 _SUPPLIER_LABEL_LINE_RE = re.compile(r"\n\s*поставщик\s*:\s*\n", re.I)
 
+# Формат «ИНН … КПП … ООО/АО/ИП … адрес» — имя после ИНН-блока.
+_ORG_NAME_AFTER_INN_RE = re.compile(
+    r'инн\s*:?\s*\d{10,12}(?:[/\d]*)?\s+'
+    r'(?:кпп\s*:?\s*[\d]+\s+)?'
+    r'((?:ООО|АО|ОАО|ЗАО|ПАО|ИП|НП|МУП|ГУП|АНО|НКО|ФГУП)\s+[^,\n]{2,60}?)'
+    r'(?=\s*[,\n]|\s+\d{6}\b|\s*$)',
+    re.I,
+)
+
 
 def _first(pattern: re.Pattern, text: str, group: int = 1) -> str:
     m = pattern.search(text)
@@ -183,10 +192,18 @@ def _compose_supplier_address(pre_line: str, post_block: str) -> str:
         if addr:
             parts.append(addr.rstrip(','))
     if post_block:
-        tail = re.sub(r'тел\.?:.*$', '', post_block, flags=re.I).strip().rstrip(',')
+        # Обрезаем от тел. (с двоеточием или без, со скобкой или без) до конца.
+        tail = re.sub(
+            r'(?:\bтел\.?\s*[\(\:]|e-mail\b).*',
+            '',
+            post_block,
+            flags=re.I | re.S,
+        ).strip().rstrip(',')
+        # Дополнительно обрезаем строку следующего контрагента (начинается с ИНН).
+        tail = re.split(r'\n\s*инн\b', tail, maxsplit=1, flags=re.I)[0].strip().rstrip(',')
         if tail:
             parts.append(tail)
-    return ', '.join(parts)
+    return ', '.join(p for p in parts if p)
 
 
 def _parse_header(text: str, result: dict) -> None:
@@ -202,7 +219,14 @@ def _parse_header(text: str, result: dict) -> None:
     )
     if sup_identity or sup_post:
         identity_block = sup_identity or sup_post
-        result["supplier"]["name"] = extract_party_name(identity_block)
+        name = extract_party_name(identity_block)
+        if not name:
+            # Формат «ИНН … КПП … ООО "Название"»: имя стоит после ИНН-блока.
+            m_inn_first = _ORG_NAME_AFTER_INN_RE.search(identity_block)
+            if m_inn_first:
+                name = re.sub(r'["«»\']', '', m_inn_first.group(1)).strip()
+                name = ' '.join(name.split())
+        result["supplier"]["name"] = name
         result["supplier"]["inn"] = (
             _first(_INN_RE, sup_pre) or _first(_INN_RE, sup_post)
         )
@@ -254,7 +278,8 @@ def _normalize_date(raw: str) -> str:
 
 
 def _extract_address(text: str) -> str:
-    m = re.search(r"\d{6}[,\s]+(.*?)(?:тел\.|e-mail|$)", text, re.I | re.S)
+    # (?<!\d) / (?!\d) — не матчить 6 цифр внутри более длинного числа (ИНН/КПП).
+    m = re.search(r"(?<!\d)\d{6}(?!\d)[,\s]+(.*?)(?:тел\.|e-mail|$)", text, re.I | re.S)
     if m:
         return " ".join(m.group(1).split())
     return ""
