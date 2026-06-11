@@ -236,9 +236,9 @@ class CreatePartnerDraftTool(AbstractWriteTool):
 - **Приоритет:** Низкий
 - **Описание:** Разбить `supplier.address` на `street` / `city` / `zip` простыми эвристиками.
 - **Шаги выполнения:**
-  - [ ] `services/invoice_parsing/address_utils.py` или метод в `invoice_context_helper`
-  - [ ] Regex индекса `^\d{6}`, «г. …», «ул. …»
-  - [ ] Fallback: весь текст в `street`
+  - [x] `services/invoice_parsing/address_utils.py` или метод в `invoice_context_helper`
+  - [x] Regex индекса `^\d{6}`, «г. …», «ул. …»
+  - [x] Fallback: весь текст в `street`
 - **Зависимости:** CPP-001
 - **DoD:** На 3+ реальных счетах адрес разбирается без регрессий.
 - **Примечание:** можно отложить после CPP-010; v1 допускает только `street`.
@@ -478,7 +478,7 @@ ssh ubuntu@<vps> 'cd /opt/project_odoo && git pull && \
 | CPP-002 | Контракт create_partner_draft | CPP-1 | Критический | ✅ | CPP-001 |
 | CPP-003 | Write-tool | CPP-2 | Критический | ✅ | CPP-002 |
 | CPP-004 | Валидаторы | CPP-2 | Высокий | ✅ | CPP-002 |
-| CPP-005 | Парсинг адреса | CPP-2 | Низкий | ⬜ | CPP-001 |
+| CPP-005 | Парсинг адреса | CPP-2 | Низкий | ✅ | CPP-001 |
 | CPP-006 | InvoiceContextHelper | CPP-3 | Критический | ✅ | CPP-002, CPP-004 |
 | CPP-007 | InvoiceWorkflow | CPP-3 | Критический | ✅ | CPP-006 |
 | CPP-008 | chat_controller | CPP-3 | Высокий | ✅ | CPP-007 |

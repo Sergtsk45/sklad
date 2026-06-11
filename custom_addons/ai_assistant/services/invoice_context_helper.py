@@ -13,6 +13,9 @@ from odoo.addons.ai_assistant.services.action_tools.read_tools import (
     FindPartnerTool,
     SearchProductsTool,
 )
+from odoo.addons.ai_assistant.services.invoice_parsing.address_utils import (
+    parse_supplier_address,
+)
 
 
 class InvoiceContextHelper:
@@ -91,7 +94,7 @@ class InvoiceContextHelper:
         }
         address = (supplier.get('address') or '').strip()
         if address:
-            args['street'] = address
+            args.update(parse_supplier_address(address))
         kpp = (supplier.get('kpp') or '').strip()
         if kpp:
             args['comment'] = 'КПП: %s' % kpp

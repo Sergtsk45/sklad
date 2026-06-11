@@ -110,7 +110,51 @@ class TestInvoiceContextHelper(TransactionCase):
         self.assertEqual(args['vat'], invoice['supplier']['inn'])
         self.assertTrue(args['is_company'])
         self.assertEqual(args['street'], invoice['supplier']['address'])
+        self.assertEqual(args['zip'], '109012')
+        self.assertEqual(args['city'], 'Москва')
         self.assertEqual(args['comment'], 'КПП: 772701001')
+
+    def test_build_partner_draft_args_parses_city_without_zip(self):
+        args = self.helper.build_partner_draft_args({
+            'supplier': {
+                'name': 'ООО Адрес Без Индекса',
+                'inn': '7727123491',
+                'address': 'г. Санкт-Петербург, Невский пр-кт, д. 10',
+            },
+        })
+
+        self.assertEqual(
+            args['street'],
+            'г. Санкт-Петербург, Невский пр-кт, д. 10',
+        )
+        self.assertEqual(args['city'], 'Санкт-Петербург')
+        self.assertNotIn('zip', args)
+
+    def test_build_partner_draft_args_parses_city_keyword(self):
+        args = self.helper.build_partner_draft_args({
+            'supplier': {
+                'name': 'ООО Город Keyword',
+                'inn': '7727123492',
+                'address': '620000, город Екатеринбург, ул. Мира, д. 1',
+            },
+        })
+
+        self.assertEqual(args['zip'], '620000')
+        self.assertEqual(args['city'], 'Екатеринбург')
+
+    def test_build_partner_draft_args_address_fallback_street_only(self):
+        raw_address = 'Производственная база Северная площадка'
+        args = self.helper.build_partner_draft_args({
+            'supplier': {
+                'name': 'ООО Адрес Fallback',
+                'inn': '7727123493',
+                'address': raw_address,
+            },
+        })
+
+        self.assertEqual(args['street'], raw_address)
+        self.assertNotIn('city', args)
+        self.assertNotIn('zip', args)
 
     def test_fetch_context_marks_partner_inn_required(self):
         invoice = dict(_MOCK_INVOICE)
