@@ -201,6 +201,23 @@ class AiAssistantController(http.Controller):
         if supplier_name:
             summary_parts.append(f'поставщик: {supplier_name}')
         summary = '. '.join(summary_parts) + '.'
+
+        partner_ctx = (invoice_context or {}).get('partner') or {}
+        partner_status = partner_ctx.get('status')
+        if partner_status == 'matched':
+            matched_name = partner_ctx.get('name') or supplier_name
+            matched_id = partner_ctx.get('partner_id')
+            summary += (
+                f'\n✅ Поставщик найден в Odoo: {matched_name}'
+                + (f' (id {matched_id})' if matched_id else '')
+            )
+        elif partner_status == 'ambiguous':
+            summary += '\n⚠ Найдено несколько контрагентов — уточните запрос.'
+        elif partner_ctx.get('partner_error') == 'inn_required':
+            summary += (
+                '\n⚠ Поставщик не найден, ИНН в счёте отсутствует — '
+                'создайте контрагента вручную.'
+            )
         if warnings:
             warning_lines = warnings[:5]
             if len(warnings) > 5:
@@ -608,6 +625,7 @@ class AiAssistantController(http.Controller):
                         executor,
                         tool_call,
                         allow_write=allow_write,
+                        extraction_token=extraction_token,
                     )
                     messages.append({
                         'role': 'tool',
@@ -671,6 +689,7 @@ class AiAssistantController(http.Controller):
                     executor,
                     tool_call,
                     allow_write=allow_write,
+                    extraction_token=extraction_token,
                 )
                 messages.append({
                     'role': 'tool',
@@ -689,7 +708,9 @@ class AiAssistantController(http.Controller):
             'meta': {'mode': mode_label, 'status': 'max_iterations'},
         }
 
-    def _execute_tool_call(self, executor, tool_call, allow_write=True):
+    def _execute_tool_call(
+        self, executor, tool_call, allow_write=True, extraction_token=None
+    ):
         name = tool_call['name']
         args = tool_call.get('arguments') or {}
         if not allow_write:
@@ -705,11 +726,35 @@ class AiAssistantController(http.Controller):
                             'code': 'write_not_allowed',
                             'message': (
                                 'Создание документов доступно только '
-                                'пользователям группы «Снабжение».'
+                                'пользователями группы «Снабжение».'
                             ),
                         },
                     }
+        if name == 'find_partner' and extraction_token:
+            args = self._augment_find_partner_args(args, extraction_token)
         return executor.execute(name, args)
+
+    def _augment_find_partner_args(self, args, extraction_token):
+        """
+        Если LLM ищет поставщика при активном счёте — сначала пробуем ИНН.
+
+        Возвращает args без изменений, если ИНН из счёта не совпадает с query
+        или ИНН не извлечён, но в таком случае вся оригинальная логика
+        find_partner остаётся в силе.
+        """
+        uid = request.env.uid
+        invoice_data = _invoice_store.get(uid, extraction_token)
+        if not invoice_data:
+            return args
+        inn = (
+            (invoice_data.get('supplier') or {}).get('inn') or ''
+        ).strip()
+        if not inn:
+            return args
+        query = (args.get('query') or '').strip()
+        if query == inn:
+            return args
+        return dict(args, query=inn)
 
     def _tool_result_content(self, tool_name, result):
         if result.get('success') and isinstance(result.get('result'), dict):
