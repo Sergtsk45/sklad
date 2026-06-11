@@ -1,5 +1,5 @@
 # @file: invoice_extraction_store.py
-# @description: In-memory TTL-хранилище результатов парсинга счетов по uid+token.
+# @description: In-memory TTL-хранилище результатов парсинга счетов.
 # @dependencies: secrets, time
 # @created: 2026-05-30
 
@@ -23,7 +23,10 @@ class InvoiceExtractionStore:
         token = secrets.token_urlsafe(18)
         self._items[(uid, token)] = {
             'data': invoice_data,
-            'session': {'created_by_line': {}},
+            'session': {
+                'created_by_line': {},
+                'created_partner_id': None,
+            },
             'expires_at': time.time() + self._ttl_seconds,
         }
         return token
@@ -39,13 +42,18 @@ class InvoiceExtractionStore:
         if not item:
             return None
         if 'session' not in item:
-            item['session'] = {'created_by_line': {}}
+            item['session'] = {
+                'created_by_line': {},
+                'created_partner_id': None,
+            }
         if 'created_by_line' not in item['session']:
             item['session']['created_by_line'] = {}
+        if 'created_partner_id' not in item['session']:
+            item['session']['created_partner_id'] = None
         return item['session']
 
     def find_latest_token(self, uid):
-        """Последний неистёкший token пользователя (для workflow без явного token)."""
+        """Последний неистёкший token пользователя."""
         self._purge_expired()
         latest = None
         latest_expires = 0

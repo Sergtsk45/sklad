@@ -7,10 +7,14 @@ from odoo.exceptions import AccessError, ValidationError
 from .base import AbstractWriteTool
 from .registry import default_registry
 from .validators import (
+    infer_is_company,
+    normalize_vat,
+    validate_partner_create_args,
     validate_partner_is_supplier,
     validate_picking_type_for_purchase,
     validate_product_is_storable,
     validate_uom_is_meter,
+    validate_vat_unique,
 )
 
 
@@ -291,6 +295,104 @@ class CreatePurchaseOrderDraftTool(AbstractWriteTool):
 
 default_registry.register(
     CreatePurchaseOrderDraftTool()
+)
+
+
+class CreatePartnerDraftTool(AbstractWriteTool):
+    name = 'create_partner_draft'
+    description = (
+        'Создать поставщика res.partner из реквизитов счёта. '
+        'Только новая запись, без обновления существующих контрагентов.'
+    )
+    required_groups = ['ai_assistant.group_ai_assistant_supply']
+    parameters_schema = {
+        'type': 'object',
+        'properties': {
+            'name': {'type': 'string', 'minLength': 1},
+            'vat': {
+                'type': 'string',
+                'pattern': r'^\D*\d(?:\D*\d){9}(?:(?:\D*\d){2})?\D*$',
+            },
+            'is_company': {'type': ['boolean', 'null']},
+            'street': {'type': ['string', 'null']},
+            'city': {'type': ['string', 'null']},
+            'zip': {'type': ['string', 'null']},
+            'phone': {'type': ['string', 'null']},
+            'email': {'type': ['string', 'null']},
+            'comment': {'type': ['string', 'null']},
+        },
+        'required': ['name', 'vat'],
+        'additionalProperties': False,
+    }
+
+    def execute(self, env, args):
+        _ensure_tool_required_groups(self, env)
+        errors = validate_partner_create_args(args)
+        if errors:
+            raise ValidationError('\n'.join(errors))
+
+        vat = normalize_vat(args.get('vat'))
+        duplicate_id = validate_vat_unique(env, vat)
+        if duplicate_id:
+            duplicate = env['res.partner'].browse(duplicate_id)
+            raise ValidationError(
+                'Контрагент с таким ИНН уже существует: ID %s, %s.'
+                % (duplicate.id, duplicate.display_name)
+            )
+
+        name = (args.get('name') or '').strip()
+        vals = {
+            'name': name,
+            'vat': vat,
+            'is_company': self._is_company(args, name),
+            'supplier_rank': 1,
+            'customer_rank': 0,
+        }
+        for field_name in (
+            'street',
+            'city',
+            'zip',
+            'phone',
+            'email',
+            'comment',
+        ):
+            value = self._clean_optional(args.get(field_name))
+            if value:
+                vals[field_name] = value
+
+        partner = env['res.partner'].create(vals)
+        partner.message_post(
+            body=(
+                'Создано AI-ассистентом по запросу %s, источник: счёт.'
+            ) % env.user.name,
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+        )
+        return {
+            'partner_id': partner.id,
+            'name': partner.display_name,
+            'vat': partner.vat,
+            'url': '/odoo/res.partner/%s' % partner.id,
+        }
+
+    def idempotency_key(self, args):
+        return hashlib.sha256(
+            normalize_vat(args.get('vat')).encode('utf-8')
+        ).hexdigest()
+
+    def _is_company(self, args, name):
+        if args.get('is_company') is not None:
+            return bool(args.get('is_company'))
+        return infer_is_company(name)
+
+    def _clean_optional(self, value):
+        if value is None:
+            return ''
+        return str(value).strip()
+
+
+default_registry.register(
+    CreatePartnerDraftTool()
 )
 
 

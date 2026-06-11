@@ -15,7 +15,16 @@ _FORBIDDEN_METHOD_PATTERNS = [
     r'action_done',
     r'action_post',
 ]
-_FORBIDDEN_WRITE_FIELDS = {'state', 'company_id', 'currency_id'}
+_FORBIDDEN_WRITE_FIELDS = {
+    'bank_ids',
+    'category_id',
+    'child_ids',
+    'company_id',
+    'currency_id',
+    'state',
+    'user_ids',
+}
+_FORBIDDEN_WRITE_FIELD_PREFIXES = ('property_',)
 
 
 class ToolRateLimiter:
@@ -175,7 +184,14 @@ class ToolExecutor:
             return ''
         if result.get('model') and result.get('record_id'):
             return '%s,%s' % (result['model'], result['record_id'])
-        for key in ('request_id', 'po_id', 'picking_id', 'product_id', 'record_id'):
+        for key in (
+            'request_id',
+            'po_id',
+            'picking_id',
+            'product_id',
+            'partner_id',
+            'record_id',
+        ):
             if result.get(key):
                 return '%s=%s' % (key, result[key])
         if result.get('url'):
@@ -196,6 +212,10 @@ class ToolExecutor:
         if isinstance(tool, AbstractWriteTool):
             properties = (tool.parameters_schema or {}).get('properties', {})
             forbidden = _FORBIDDEN_WRITE_FIELDS & set(properties)
+            forbidden |= {
+                field_name for field_name in properties
+                if field_name.startswith(_FORBIDDEN_WRITE_FIELD_PREFIXES)
+            }
             if forbidden:
                 _logger.warning(
                     'AI write tool forbidden fields: name=%s fields=%s',

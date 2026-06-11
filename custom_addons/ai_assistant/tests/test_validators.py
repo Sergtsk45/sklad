@@ -3,12 +3,16 @@ from odoo.tests.common import TransactionCase
 from odoo.tests import tagged
 
 from odoo.addons.ai_assistant.services.action_tools.validators import (
+    infer_is_company,
+    normalize_vat,
+    validate_partner_create_args,
     validate_partner_is_supplier,
     validate_picking_type_for_purchase,
     validate_picking_type_is_object,
     validate_product_is_storable,
     validate_state_in,
     validate_uom_is_meter,
+    validate_vat_unique,
     validate_warehouse_code_pattern,
 )
 
@@ -55,6 +59,7 @@ class TestActionToolValidators(TransactionCase):
         })
         cls.supplier = cls.env['res.partner'].create({
             'name': 'Поставщик validator',
+            'vat': '1435000360',
             'supplier_rank': 1,
         })
         cls.customer = cls.env['res.partner'].create({
@@ -113,6 +118,47 @@ class TestActionToolValidators(TransactionCase):
     def test_validate_partner_is_supplier_rejects_customer(self):
         with self.assertRaises(ValidationError):
             validate_partner_is_supplier(self.env, self.customer.id)
+
+    def test_normalize_vat_keeps_only_digits(self):
+        self.assertEqual(normalize_vat('ИНН 7727 123-456'), '7727123456')
+
+    def test_validate_vat_unique_returns_existing_id(self):
+        self.assertEqual(
+            validate_vat_unique(self.env, '1435 000360'),
+            self.supplier.id,
+        )
+
+    def test_validate_vat_unique_returns_none_for_new_vat(self):
+        self.assertFalse(validate_vat_unique(self.env, '7727123456'))
+
+    def test_infer_is_company_for_ooo(self):
+        self.assertTrue(infer_is_company('ООО "Ромашка"'))
+
+    def test_infer_is_company_for_ip(self):
+        self.assertFalse(infer_is_company('ИП Иванов Иван Иванович'))
+
+    def test_validate_partner_create_args_rejects_empty_vat(self):
+        errors = validate_partner_create_args({
+            'name': 'ООО Ромашка',
+            'vat': '',
+        })
+        self.assertTrue(errors)
+        self.assertIn('ИНН', errors[0])
+
+    def test_validate_partner_create_args_rejects_bad_vat_length(self):
+        errors = validate_partner_create_args({
+            'name': 'ООО Ромашка',
+            'vat': '123',
+        })
+        self.assertTrue(errors)
+        self.assertIn('10 или 12', errors[0])
+
+    def test_validate_partner_create_args_accepts_ip_vat(self):
+        errors = validate_partner_create_args({
+            'name': 'ИП Иванов Иван Иванович',
+            'vat': '143500036001',
+        })
+        self.assertEqual(errors, [])
 
     def test_validate_uom_is_meter_happy(self):
         warning = validate_uom_is_meter(self.env, self.stock_product.id)

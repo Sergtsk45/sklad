@@ -101,7 +101,7 @@ class AiAssistantController(http.Controller):
                 methods=['POST'], csrf=False)
     def upload_invoice(self, **kwargs):
         """
-        AIA-056: Принять PDF/XLSX счёт, распарсить, вернуть сводку + extraction_token.
+        AIA-056: Принять PDF/XLSX счёт, распарсить, вернуть сводку.
         Доступно только группе group_ai_assistant_supply.
         Не логируем содержимое файла (PII).
         """
@@ -111,7 +111,10 @@ class AiAssistantController(http.Controller):
             )
 
         if not request.env.user.has_group(_GROUP_SUPPLY):
-            return _json_error('Доступ запрещён: требуется группа «Снабжение»', 403)
+            return _json_error(
+                'Доступ запрещён: требуется группа «Снабжение»',
+                403,
+            )
 
         uploaded_file = request.httprequest.files.get('file')
         if not uploaded_file:
@@ -134,11 +137,16 @@ class AiAssistantController(http.Controller):
 
         if ext == 'pdf' and not file_bytes.startswith(b'%PDF'):
             return _json_error('Файл не является PDF (неверный заголовок)')
-        if ext == 'xlsx' and not file_bytes[:4] in (b'PK\x03\x04', b'PK\x05\x06'):
+        if (
+            ext == 'xlsx'
+            and file_bytes[:4] not in (b'PK\x03\x04', b'PK\x05\x06')
+        ):
             return _json_error('Файл не является XLSX (неверный заголовок)')
         if ext == 'xlsx':
-            return _json_error('XLSX-формат будет поддержан в следующей версии. '
-                               'Пожалуйста, используйте PDF.')
+            return _json_error(
+                'XLSX-формат будет поддержан в следующей версии. '
+                'Пожалуйста, используйте PDF.'
+            )
 
         try:
             invoice_data = extract_invoice(file_bytes)
@@ -158,6 +166,11 @@ class AiAssistantController(http.Controller):
         warnings = validate_invoice_data(invoice_data)
         uid = request.env.uid
         extraction_token = _invoice_store.put(uid, invoice_data)
+        invoice_context = InvoiceContextHelper(
+            request.env,
+            _invoice_store,
+        ).fetch_context(uid, extraction_token)
+        suggestions = self._invoice_upload_suggestions(invoice_context)
 
         totals = invoice_data.get('totals', {})
         total_w_vat = totals.get('total_w_vat', '')
@@ -177,7 +190,12 @@ class AiAssistantController(http.Controller):
         summary_parts = [f'Счёт распознан: {item_count} позиций']
         if total_w_vat:
             try:
-                summary_parts.append(f'сумма {float(total_w_vat):,.2f} ₽'.replace(',', '\u00a0'))
+                summary_parts.append(
+                    f'сумма {float(total_w_vat):,.2f} ₽'.replace(
+                        ',',
+                        '\u00a0',
+                    )
+                )
             except (ValueError, TypeError):
                 summary_parts.append(f'сумма {total_w_vat}')
         if supplier_name:
@@ -195,6 +213,7 @@ class AiAssistantController(http.Controller):
             'extraction_token': extraction_token,
             'summary': summary,
             'warnings': warnings,
+            'suggestions': suggestions,
             'meta': {
                 'item_count': item_count,
                 'total_w_vat': total_w_vat,
@@ -204,6 +223,20 @@ class AiAssistantController(http.Controller):
                 'warnings_count': len(warnings),
             },
         })
+
+    def _invoice_upload_suggestions(self, invoice_context):
+        partner = (invoice_context or {}).get('partner') or {}
+        if partner.get('needs_create_partner_draft'):
+            name = (
+                partner.get('extracted_name')
+                or (partner.get('partner_draft_args') or {}).get('name')
+                or 'поставщика'
+            )
+            return [{
+                'label': 'Создать поставщика: %s' % self._short_label(name),
+                'action': InvoiceWorkflow.ACTION_CREATE_PARTNER,
+            }]
+        return []
 
     @http.route('/ai_assistant/chat', type='jsonrpc', auth='user',
                 methods=['POST'])
@@ -224,8 +257,10 @@ class AiAssistantController(http.Controller):
             )
             if workflow_result is not None:
                 if 'answer' in workflow_result:
-                    workflow_result['answer'] = ResponseGuard().filter_response(
-                        workflow_result['answer']
+                    workflow_result['answer'] = (
+                        ResponseGuard().filter_response(
+                            workflow_result['answer']
+                        )
                     )
                 return workflow_result
 
@@ -337,6 +372,20 @@ class AiAssistantController(http.Controller):
                     result['result']['product_id'],
                 )
                 suggestions = workflow.suggestions_after_product_created(
+                    request.env.uid,
+                    extraction_token,
+                )
+            elif (
+                extraction_token and
+                item['tool_name'] == 'create_partner_draft'
+            ):
+                workflow = InvoiceWorkflow(request.env, _invoice_store)
+                workflow.record_partner_created(
+                    request.env.uid,
+                    extraction_token,
+                    result['result']['partner_id'],
+                )
+                suggestions = workflow.suggestions_after_partner_created(
                     request.env.uid,
                     extraction_token,
                 )
@@ -543,7 +592,8 @@ class AiAssistantController(http.Controller):
             if not tool_calls:
                 break
             write_call = (
-                self._first_write_tool_call(tool_calls) if allow_write else None
+                self._first_write_tool_call(tool_calls)
+                if allow_write else None
             )
             read_calls = self._read_tool_calls(tool_calls)
             if write_call and read_calls:
@@ -572,7 +622,23 @@ class AiAssistantController(http.Controller):
             if write_call:
                 args = write_call.get('arguments') or {}
                 metadata = {}
-                if extraction_token and write_call['name'] == 'create_product_draft':
+                if (
+                    extraction_token and
+                    write_call['name'] == 'create_partner_draft'
+                ):
+                    workflow = InvoiceWorkflow(request.env, _invoice_store)
+                    draft = workflow.next_partner_draft(
+                        request.env.uid,
+                        extraction_token,
+                    )
+                    if draft:
+                        args = draft['args']
+                        metadata = {'extraction_token': extraction_token}
+                        write_call['arguments'] = args
+                elif (
+                    extraction_token and
+                    write_call['name'] == 'create_product_draft'
+                ):
                     workflow = InvoiceWorkflow(request.env, _invoice_store)
                     args, metadata = workflow.attach_to_product_draft(
                         request.env.uid,
@@ -734,11 +800,16 @@ class AiAssistantController(http.Controller):
             'type': 'confirmation',
             'pending_key': pending_key,
             'plan': {
-                'title': 'Подтвердите действие',
+                'title': self._confirmation_title(tool_call['name']),
                 'tool_name': tool_call['name'],
                 'fields': self._summarize_args(args),
             },
         }
+
+    def _confirmation_title(self, tool_name):
+        if tool_name == 'create_partner_draft':
+            return 'Создать поставщика'
+        return 'Подтвердите действие'
 
     def _summarize_args(self, args):
         fields = []
@@ -753,6 +824,12 @@ class AiAssistantController(http.Controller):
                 value = str(value)
             fields.append({'label': key, 'value': value})
         return fields
+
+    def _short_label(self, text, limit=48):
+        value = (text or '').strip()
+        if len(value) <= limit:
+            return value
+        return value[: limit - 1] + '…'
 
     def _result_card_success(self, tool_name, result):
         model, record_id = self._result_record(tool_name, result)
@@ -774,8 +851,14 @@ class AiAssistantController(http.Controller):
         if tool_name == 'create_purchase_order_draft':
             return [
                 'Откройте черновик и проверьте строки и склад.',
-                'Нажмите «Подтвердить» (Confirm) — PO перейдёт в статус «В процессе».',
-                'Откройте вкладку «Приход» (Receipt) — появится входящее поступление.',
+                (
+                    'Нажмите «Подтвердить» (Confirm) — PO перейдёт '
+                    'в статус «В процессе».'
+                ),
+                (
+                    'Откройте вкладку «Приход» (Receipt) — появится '
+                    'входящее поступление.'
+                ),
                 'В поступлении: «Проверить наличие» → «Провести» (Validate).',
                 '⚠ Оплата счёта — в 1С, не в Odoo.',
             ]
@@ -791,7 +874,18 @@ class AiAssistantController(http.Controller):
             ]
         if tool_name == 'create_product_draft':
             return [
-                'Откройте карточку товара и дозаполните поля (цена, категория).',
+                (
+                    'Откройте карточку товара и дозаполните поля '
+                    '(цена, категория).'
+                ),
+            ]
+        if tool_name == 'create_partner_draft':
+            return [
+                (
+                    'Теперь создайте товары из счёта; карточку поставщика '
+                    'можно открыть и проверить реквизиты.'
+                ),
+                'Если товары уже готовы, можно создать закупку на склад.',
             ]
         return ['Откройте черновик и проверьте данные.']
 
@@ -810,6 +904,8 @@ class AiAssistantController(http.Controller):
             return 'purchase.order', result.get('po_id')
         if tool_name == 'create_product_draft':
             return 'product.product', result.get('product_id')
+        if tool_name == 'create_partner_draft':
+            return 'res.partner', result.get('partner_id')
         if tool_name == 'create_internal_picking_draft':
             return 'stock.picking', result.get('picking_id')
         return '', result.get('record_id')
@@ -859,6 +955,57 @@ class AiAssistantController(http.Controller):
         workflow = InvoiceWorkflow(request.env, _invoice_store)
         uid = request.env.uid
 
+        if invoice_workflow_action == InvoiceWorkflow.ACTION_CREATE_PARTNER:
+            return self._partner_pending_response(workflow, uid, token)
+
+        if message and self._message_intends_partner(message):
+            partner_response = self._partner_pending_response(
+                workflow, uid, token
+            )
+            if partner_response:
+                return partner_response
+            if not workflow.partner_ready(uid, token):
+                return {
+                    'answer': (
+                        'Поставщика нельзя создать из счёта: '
+                        'ИНН не распознан. '
+                        'Уточните ИНН или создайте контрагента вручную.'
+                    ),
+                    'suggestions': [],
+                    'cards': [],
+                    'meta': {'status': 'partner_incomplete'},
+                }
+
+        if not workflow.partner_ready(uid, token):
+            if (
+                invoice_workflow_action in (
+                    InvoiceWorkflow.ACTION_NEXT_PRODUCT,
+                    InvoiceWorkflow.ACTION_PREPARE_PO,
+                )
+                or (message and self._message_intends_po(message))
+                or awaiting_po_warehouse
+            ):
+                partner_response = self._partner_pending_response(
+                    workflow,
+                    uid,
+                    token,
+                    answer=(
+                        'Сначала нужно создать поставщика из счёта. '
+                        'Проверьте карточку и подтвердите.'
+                    ),
+                )
+                if partner_response:
+                    return partner_response
+                return {
+                    'answer': (
+                        'Поставщик счёта не найден, а ИНН не распознан. '
+                        'Уточните ИНН или создайте контрагента вручную.'
+                    ),
+                    'suggestions': [],
+                    'cards': [],
+                    'meta': {'status': 'partner_incomplete'},
+                }
+
         if invoice_workflow_action == InvoiceWorkflow.ACTION_NEXT_PRODUCT:
             draft = workflow.next_product_draft(uid, token)
             if not draft:
@@ -871,7 +1018,8 @@ class AiAssistantController(http.Controller):
                     'invoice_line_key': draft['line_key'],
                 },
                 answer=(
-                    'Следующая позиция счёта. Проверьте карточку и подтвердите.'
+                    'Следующая позиция счёта. Проверьте карточку '
+                    'и подтвердите.'
                 ),
             )
 
@@ -889,7 +1037,8 @@ class AiAssistantController(http.Controller):
                             'invoice_line_key': draft['line_key'],
                         },
                         answer=(
-                            'Сначала нужно создать карточки для новых товаров из счёта. '
+                            'Сначала нужно создать карточки для новых '
+                            'товаров из счёта. '
                             'Начнём с первого:'
                         ),
                     )
@@ -939,6 +1088,26 @@ class AiAssistantController(http.Controller):
 
         return None
 
+    def _partner_pending_response(
+        self,
+        workflow,
+        uid,
+        token,
+        answer=(
+            'Поставщик из счёта не найден. '
+            'Проверьте карточку и подтвердите.'
+        ),
+    ):
+        draft = workflow.next_partner_draft(uid, token)
+        if not draft:
+            return None
+        return self._pending_write_response(
+            'create_partner_draft',
+            draft['args'],
+            metadata={'extraction_token': token},
+            answer=answer,
+        )
+
     def _pending_write_response(
         self,
         tool_name,
@@ -975,6 +1144,23 @@ class AiAssistantController(http.Controller):
     def _message_intends_po(self, message):
         text = (message or '').lower().strip()
         return any(kw in text for kw in self._PO_INTENT_KEYWORDS)
+
+    _PARTNER_INTENT_KEYWORDS = (
+        'добавь поставщика',
+        'добавить поставщика',
+        'создай поставщика',
+        'создать поставщика',
+        'добавь контрагента',
+        'добавить контрагента',
+        'создай контрагента',
+        'создать контрагента',
+        'занеси в базу',
+        'занести в базу',
+    )
+
+    def _message_intends_partner(self, message):
+        text = (message or '').lower().strip()
+        return any(kw in text for kw in self._PARTNER_INTENT_KEYWORDS)
 
     # AIA-024 ──────────────────────────────────────────────────────────
 

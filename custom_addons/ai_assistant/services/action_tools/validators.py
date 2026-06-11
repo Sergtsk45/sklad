@@ -1,3 +1,5 @@
+import re
+
 from odoo.exceptions import ValidationError
 
 
@@ -7,6 +9,15 @@ LEGACY_OBJECT_WAREHOUSE_ALIASES = {
     'обм-4': 'O002',
 }
 METER_UOM_NAMES = {'m', 'meter', 'meters', 'метр', 'метры', 'м'}
+COMPANY_PREFIXES = (
+    'ООО',
+    'АО',
+    'ЗАО',
+    'ПАО',
+    'ОАО',
+    'МУП',
+    'ГУП',
+)
 
 
 def validate_picking_type_for_purchase(env, picking_type_id):
@@ -73,6 +84,48 @@ def validate_partner_is_supplier(env, partner_id):
         raise ValidationError(
             'Контрагент должен быть поставщиком (supplier_rank > 0).'
         )
+
+
+def normalize_vat(inn):
+    """Return only digits from Russian INN input."""
+    return ''.join(re.findall(r'\d', inn or ''))
+
+
+def validate_vat_unique(env, vat):
+    """Return existing partner id for VAT duplicate, or None."""
+    normalized = normalize_vat(vat)
+    if not normalized:
+        return None
+    partner = env['res.partner'].search([('vat', '=', normalized)], limit=1)
+    return partner.id if partner else None
+
+
+def infer_is_company(name):
+    """Infer res.partner.is_company from common Russian legal prefixes."""
+    text = (name or '').strip().upper()
+    if not text:
+        return False
+    if re.match(r'^ИП(?:\s|$|[.,])', text):
+        return False
+    return any(
+        re.match(r'^%s(?:\s|$|[.,"])' % re.escape(prefix), text)
+        for prefix in COMPANY_PREFIXES
+    )
+
+
+def validate_partner_create_args(args):
+    """Validate create_partner_draft args and return a list of errors."""
+    errors = []
+    name = (args.get('name') or '').strip()
+    vat = normalize_vat(args.get('vat'))
+    if not name:
+        errors.append('Укажите название поставщика.')
+    if len(vat) not in (10, 12):
+        errors.append('Укажите ИНН поставщика: 10 или 12 цифр.')
+    email = (args.get('email') or '').strip()
+    if email and '@' not in email:
+        errors.append('Некорректный email поставщика.')
+    return errors
 
 
 def validate_uom_is_meter(env, product_id):

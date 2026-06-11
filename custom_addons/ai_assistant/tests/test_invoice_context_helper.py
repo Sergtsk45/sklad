@@ -90,6 +90,43 @@ class TestInvoiceContextHelper(TransactionCase):
         self.assertEqual(missing['status'], 'not_found')
         self.assertTrue(missing['needs_create_product_draft'])
 
+    def test_fetch_context_marks_partner_draft_needed(self):
+        invoice = dict(_MOCK_INVOICE)
+        invoice['supplier'] = {
+            'name': 'ООО Новый Контекст Поставщик',
+            'inn': '7727123401',
+            'kpp': '772701001',
+            'address': '109012, г. Москва, ул. Контекстная, д. 1',
+        }
+        token = self.store.put(self.env.uid, invoice)
+
+        context = self.helper.fetch_context(self.env.uid, token)
+
+        partner = context['partner']
+        self.assertEqual(partner['status'], 'not_found')
+        self.assertTrue(partner['needs_create_partner_draft'])
+        args = partner['partner_draft_args']
+        self.assertEqual(args['name'], invoice['supplier']['name'])
+        self.assertEqual(args['vat'], invoice['supplier']['inn'])
+        self.assertTrue(args['is_company'])
+        self.assertEqual(args['street'], invoice['supplier']['address'])
+        self.assertEqual(args['comment'], 'КПП: 772701001')
+
+    def test_fetch_context_marks_partner_inn_required(self):
+        invoice = dict(_MOCK_INVOICE)
+        invoice['supplier'] = {
+            'name': 'ООО Без ИНН Context',
+            'inn': '',
+        }
+        token = self.store.put(self.env.uid, invoice)
+
+        context = self.helper.fetch_context(self.env.uid, token)
+
+        partner = context['partner']
+        self.assertEqual(partner['status'], 'not_found')
+        self.assertFalse(partner['needs_create_partner_draft'])
+        self.assertEqual(partner['partner_error'], 'inn_required')
+
     def test_build_context_message_contains_ids(self):
         token = self.store.put(self.env.uid, _MOCK_INVOICE)
         context = self.helper.fetch_context(self.env.uid, token)
@@ -99,6 +136,7 @@ class TestInvoiceContextHelper(TransactionCase):
         self.assertIn('"partner_id": %d' % self.supplier.id, message)
         self.assertIn('"product_id": %d' % self.product.id, message)
         self.assertIn('needs_create_product_draft', message)
+        self.assertIn('create_partner_draft', message)
         self.assertIn('find_warehouse', message)
 
     def test_fetch_context_returns_none_for_unknown_token(self):

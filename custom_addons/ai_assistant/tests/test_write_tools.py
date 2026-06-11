@@ -8,6 +8,7 @@ from odoo.addons.ai_assistant.services.action_tools.registry import (
 from odoo.addons.ai_assistant.services.action_tools.write_tools import (
     CreateInternalPickingDraftTool,
     CreateObjectRequestDraftTool,
+    CreatePartnerDraftTool,
     CreateProductDraftTool,
     CreatePurchaseOrderDraftTool,
 )
@@ -204,6 +205,79 @@ class TestActionWriteTools(TransactionCase):
         self.assertIsInstance(
             default_registry.get('create_purchase_order_draft'),
             CreatePurchaseOrderDraftTool,
+        )
+
+    def test_create_partner_draft_happy(self):
+        tool = CreatePartnerDraftTool()
+
+        result = tool.execute(
+            self.env(user=self.supply_user),
+            {
+                'name': 'ООО Новый Поставщик WT',
+                'vat': ' 7727 123456 ',
+                'street': '109012, г. Москва, ул. Тестовая, д. 1',
+                'comment': 'КПП: 772701001',
+            },
+        )
+
+        partner = self.env['res.partner'].browse(result['partner_id'])
+        self.assertTrue(partner.exists())
+        self.assertEqual(partner.name, 'ООО Новый Поставщик WT')
+        self.assertEqual(partner.vat, '7727123456')
+        self.assertEqual(partner.supplier_rank, 1)
+        self.assertEqual(partner.customer_rank, 0)
+        self.assertTrue(partner.is_company)
+        self.assertEqual(
+            partner.street,
+            '109012, г. Москва, ул. Тестовая, д. 1',
+        )
+        self.assertIn('КПП: 772701001', partner.comment)
+        self.assertEqual(
+            result['url'], '/odoo/res.partner/%s' % partner.id
+        )
+        body = '\n'.join(partner.message_ids.mapped('body'))
+        self.assertIn('AI-ассистентом', body)
+        self.assertIn('источник: счёт', body)
+
+    def test_create_partner_draft_rejects_without_supply_group(self):
+        tool = CreatePartnerDraftTool()
+
+        with self.assertRaises(AccessError):
+            tool.execute(
+                self.env(user=self.no_ai_user),
+                {'name': 'ООО Без доступа WT', 'vat': '7727123457'},
+            )
+
+    def test_create_partner_draft_rejects_duplicate_vat(self):
+        tool = CreatePartnerDraftTool()
+
+        with self.assertRaises(ValidationError):
+            tool.execute(
+                self.env(user=self.supply_user),
+                {'name': 'ООО Дубликат WT', 'vat': self.vendor.vat},
+            )
+
+    def test_create_partner_draft_rejects_empty_vat(self):
+        tool = CreatePartnerDraftTool()
+
+        with self.assertRaises(ValidationError):
+            tool.execute(
+                self.env(user=self.supply_user),
+                {'name': 'ООО Без ИНН WT', 'vat': ''},
+            )
+
+    def test_create_partner_draft_registered(self):
+        self.assertIsInstance(
+            default_registry.get('create_partner_draft'),
+            CreatePartnerDraftTool,
+        )
+
+    def test_create_partner_draft_idempotency_key_uses_normalized_vat(self):
+        tool = CreatePartnerDraftTool()
+
+        self.assertEqual(
+            tool.idempotency_key({'vat': '7727 123456'}),
+            tool.idempotency_key({'vat': '7727123456'}),
         )
 
     def test_create_product_draft_happy(self):

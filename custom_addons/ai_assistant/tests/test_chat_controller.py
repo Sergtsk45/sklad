@@ -532,6 +532,99 @@ class TestChatController(HttpCase):
         self.assertIn('"partner_id": %d' % supplier.id, system_contents)
         self.assertIn('"product_id": %d' % product.id, system_contents)
 
+    def test_invoice_partner_intent_returns_partner_confirmation(self):
+        from odoo.addons.ai_assistant.controllers import chat_controller
+
+        invoice_data = {
+            'invoice_number': 'НФ-PARTNER-1',
+            'invoice_date': '2026-06-11',
+            'supplier': {
+                'name': 'ООО Chat Новый Поставщик',
+                'inn': '7727123405',
+                'kpp': '772701005',
+                'address': '109012, г. Москва, ул. Chat, д. 5',
+            },
+            'items': [],
+            'totals': {'total_w_vat': 0.0},
+        }
+        token = chat_controller._invoice_store.put(
+            self.env.ref('base.user_admin').id,
+            invoice_data,
+        )
+
+        result = self._post_chat({
+            'message': 'добавь поставщика в базу',
+            'extraction_token': token,
+        })
+
+        data = result.get('result', {})
+        cards = data.get('cards', [])
+        self.assertTrue(cards, 'Ожидали ConfirmationCard поставщика')
+        self.assertEqual(cards[0]['type'], 'confirmation')
+        self.assertEqual(cards[0]['plan']['title'], 'Создать поставщика')
+        self.assertEqual(
+            cards[0]['plan']['tool_name'],
+            'create_partner_draft',
+        )
+        fields = {
+            item['label']: item['value']
+            for item in cards[0]['plan']['fields']
+        }
+        self.assertEqual(fields['vat'], invoice_data['supplier']['inn'])
+
+        confirm_result = self._post_confirm({
+            'pending_key': cards[0]['pending_key'],
+            'decision': 'confirm',
+        })
+        confirm_data = confirm_result.get('result', {})
+        self.assertEqual(confirm_data.get('meta', {}).get('status'), 'ok')
+        result_cards = confirm_data.get('cards', [])
+        self.assertEqual(
+            result_cards[0]['record']['model'],
+            'res.partner',
+        )
+        self.assertIn(
+            'поставщика',
+            result_cards[0]['next_hint'].lower(),
+        )
+        partner_id = result_cards[0]['record']['id']
+        session = chat_controller._invoice_store.get_session(
+            self.env.ref('base.user_admin').id,
+            token,
+        )
+        self.assertEqual(session['created_partner_id'], partner_id)
+
+    def test_invoice_po_intent_requires_partner_first(self):
+        from odoo.addons.ai_assistant.controllers import chat_controller
+
+        invoice_data = {
+            'invoice_number': 'НФ-PARTNER-PO',
+            'invoice_date': '2026-06-11',
+            'supplier': {
+                'name': 'ООО Chat Partner Before PO',
+                'inn': '7727123406',
+            },
+            'items': [],
+            'totals': {'total_w_vat': 0.0},
+        }
+        token = chat_controller._invoice_store.put(
+            self.env.ref('base.user_admin').id,
+            invoice_data,
+        )
+
+        result = self._post_chat({
+            'message': 'создай закупку на склад Ос.ск',
+            'extraction_token': token,
+        })
+
+        data = result.get('result', {})
+        cards = data.get('cards', [])
+        self.assertTrue(cards, 'Ожидали partner card перед PO')
+        self.assertEqual(
+            cards[0]['plan']['tool_name'],
+            'create_partner_draft',
+        )
+
     def test_result_card_po_has_confirm_validate_steps(self):
         """AIA-059: ResultCard для PO содержит шаги Confirm и Validate."""
         supplier = self.env['res.partner'].create({

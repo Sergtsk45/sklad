@@ -173,7 +173,14 @@ export class AiChatWidget extends Component {
             const result = await this.chatService.uploadInvoice(file);
             if (result && result.success) {
                 this.state.extractionToken = result.extraction_token || null;
-                this._addMessage("assistant", result.summary || "Счёт распознан.");
+                this._addMessage(
+                    "assistant",
+                    this._invoiceUploadContent(result),
+                    {
+                        suggestions: result.suggestions || [],
+                        meta: result.meta || {},
+                    }
+                );
             } else {
                 const errMsg = (result && result.error) || "Не удалось распознать счёт.";
                 this._addMessage("assistant", `⚠ ${errMsg}`);
@@ -186,6 +193,17 @@ export class AiChatWidget extends Component {
             this.state.isLoading = false;
             this.state.isUploading = false;
         }
+    }
+
+    _invoiceUploadContent(result) {
+        const lines = [result.summary || "Счёт распознан."];
+        const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+        for (const warning of warnings) {
+            if (warning) {
+                lines.push(`⚠ ${warning}`);
+            }
+        }
+        return lines.join("\n");
     }
 
     clearSession() {

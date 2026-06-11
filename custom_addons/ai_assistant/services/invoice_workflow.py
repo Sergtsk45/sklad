@@ -29,6 +29,7 @@ _UOM_BY_UNIT = {
 class InvoiceWorkflow:
     """Сессия счёта: по одному товару, затем предложение PO."""
 
+    ACTION_CREATE_PARTNER = 'invoice_create_partner'
     ACTION_NEXT_PRODUCT = 'invoice_next_product'
     ACTION_PREPARE_PO = 'invoice_prepare_po'
 
@@ -79,12 +80,59 @@ class InvoiceWorkflow:
         session = self._store.ensure_session(uid, extraction_token)
         session['created_by_line'][str(line_key)] = product_id
 
+    def record_partner_created(self, uid, extraction_token, partner_id):
+        session = self._store.ensure_session(uid, extraction_token)
+        if session is not None:
+            session['created_partner_id'] = partner_id
+
+    def partner_ready(self, uid, extraction_token):
+        context = self._context_helper.fetch_context(uid, extraction_token)
+        return bool(self._resolve_partner_id(context, uid, extraction_token))
+
+    def next_partner_draft(self, uid, extraction_token=None):
+        token = extraction_token or self._store.find_latest_token(uid)
+        if not token:
+            return None
+        context = self._context_helper.fetch_context(uid, token)
+        partner = (context or {}).get('partner') or {}
+        if partner.get('status') == 'matched':
+            return None
+        session = self._store.get_session(uid, token) or {}
+        if session.get('created_partner_id'):
+            return None
+        if partner.get('needs_create_partner_draft'):
+            return {
+                'token': token,
+                'args': partner.get('partner_draft_args') or {},
+                'partner_name': (
+                    partner.get('extracted_name')
+                    or (partner.get('partner_draft_args') or {}).get('name')
+                    or ''
+                ),
+            }
+        return None
+
     def suggestions_after_product_created(self, uid, extraction_token):
         next_line = self._next_line_to_create(uid, extraction_token)
         if next_line:
             short_name = self._short_name(next_line['name'])
             return [{
                 'label': 'Создать следующий: %s' % short_name,
+                'action': self.ACTION_NEXT_PRODUCT,
+            }]
+        if self.all_products_ready(uid, extraction_token):
+            return [{
+                'label': 'Создать закупку на склад',
+                'action': self.ACTION_PREPARE_PO,
+            }]
+        return []
+
+    def suggestions_after_partner_created(self, uid, extraction_token):
+        next_line = self._next_line_to_create(uid, extraction_token)
+        if next_line:
+            short_name = self._short_name(next_line['name'])
+            return [{
+                'label': 'Создать товар: %s' % short_name,
                 'action': self.ACTION_NEXT_PRODUCT,
             }]
         if self.all_products_ready(uid, extraction_token):
@@ -133,6 +181,22 @@ class InvoiceWorkflow:
         """
         Подготовить args для create_purchase_order_draft.
         """
+        if not self.partner_ready(uid, extraction_token):
+            draft = self.next_partner_draft(uid, extraction_token)
+            suggestions = []
+            if draft:
+                suggestions = [{
+                    'label': 'Создать поставщика из счёта',
+                    'action': self.ACTION_CREATE_PARTNER,
+                }]
+            return {
+                'status': 'partner_incomplete',
+                'answer': (
+                    'Сначала нужно создать поставщика из реквизитов счёта.'
+                ),
+                'suggestions': suggestions,
+                'meta': {'partner_incomplete': True},
+            }
         query = (warehouse_query or '').strip()
         if not query:
             return {
@@ -248,7 +312,7 @@ class InvoiceWorkflow:
         return context, None, None
 
     def _build_po_args(self, context, uid, extraction_token, warehouse):
-        partner_id = self._resolve_partner_id(context)
+        partner_id = self._resolve_partner_id(context, uid, extraction_token)
         if not partner_id:
             raise ValidationError(
                 'Поставщик счёта не найден в Odoo. Создайте контрагента.'
@@ -304,10 +368,14 @@ class InvoiceWorkflow:
             'lines': lines,
         }
 
-    def _resolve_partner_id(self, context):
+    def _resolve_partner_id(self, context, uid=None, extraction_token=None):
         partner = (context or {}).get('partner') or {}
         if partner.get('status') == 'matched':
             return partner.get('partner_id')
+        if uid and extraction_token:
+            session = self._store.get_session(uid, extraction_token) or {}
+            if session.get('created_partner_id'):
+                return session['created_partner_id']
         return None
 
     def _product_id_for_line(self, line, line_key, created):

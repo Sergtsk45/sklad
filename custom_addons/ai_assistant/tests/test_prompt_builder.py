@@ -341,6 +341,19 @@ class TestPromptBuilder(TransactionCase):
             self.builder.build_safety_rules(mode='actions')
         )
 
+    def test_actions_mode_requires_partner_before_products_and_po(self):
+        messages = self.builder.build_messages(
+            'Создай закупку по счету', [], context=None, mode='actions'
+        )
+        system_content = messages[0]['content']
+        self.assertIn(
+            'partner.needs_create_partner_draft=true',
+            system_content,
+        )
+        self.assertIn('create_partner_draft', system_content)
+        self.assertIn('Банковские реквизиты', system_content)
+        self.assertIn('ШАГ В', system_content)
+
     # --- build_technical_context_block ---
 
     def test_build_technical_context_block_with_content(self):

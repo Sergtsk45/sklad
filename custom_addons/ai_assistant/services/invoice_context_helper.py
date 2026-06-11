@@ -5,6 +5,10 @@
 
 import json
 
+from odoo.addons.ai_assistant.services.action_tools.validators import (
+    infer_is_company,
+    normalize_vat,
+)
 from odoo.addons.ai_assistant.services.action_tools.read_tools import (
     FindPartnerTool,
     SearchProductsTool,
@@ -39,6 +43,8 @@ class InvoiceContextHelper:
             'supplier_extracted': {
                 'name': supplier.get('name'),
                 'inn': supplier.get('inn'),
+                'kpp': supplier.get('kpp'),
+                'address': supplier.get('address'),
             },
             'partner': self._match_supplier(supplier),
             'items': [
@@ -66,7 +72,30 @@ class InvoiceContextHelper:
             'status': 'not_found',
             'extracted_name': supplier.get('name'),
             'extracted_inn': inn or None,
+            'needs_create_partner_draft': bool(inn),
+            'partner_error': None if inn else 'inn_required',
+            'partner_draft_args': (
+                self.build_partner_draft_args({'supplier': supplier})
+                if inn else {}
+            ),
         }
+
+    def build_partner_draft_args(self, invoice_data):
+        supplier = (invoice_data or {}).get('supplier') or {}
+        name = (supplier.get('name') or '').strip()
+        vat = normalize_vat(supplier.get('inn'))
+        args = {
+            'name': name,
+            'vat': vat,
+            'is_company': infer_is_company(name),
+        }
+        address = (supplier.get('address') or '').strip()
+        if address:
+            args['street'] = address
+        kpp = (supplier.get('kpp') or '').strip()
+        if kpp:
+            args['comment'] = 'КПП: %s' % kpp
+        return args
 
     def _match_partners_by_query(self, query):
         partners = self._find_partner.execute(
@@ -163,7 +192,10 @@ class InvoiceContextHelper:
         payload = json.dumps(invoice_context, ensure_ascii=False, default=str)
         return (
             '%s\n%s\n'
-            'Правила: не подставляй склад/объект по умолчанию (D3) — '
+            'Правила: сначала поставщик, потом товары, потом PO; '
+            'если partner.needs_create_partner_draft=true — предложи '
+            'create_partner_draft и не создавай PO; '
+            'не подставляй склад/объект по умолчанию (D3) — '
             'уточни у пользователя склад приёмки (код или название, '
             'find_warehouse) перед PO; '
             'позиции с needs_create_product_draft=true — create_product_draft '

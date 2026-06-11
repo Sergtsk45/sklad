@@ -110,3 +110,58 @@ class TestInvoiceWorkflow(TransactionCase):
         self.assertEqual(len(po_args['lines']), 2)
         self.assertEqual(po_args['lines'][0]['product_qty'], 2.0)
         self.assertEqual(po_args['lines'][0]['price_unit'], 1500.0)
+
+    def test_next_partner_draft_for_unknown_supplier(self):
+        invoice = dict(self.invoice_data)
+        invoice['supplier'] = {
+            'name': 'ООО Workflow Новый Поставщик',
+            'inn': '7727123402',
+            'kpp': '772701002',
+            'address': '109012, г. Москва, ул. Workflow, д. 2',
+        }
+        token = self.store.put(self.env.uid, invoice)
+
+        draft = self.workflow.next_partner_draft(self.env.uid, token)
+
+        self.assertEqual(draft['token'], token)
+        self.assertEqual(draft['args']['name'], invoice['supplier']['name'])
+        self.assertEqual(draft['args']['vat'], invoice['supplier']['inn'])
+        self.assertEqual(draft['args']['comment'], 'КПП: 772701002')
+
+    def test_prepare_po_draft_requires_partner_before_warehouse(self):
+        invoice = dict(self.invoice_data)
+        invoice['supplier'] = {
+            'name': 'ООО Workflow Partner First',
+            'inn': '7727123403',
+        }
+        token = self.store.put(self.env.uid, invoice)
+
+        payload = self.workflow.prepare_po_draft(
+            self.env.uid, token, 'Ос.ск',
+        )
+
+        self.assertEqual(payload['status'], 'partner_incomplete')
+        self.assertEqual(
+            payload['suggestions'][0]['action'],
+            InvoiceWorkflow.ACTION_CREATE_PARTNER,
+        )
+
+    def test_record_partner_created_makes_partner_ready(self):
+        invoice = dict(self.invoice_data)
+        invoice['supplier'] = {
+            'name': 'ООО Workflow Created Partner',
+            'inn': '7727123404',
+        }
+        token = self.store.put(self.env.uid, invoice)
+        partner = self.env['res.partner'].create({
+            'name': invoice['supplier']['name'],
+            'vat': invoice['supplier']['inn'],
+            'supplier_rank': 1,
+        })
+
+        self.workflow.record_partner_created(self.env.uid, token, partner.id)
+
+        self.assertTrue(self.workflow.partner_ready(self.env.uid, token))
+        self.assertIsNone(
+            self.workflow.next_partner_draft(self.env.uid, token)
+        )

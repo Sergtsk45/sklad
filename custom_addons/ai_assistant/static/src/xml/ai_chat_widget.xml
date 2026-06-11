@@ -179,11 +179,11 @@
     <t t-name="ai_assistant.ConfirmationCard">
         <div t-attf-class="o_ai_confirmation_card {{ props.plan.state ? 'o_ai_card_' + props.plan.state : '' }}">
             <div class="o_ai_card_title">
-                <t t-esc="props.plan.title"/>
+                <t t-esc="title"/>
             </div>
-            <table t-if="props.plan.fields and props.plan.fields.length" class="o_ai_card_fields">
+            <table t-if="fields and fields.length" class="o_ai_card_fields">
                 <tbody>
-                    <tr t-foreach="props.plan.fields" t-as="field" t-key="field.label">
+                    <tr t-foreach="fields" t-as="field" t-key="field.label">
                         <th><t t-esc="field.label"/></th>
                         <td><t t-esc="field.value"/></td>
                     </tr>
@@ -222,8 +222,7 @@
                     <i t-attf-class="fa {{ isSuccess ? 'fa-check-circle' : 'fa-exclamation-circle' }}"/>
                 </span>
                 <span class="o_ai_result_title">
-                    <t t-if="isSuccess">Черновик создан</t>
-                    <t t-else="">Действие не выполнено</t>
+                    <t t-esc="title"/>
                 </span>
             </div>
             <div t-if="isSuccess and props.record" class="o_ai_result_record">
@@ -245,6 +244,9 @@
             <div t-if="!isSuccess" class="o_ai_result_error_message">
                 <t t-esc="errorMessage"/>
             </div>
+            <div t-if="isSuccess and props.nextHint" class="o_ai_result_hint">
+                <t t-esc="props.nextHint"/>
+            </div>
             <t t-if="isSuccess and props.steps and props.steps.length">
                 <ol class="o_ai_result_steps">
                     <t t-foreach="props.steps" t-as="step" t-key="step_index">
@@ -252,7 +254,7 @@
                     </t>
                 </ol>
             </t>
-            <t t-elif="props.nextHint">
+            <t t-elif="props.nextHint and !isSuccess">
                 <div class="o_ai_result_hint">
                     <t t-esc="props.nextHint"/>
                 </div>

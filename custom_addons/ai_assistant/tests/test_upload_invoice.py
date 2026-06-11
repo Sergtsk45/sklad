@@ -45,7 +45,12 @@ _MOCK_INVOICE_DATA = {
 }
 
 
-def _upload(client, file_bytes, filename="invoice.pdf", content_type="application/pdf"):
+def _upload(
+    client,
+    file_bytes,
+    filename="invoice.pdf",
+    content_type="application/pdf",
+):
     """Вспомогательная функция для POST multipart к /upload_invoice."""
     return client.url_open(
         "/ai_assistant/upload_invoice",
@@ -67,7 +72,10 @@ class TestUploadInvoiceController(HttpCase):
         """Отправить multipart POST на /ai_assistant/upload_invoice."""
         boundary = b"testboundary12345"
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-        mime = "application/pdf" if ext == "pdf" else "application/octet-stream"
+        mime = (
+            "application/pdf"
+            if ext == "pdf" else "application/octet-stream"
+        )
         body = (
             b"--" + boundary + b"\r\n"
             + b'Content-Disposition: form-data; name="file"; filename="'
@@ -95,15 +103,57 @@ class TestUploadInvoiceController(HttpCase):
         resp = self._upload(_MINIMAL_PDF)
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
-        self.assertTrue(body.get("success"), msg=f"Ожидали success=True: {body}")
+        self.assertTrue(
+            body.get("success"),
+            msg=f"Ожидали success=True: {body}",
+        )
         self.assertIn("extraction_token", body)
-        self.assertTrue(body.get("extraction_token"), "Token должен быть непустым")
+        self.assertTrue(
+            body.get("extraction_token"),
+            "Token должен быть непустым",
+        )
         summary = body.get("summary", "")
-        self.assertIn("14", summary, msg=f"В summary должно быть кол-во позиций: {summary}")
+        self.assertIn(
+            "14",
+            summary,
+            msg=f"В summary должно быть кол-во позиций: {summary}",
+        )
         meta = body.get("meta", {})
         self.assertEqual(meta.get("item_count"), 14)
         self.assertEqual(meta.get("total_w_vat"), 72096.22)
         self.assertEqual(meta.get("supplier_name"), _NF504_SUPPLIER)
+
+    @patch(
+        "odoo.addons.ai_assistant.controllers.chat_controller.extract_invoice",
+        return_value={
+            **_MOCK_INVOICE_DATA,
+            "supplier": {
+                "name": "ООО Upload Новый Поставщик",
+                "inn": "7727123407",
+                "kpp": "772701007",
+                "address": "",
+                "bank": {
+                    "name": "",
+                    "bik": "",
+                    "account": "",
+                    "corr_account": "",
+                },
+            },
+        },
+    )
+    def test_happy_case_returns_create_partner_suggestion(self, mock_extract):
+        resp = self._upload(_MINIMAL_PDF)
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+
+        suggestions = body.get("suggestions") or []
+        self.assertTrue(suggestions)
+        self.assertEqual(suggestions[0]["action"], "invoice_create_partner")
+        self.assertIn("Создать поставщика", suggestions[0]["label"])
+        self.assertEqual(
+            body["meta"]["supplier_name"],
+            "ООО Upload Новый Поставщик",
+        )
 
     def test_rejects_wrong_extension(self):
         resp = self._upload(_MINIMAL_PDF, filename="document.txt")
@@ -166,7 +216,8 @@ class TestUploadInvoiceAccessControl(HttpCase):
         if demo_user:
             self.authenticate(demo_user.login, demo_user.login)
             supply_group = self.env.ref(
-                'ai_assistant.group_ai_assistant_supply', raise_if_not_found=False
+                'ai_assistant.group_ai_assistant_supply',
+                raise_if_not_found=False,
             )
             if supply_group:
                 supply_group.sudo().write({'user_ids': [(3, demo_user.id)]})
