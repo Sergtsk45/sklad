@@ -1081,6 +1081,27 @@
 
 ---
 
+### Задача: AIA-061 — Создание поставщика из счёта
+
+- **Статус**: Завершена ✅ (2026-06-12)
+- **Приоритет**: Высокий
+- **Описание**: Закрыть gap, когда счёт распознан, но поставщик по ИНН отсутствует в Odoo: ассистент сначала предлагает создать `res.partner`, затем продолжает товары и PO.
+- **📁 Контекст**:
+  - [`tasktrecker-creat-partner.md`](tasktrecker-creat-partner.md) — CPP-001…015
+  - `custom_addons/ai_assistant/services/action_tools/write_tools.py` — `create_partner_draft`
+  - `custom_addons/ai_assistant/services/invoice_workflow.py` — порядок partner → product → PO
+- **Шаги выполнения**:
+  - [x] `create_partner_draft`: обязательный ИНН, `supplier_rank=1`, проверка дубля по `vat`, без банковских реквизитов.
+  - [x] `InvoiceContextHelper`: `needs_create_partner_draft`, `partner_draft_args`, `partner_error='inn_required'`.
+  - [x] `InvoiceWorkflow` и `chat_controller`: ConfirmationCard до товаров/PO, запись `created_partner_id` в invoice-сессию.
+  - [x] OWL UI: chip после upload, preview реквизитов, ResultCard со ссылкой на поставщика.
+  - [x] E2E: неизвестный поставщик → partner draft → product draft → PO draft.
+- **🚫 Запрещено**: создавать поставщика без ИНН; переносить `bank_ids`; обходить кнопку подтверждения; создавать PO до resolved partner.
+- **✅ DoD**: E2E зелёный; документация обновлена.
+- **⛓ Зависит от**: AIA-056, AIA-057, AIA-058, AIA-060
+
+---
+
 ## 13. Сводная таблица задач
 
 | ID | Название | Этап | Приоритет | Статус | Context7 | Зависит от |
@@ -1117,6 +1138,7 @@
 | AIA-058 | create_product_draft (write-tool) | V3-10 | Высокий | ✅ | 2026-05-30 | AIA-031, AIA-032 |
 | AIA-059 | ResultCard инструкции UI (Confirm→Validate) | V3-10 | Средний | ✅ | 2026-05-30 | AIA-057, AIA-058 |
 | AIA-060 | E2E НФ-504 → PO draft | V3-10 | Высокий | ✅ | 2026-05-30 | AIA-055..058 |
+| AIA-061 | Поставщик из счёта (`create_partner_draft`) | V3-10 | Высокий | ✅ | 2026-06-12 | AIA-056..060 |
 
 ---
 

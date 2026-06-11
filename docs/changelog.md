@@ -1,3 +1,16 @@
+## [2026-06-12] — feat(ai_assistant): поставщик из счёта
+
+### Добавлено
+- `create_partner_draft`: создание нового поставщика `res.partner` из реквизитов счёта только после ConfirmationCard; ИНН обязателен, дубликат по `vat` блокируется, банковские реквизиты не переносятся.
+- Invoice workflow теперь ведёт сценарий в порядке поставщик → товары → PO; PO draft использует `created_partner_id` из invoice-сессии.
+- UI чата показывает chip «Создать поставщика…», preview реквизитов поставщика и ResultCard со ссылкой на карточку.
+- `tests/test_e2e_unknown_supplier_invoice_to_po.py`: E2E неизвестный поставщик → `create_partner_draft` → `create_product_draft` → `create_purchase_order_draft`.
+
+### Проверено
+- `docker exec odoo19-local odoo --test-enable --test-tags /ai_assistant -d odoo19_local --stop-after-init --http-port=8071`
+
+---
+
 ## [2026-06-11] — docs: TD-006 — неверный итог «к оплате» в счёте Метиз Комплект
 
 ### Добавлено

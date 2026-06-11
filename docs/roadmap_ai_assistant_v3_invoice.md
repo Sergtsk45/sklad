@@ -51,7 +51,7 @@
 |---|---|
 | 1. Загрузка файла | Кнопка-скрепка в `ai_chat_widget.xml` + `/ai_assistant/upload_invoice` (multipart) |
 | 2. Извлечение | `services/invoice_parsing/` (порт `extractor`/`invoice_utils`/`normalizer`/`validators`) |
-| 3. Команды | `create_product_draft` (write-tool) + `InvoiceContextHelper` (инъекция данных в промпт) |
+| 3. Команды | `create_partner_draft` для неизвестного поставщика, `create_product_draft` для новых товаров, `InvoiceContextHelper` (инъекция данных в промпт) |
 | 4. Инструкции UI | Обогащение `ResultCard.next_hint` + правило в `_ACTIONS_RULES_BLOCK` |
 
 ---
@@ -65,7 +65,10 @@ flowchart TB
   VAL --> PARSE["services/invoice_parsing (pdfplumber, text-first)"]
   PARSE --> NORM["normalize + validators (qty*price=sum, итого)"]
   NORM --> MAP["InvoiceContextHelper: ИНН→partner, items→product кандидаты"]
-  MAP --> ASK["Уточнить объект/склад у пользователя (D3)"]
+  MAP --> PARTNER{"Поставщик найден?"}
+  PARTNER -->|нет, есть ИНН| CP["create_partner_draft + ConfirmationCard"]
+  PARTNER -->|да| ASK["Уточнить объект/склад у пользователя (D3)"]
+  CP --> ASK
   ASK --> LLM["actions-режим: план PO/picking + create_product_draft для новых"]
   LLM -->|write tool| PEND["pending_action + ConfirmationCard"]
   PEND -->|/confirm| EXE["ToolExecutor → create_*_draft (draft-only)"]
@@ -88,6 +91,7 @@ flowchart TB
 | AIA-058 | Write-tool `create_product_draft` (D2) | Высокий | AIA-031, AIA-032 |
 | AIA-059 | Обогащение `ResultCard` инструкциями UI (Confirm → Validate) | Средний | AIA-057, AIA-058 |
 | AIA-060 | E2E-тест «НФ-504 → PO draft» | Высокий | AIA-055..058 |
+| AIA-061 | Создание неизвестного поставщика из счёта (`create_partner_draft`) | Высокий | AIA-056..060 |
 
 ---
 
@@ -107,6 +111,7 @@ flowchart TB
 | Скан-PDF без текстового слоя | v1 — text-first; vision-fallback через существующий `OpenRouterClient` — [`TD-005`](technical-debt.md#td-005-vision-fallback-парсинга-счетов-через-существующий-openrouterclient) |
 | Неверное сопоставление позиций | Авто-товар только с подтверждением; позиции-кандидаты показываются пользователю |
 | Дубли товаров при создании | idempotency_key + проверка по имени/категории перед созданием |
+| Неизвестный поставщик блокирует PO | `create_partner_draft` с обязательным ИНН, проверкой дубля по `vat` и ConfirmationCard до товаров/PO |
 | Размер/тип файла | Валидация на эндпоинте (расширение, magic bytes, лимит) |
 
 ---
@@ -114,6 +119,6 @@ flowchart TB
 ## 9. Критерии приёмки (по требованиям пользователя)
 
 1. **Загрузка**: счёт НФ-504 (PDF) прикрепляется в чат, ассистент показывает сводку (14 позиций, 72 096,22 ₽).
-2. **Извлечение**: поставщик распознан по ИНН, позиции сопоставлены с номенклатурой, мусорные строки отфильтрованы.
-3. **Команды**: создан черновик `purchase.order` (после уточнения склада и подтверждения), недостающий товар — через `create_product_draft`.
+2. **Извлечение**: поставщик распознан по ИНН; если его нет в Odoo, сначала предлагается `create_partner_draft`; позиции сопоставлены с номенклатурой, мусорные строки отфильтрованы.
+3. **Команды**: создан черновик поставщика при необходимости, затем черновик `purchase.order` (после уточнения склада и подтверждения), недостающий товар — через `create_product_draft`.
 4. **Инструкции**: ResultCard содержит шаги Confirm PO → открыть Приход → Provести (Validate) + напоминание про оплату в 1С.

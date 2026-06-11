@@ -1,5 +1,29 @@
 # AI Assistant V3 Pilot Results
 
+## 2026-06-12 — Partner draft from invoice
+
+### Scope
+
+Пилот закрывает сценарий: счёт распознан, поставщик по ИНН отсутствует в
+`res.partner`, пользователь создаёт поставщика через ConfirmationCard, затем
+создаёт недостающий товар и draft PO.
+
+### Scenario
+
+| Step | Result | Notes |
+|------|--------|-------|
+| Загрузка счёта с новым ИНН | Passed | После upload появляется chip «Создать поставщика…». |
+| `create_partner_draft` | Passed | Создаёт `res.partner` с `supplier_rank=1`; КПП сохраняется в `comment`; `bank_ids` не создаются. |
+| Продолжение workflow | Passed | `created_partner_id` сохраняется в invoice session; следующий chip ведёт к товару или PO. |
+| `create_purchase_order_draft` | Passed | PO создаётся в `draft` с `partner_id` нового поставщика и `partner_ref` номером счёта. |
+| Обход confirm | Passed | Текстовое «да» не исполняет write-tool; нужен pending confirmation key. |
+
+### Verification
+
+- E2E: `test_e2e_unknown_supplier_invoice_to_po.py`.
+- Локальный прогон `/ai_assistant`: 352 post-tests, 0 failed, 0 errors.
+- Prod smoke: pending до CPP-015.
+
 ## 2026-05-24 — Pilot summary
 
 ### Scope

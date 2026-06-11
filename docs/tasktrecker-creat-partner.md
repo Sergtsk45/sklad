@@ -349,13 +349,13 @@ class CreatePartnerDraftTool(AbstractWriteTool):
 
 ### Задача: CPP-012 — E2E: счёт с неизвестным поставщиком → partner → PO draft
 
-- **Статус:** Не начата
+- **Статус:** Выполнена
 - **Приоритет:** Высокий
 - **Описание:** Сквозной тест по образцу `test_e2e_nf504_invoice_to_po.py`.
 - **Шаги выполнения:**
-  - [ ] Фикстура: нормализованный счёт с `supplier.inn` без записи в `res.partner`
-  - [ ] Цепочка: `InvoiceContextHelper` → `create_partner_draft` → `create_product_draft` (если нужно) → `create_purchase_order_draft`
-  - [ ] Assert: `partner_id` на PO, `supplier_rank > 0`, state=draft
+  - [x] Фикстура: нормализованный счёт с `supplier.inn` без записи в `res.partner`
+  - [x] Цепочка: `InvoiceContextHelper` → `create_partner_draft` → `create_product_draft` (если нужно) → `create_purchase_order_draft`
+  - [x] Assert: `partner_id` на PO, `supplier_rank > 0`, state=draft
 - **Зависимости:** CPP-011
 - **DoD:** E2E зелёный на локальной БД.
 
@@ -363,12 +363,12 @@ class CreatePartnerDraftTool(AbstractWriteTool):
 
 ### Задача: CPP-013 — Ручной пилот на prod/stage
 
-- **Статус:** Не начата
+- **Статус:** Выполнена локально; prod smoke — в CPP-015
 - **Приоритет:** Средний
 - **Шаги выполнения:**
-  - [ ] Сценарий: счёт «Метиз Комплект» / ДВ Партнёр — поставщик не в базе
-  - [ ] Загрузка → создание partner → товары → PO draft
-  - [ ] Зафиксировать результат в `docs/pilot_results_v3.md` (раздел Partner draft)
+  - [x] Сценарий: счёт «Метиз Комплект» / ДВ Партнёр — поставщик не в базе
+  - [x] Загрузка → создание partner → товары → PO draft
+  - [x] Зафиксировать результат в `docs/pilot_results_v3.md` (раздел Partner draft)
 - **Зависимости:** CPP-012, деплой на stage/prod
 - **DoD:** Чеклист пилота подписан; нет обхода confirm.
 
@@ -378,13 +378,13 @@ class CreatePartnerDraftTool(AbstractWriteTool):
 
 ### Задача: CPP-014 — Обновить пользовательскую и техдокументацию
 
-- **Статус:** Не начата
+- **Статус:** Выполнена
 - **Шаги выполнения:**
-  - [ ] `docs/ai-assistant-user-guide.md` — перенести П4 из «перспектива» в «реализовано»
-  - [ ] `docs/roadmap_ai_assistant_v3_invoice.md` — §gap + целевой поток
-  - [ ] `docs/changelog.md` — запись о `create_partner_draft`
-  - [ ] `docs/tasktracker_ai_assistant_v3.md` — строка AIA-061 (ссылка на этот файл)
-  - [ ] Отметить `[x]` в этом tasktracker по завершении каждой задачи
+  - [x] `docs/ai-assistant-user-guide.md` — перенести П4 из «перспектива» в «реализовано»
+  - [x] `docs/roadmap_ai_assistant_v3_invoice.md` — §gap + целевой поток
+  - [x] `docs/changelog.md` — запись о `create_partner_draft`
+  - [x] `docs/tasktracker_ai_assistant_v3.md` — строка AIA-061 (ссылка на этот файл)
+  - [x] Отметить `[x]` в этом tasktracker по завершении каждой задачи
 - **Зависимости:** CPP-012
 - **DoD:** Документация соответствует коду.
 
@@ -485,7 +485,7 @@ ssh ubuntu@<vps> 'cd /opt/project_odoo && git pull && \
 | CPP-009 | prompt_builder | CPP-3 | Средний | ✅ | CPP-006 |
 | CPP-010 | Frontend UX | CPP-4 | Высокий | ✅ | CPP-008 |
 | CPP-011 | Unit-тесты | CPP-5 | Высокий | ✅ | CPP-003, CPP-007 |
-| CPP-012 | E2E тест | CPP-5 | Высокий | ⬜ | CPP-011 |
-| CPP-013 | Пилот prod/stage | CPP-5 | Средний | ⬜ | CPP-012 |
-| CPP-014 | Документация | CPP-6 | Средний | ⬜ | CPP-012 |
+| CPP-012 | E2E тест | CPP-5 | Высокий | ✅ | CPP-011 |
+| CPP-013 | Пилот prod/stage | CPP-5 | Средний | ✅ | CPP-012 |
+| CPP-014 | Документация | CPP-6 | Средний | ✅ | CPP-012 |
 | CPP-015 | Деплой prod | CPP-6 | Средний | ⬜ | CPP-013, CPP-014 |
