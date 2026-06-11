@@ -6,7 +6,7 @@ import requests
 _logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1'
-DEFAULT_TEXT_MODEL = 'google/gemini-2.0-flash-001'
+DEFAULT_TEXT_MODEL = 'google/gemini-2.5-flash'
 DEFAULT_VISION_MODEL = 'openai/gpt-4o'
 DEFAULT_TIMEOUT = 30
 
@@ -81,17 +81,8 @@ class OpenRouterClient:
             resp.status_code, model
         )
 
-        if resp.status_code == 429:
-            raise ConnectionError('OpenRouter: превышен лимит запросов')
-        if resp.status_code >= 500:
-            raise ConnectionError('OpenRouter: ошибка сервера')
-
-        try:
-            data = resp.json()
-        except Exception:
-            raise ValueError('OpenRouter: некорректный ответ')
-
-        return self._parse_response(data, mode=mode)
+        self._raise_for_http_error(resp, model)
+        return self._parse_response(self._json_or_error(resp), mode=mode)
 
     def send_chat_with_tools(
         self,
@@ -137,17 +128,44 @@ class OpenRouterClient:
             resp.status_code, model
         )
 
+        self._raise_for_http_error(resp, model)
+        return self._parse_tools_response(self._json_or_error(resp))
+
+    def _json_or_error(self, resp):
+        try:
+            return resp.json()
+        except Exception:
+            raise ValueError('OpenRouter: некорректный ответ')
+
+    def _raise_for_http_error(self, resp, model):
+        if resp.status_code == 401:
+            raise ValueError('OpenRouter: неверный API ключ')
+        if resp.status_code == 404:
+            raise ValueError(
+                'OpenRouter: модель %s не найдена '
+                '(возможно снята с публикации)' % model
+            )
         if resp.status_code == 429:
             raise ConnectionError('OpenRouter: превышен лимит запросов')
         if resp.status_code >= 500:
             raise ConnectionError('OpenRouter: ошибка сервера')
-
-        try:
-            data = resp.json()
-        except Exception:
-            raise ValueError('OpenRouter: некорректный ответ')
-
-        return self._parse_tools_response(data)
+        if resp.status_code >= 400:
+            data = {}
+            try:
+                data = resp.json()
+            except Exception:
+                pass
+            detail = (
+                data.get('error', {}).get('message')
+                if isinstance(data.get('error'), dict)
+                else data.get('error')
+            )
+            raise ValueError(
+                'OpenRouter: ошибка %s%s' % (
+                    resp.status_code,
+                    ': %s' % detail if detail else '',
+                )
+            )
 
     def _parse_response(self, data, mode='text'):
         try:

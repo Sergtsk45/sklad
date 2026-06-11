@@ -19,7 +19,7 @@ class AiAssistantConfig(models.TransientModel):
     ai_assistant_text_model = fields.Char(
         string='Модель (текст)',
         config_parameter='ai_assistant.text_model',
-        default='google/gemini-2.0-flash-001',
+        default='google/gemini-2.5-flash',
     )
     ai_assistant_vision_model = fields.Char(
         string='Модель (скриншот/vision)',

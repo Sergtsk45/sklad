@@ -23,8 +23,8 @@
                             <label for="ai_assistant_text_model"/>
                             <field name="ai_assistant_text_model"/>
                             <p class="text-muted mt-1 mb-2">
-                                Рекомендуется: <code>google/gemini-2.0-flash-001</code>
-                                ($0.075/M input, $0.30/M output). Используется для обычных
+                                Рекомендуется: <code>google/gemini-2.5-flash</code>.
+                                Используется для обычных
                                 текстовых вопросов по Odoo.
                             </p>
                             <label for="ai_assistant_vision_model"/>

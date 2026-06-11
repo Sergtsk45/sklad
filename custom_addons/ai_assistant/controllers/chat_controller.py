@@ -182,13 +182,19 @@ class AiAssistantController(http.Controller):
                 summary_parts.append(f'сумма {total_w_vat}')
         if supplier_name:
             summary_parts.append(f'поставщик: {supplier_name}')
+        summary = '. '.join(summary_parts) + '.'
         if warnings:
-            summary_parts.append(f'⚠ предупреждений: {len(warnings)}')
+            warning_lines = warnings[:5]
+            if len(warnings) > 5:
+                warning_lines.append('… и ещё %s' % (len(warnings) - 5))
+            summary += '\n\nПредупреждения (%s):\n' % len(warnings)
+            summary += '\n'.join('• %s' % line for line in warning_lines)
 
         return request.make_json_response({
             'success': True,
             'extraction_token': extraction_token,
-            'summary': '. '.join(summary_parts) + '.',
+            'summary': summary,
+            'warnings': warnings,
             'meta': {
                 'item_count': item_count,
                 'total_w_vat': total_w_vat,
@@ -414,8 +420,9 @@ class AiAssistantController(http.Controller):
                 stock_helper=stock_helper,
                 stock_result=stock_result,
             )
-        except ValueError:
-            return self._mock_response()
+        except ValueError as e:
+            _logger.warning('[AI Assistant] OpenRouter unavailable: %s', e)
+            return self._ai_unavailable_response(str(e))
         except ConnectionError as e:
             return {
                 'answer': str(e),
@@ -1015,9 +1022,26 @@ class AiAssistantController(http.Controller):
         _VISION_RATE[uid] = timestamps
         return True
 
-    def _mock_response(self):
+    def _ai_unavailable_response(self, reason=''):
+        if 'API key' in reason or 'API ключ' in reason:
+            answer = (
+                'AI не настроен: укажите OpenRouter API Key '
+                'в Настройках → AI-консультант.'
+            )
+        elif 'не найдена' in reason or '404' in reason:
+            answer = (
+                'Модель OpenRouter недоступна (снята или неверный slug). '
+                'Обновите поле «Модель (текст)» в настройках AI-консультанта '
+                '(рекомендуется google/gemini-2.5-flash).'
+            )
+        else:
+            answer = (
+                'AI временно недоступен. Обратитесь к администратору Odoo.'
+            )
+            if reason:
+                answer += ' (%s)' % reason
         return {
-            'answer': 'Я пока не подключён к AI, но скоро буду помогать!',
+            'answer': answer,
             'suggestions': [],
-            'meta': {'mock': True},
+            'meta': {'status': 'ai_unavailable'},
         }
