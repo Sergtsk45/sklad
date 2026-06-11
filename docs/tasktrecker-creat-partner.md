@@ -1,7 +1,7 @@
 # Tasktracker: создание контрагента из счёта в AI-ассистенте (`create_partner_draft`)
 
 **Создано:** 2026-06-11  
-**Статус:** CPP-001 → CPP-004, CPP-006 → CPP-011 выполнены  
+**Статус:** CPP-001 → CPP-004, CPP-006 → CPP-015 выполнены  
 **Модуль:** `custom_addons/ai_assistant`  
 **Связанные документы:**
 - [`ai-assistant-user-guide.md`](ai-assistant-user-guide.md) — п. **П4** (перспектива)
@@ -392,12 +392,12 @@ class CreatePartnerDraftTool(AbstractWriteTool):
 
 ### Задача: CPP-015 — Деплой prod
 
-- **Статус:** Не начата
+- **Статус:** Выполнена
 - **Шаги выполнения:**
-  - [ ] `git push` → на VPS `git pull`
-  - [ ] `docker exec odoo odoo -c /etc/odoo/odoo.conf -d odoo19 -u ai_assistant --stop-after-init`
-  - [ ] `docker compose restart odoo`
-  - [ ] Smoke: upload счёта + «добавь поставщика в базу»
+  - [x] `git push` → на VPS `git pull`
+  - [x] `docker exec odoo odoo -c /etc/odoo/odoo.conf -d odoo19 -u ai_assistant --stop-after-init`
+  - [x] `docker compose restart odoo`
+  - [x] Smoke: upload счёта + «добавь поставщика в базу»
 - **Зависимости:** CPP-013, CPP-014
 - **DoD:** Prod smoke OK.
 
@@ -415,13 +415,13 @@ class CreatePartnerDraftTool(AbstractWriteTool):
 
 ## Критерии готовности (релиз v1)
 
-- [ ] После загрузки счёта с неизвестным ИНН ассистент предлагает создать поставщика **до** товаров и PO.
-- [ ] `create_partner_draft` работает только с ConfirmationCard и группой Supply.
-- [ ] Дубликат по ИНН блокируется с сообщением и ссылкой на существующую запись.
-- [ ] PO draft создаётся с `partner_id` нового поставщика.
-- [ ] Denylist не нарушен (`res.users`, `button_*`, vendor bill).
-- [ ] Тесты `/ai_assistant` зелёные; flake8 на изменённых файлах.
-- [ ] `docs/changelog.md` и user guide обновлены.
+- [x] После загрузки счёта с неизвестным ИНН ассистент предлагает создать поставщика **до** товаров и PO.
+- [x] `create_partner_draft` работает только с ConfirmationCard и группой Supply.
+- [x] Дубликат по ИНН блокируется с сообщением и ссылкой на существующую запись.
+- [x] PO draft создаётся с `partner_id` нового поставщика.
+- [x] Denylist не нарушен (`res.users`, `button_*`, vendor bill).
+- [x] Тесты `/ai_assistant` зелёные; flake8 на изменённых файлах.
+- [x] `docs/changelog.md` и user guide обновлены.
 
 ---
 
@@ -488,4 +488,4 @@ ssh ubuntu@<vps> 'cd /opt/project_odoo && git pull && \
 | CPP-012 | E2E тест | CPP-5 | Высокий | ✅ | CPP-011 |
 | CPP-013 | Пилот prod/stage | CPP-5 | Средний | ✅ | CPP-012 |
 | CPP-014 | Документация | CPP-6 | Средний | ✅ | CPP-012 |
-| CPP-015 | Деплой prod | CPP-6 | Средний | ⬜ | CPP-013, CPP-014 |
+| CPP-015 | Деплой prod | CPP-6 | Средний | ✅ | CPP-013, CPP-014 |

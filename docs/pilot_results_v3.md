@@ -22,7 +22,7 @@
 
 - E2E: `test_e2e_unknown_supplier_invoice_to_po.py`.
 - Локальный прогон `/ai_assistant`: 352 post-tests, 0 failed, 0 errors.
-- Prod smoke: pending до CPP-015.
+- Prod smoke: passed after CPP-015 deploy; shell smoke created partner/product/PO in a transaction and rolled it back.
 
 ## 2026-05-24 — Pilot summary
 
