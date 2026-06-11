@@ -37,6 +37,15 @@ _NF504_HEADER_TEXT = """
 к/с 30101810145250000974
 """
 
+_CB675_HEADER_TEXT = """
+Счет на оплату № ЦБ-675 от 9 июня 2026 г.
+ООО "АРМОСТ", ИНН 5404959909, КПП 540401001, 630096, Новосибирская обл, Новосибирск г, Станционная ул,
+Поставщик:
+дом № 46Б, тел.: +7 (383) 3832253
+Покупатель: Розничный покупатель
+№ Товары (работы, услуги) Количество Цена Сумма
+"""
+
 _NF504_ITEMS_ROWS = [
     # строка-заголовок
     ["№", "Наименование товара", "Ед.", "Кол-во", "Цена",
@@ -194,6 +203,29 @@ class TestParseHeader(TransactionCase):
         }
         _parse_header(_NF504_HEADER_TEXT, result)
         self.assertEqual(result["supplier"]["bank"]["bik"], "044525974")
+
+    def test_supplier_name_from_line_before_label_cb675(self):
+        """1С/Т-Банк: реквизиты выше метки «Поставщик:», адрес — ниже."""
+        result = {
+            "invoice_number": "",
+            "invoice_date": "",
+            "supplier": {
+                "name": "", "inn": "", "kpp": "", "address": "",
+                "bank": {"name": "", "bik": "", "account": "", "corr_account": ""},
+            },
+            "buyer": {"name": "", "inn": "", "kpp": "", "address": ""},
+        }
+        _parse_header(_CB675_HEADER_TEXT, result)
+        self.assertEqual(result["invoice_number"], "ЦБ-675")
+        self.assertEqual(result["supplier"]["name"], "ООО АРМОСТ")
+        self.assertEqual(result["supplier"]["inn"], "5404959909")
+        self.assertEqual(result["supplier"]["kpp"], "540401001")
+        self.assertIn("Новосибирская обл", result["supplier"]["address"])
+        self.assertIn("Станционная ул", result["supplier"]["address"])
+        self.assertIn("дом № 46Б", result["supplier"]["address"])
+        self.assertNotIn("КПП", result["supplier"]["address"])
+        self.assertNotIn("тел.", result["supplier"]["address"].lower())
+        self.assertEqual(result["buyer"]["name"], "Розничный покупатель")
 
 
 @tagged('post_install', '-at_install')

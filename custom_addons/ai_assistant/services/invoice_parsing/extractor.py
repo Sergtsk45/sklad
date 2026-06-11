@@ -131,14 +131,62 @@ _SUPPLIER_RE = re.compile(
 )
 _BUYER_RE = re.compile(
     r"покупатель(?:\s*\([^)]*\))?\s*[:：]?\s*"
-    r"(.*?)(?=\n(?:грузополучатель|основание)\b|\n\s*\n|$)",
+    r"(.*?)(?=\n(?:грузополучатель|основание)\b|\n№\s*(?:товар|наименование)|\n\s*\n)",
     re.I | re.S,
 )
+_SUPPLIER_LABEL_LINE_RE = re.compile(r"\n\s*поставщик\s*:\s*\n", re.I)
 
 
 def _first(pattern: re.Pattern, text: str, group: int = 1) -> str:
     m = pattern.search(text)
     return m.group(group).strip() if m else ""
+
+
+def _supplier_pre_label_line(text: str) -> str:
+    """
+    Строка с ИНН непосредственно перед «Поставщик:» на отдельной строке.
+
+    Формат 1С/Т-Банк: реквизиты на строке выше метки, продолжение адреса — ниже.
+    """
+    label_match = _SUPPLIER_LABEL_LINE_RE.search(text)
+    if not label_match:
+        return ''
+    before = label_match.start()
+    lines = [
+        line.strip()
+        for line in text[:before].splitlines()
+        if line.strip()
+    ]
+    for line in reversed(lines[-8:]):
+        if _INN_RE.search(line):
+            return line
+    return ''
+
+
+def _address_from_party_line(line: str) -> str:
+    """Хвост адреса после КПП и почтового индекса (не путать с цифрами ИНН)."""
+    after_kpp = re.search(
+        r'кпп\s*:?\s*\d{9}\s*,?\s*\d{6}\s*,\s*(.+)$',
+        line,
+        re.I,
+    )
+    if after_kpp:
+        return after_kpp.group(1).strip().rstrip(',')
+    return _extract_address(line)
+
+
+def _compose_supplier_address(pre_line: str, post_block: str) -> str:
+    """Склеить адрес из строки с ИНН и продолжения после метки «Поставщик:»."""
+    parts = []
+    if pre_line:
+        addr = _address_from_party_line(pre_line)
+        if addr:
+            parts.append(addr.rstrip(','))
+    if post_block:
+        tail = re.sub(r'тел\.?:.*$', '', post_block, flags=re.I).strip().rstrip(',')
+        if tail:
+            parts.append(tail)
+    return ', '.join(parts)
 
 
 def _parse_header(text: str, result: dict) -> None:
@@ -147,12 +195,28 @@ def _parse_header(text: str, result: dict) -> None:
         result["invoice_number"] = m.group(1).strip().replace(" ", "-")
         result["invoice_date"] = _normalize_date(m.group(2).strip())
 
-    sup_block = _first(_SUPPLIER_RE, text)
-    if sup_block:
-        result["supplier"]["name"] = extract_party_name(sup_block)
-        result["supplier"]["inn"] = _first(_INN_RE, sup_block)
-        result["supplier"]["kpp"] = _first(_KPP_RE, sup_block)
-        result["supplier"]["address"] = _extract_address(sup_block)
+    sup_post = _first(_SUPPLIER_RE, text)
+    sup_pre = _supplier_pre_label_line(text)
+    sup_identity = (
+        sup_pre if sup_pre and _first(_INN_RE, sup_pre) else sup_post
+    )
+    if sup_identity or sup_post:
+        identity_block = sup_identity or sup_post
+        result["supplier"]["name"] = extract_party_name(identity_block)
+        result["supplier"]["inn"] = (
+            _first(_INN_RE, sup_pre) or _first(_INN_RE, sup_post)
+        )
+        result["supplier"]["kpp"] = (
+            _first(_KPP_RE, sup_pre) or _first(_KPP_RE, sup_post)
+        )
+        if sup_pre and sup_post and _first(_INN_RE, sup_pre):
+            result["supplier"]["address"] = _compose_supplier_address(
+                sup_pre, sup_post,
+            )
+        else:
+            result["supplier"]["address"] = _extract_address(
+                sup_post or sup_pre,
+            )
 
     buy_block = _first(_BUYER_RE, text)
     if buy_block:
