@@ -90,6 +90,7 @@ class InvoiceContextHelper:
         args = {
             'name': name,
             'vat': vat,
+            'category': 'Поставщик',
             'is_company': infer_is_company(name),
         }
         address = (supplier.get('address') or '').strip()

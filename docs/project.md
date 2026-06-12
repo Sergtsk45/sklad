@@ -89,6 +89,18 @@ AI Assistant v3 добавляет ограниченный tool layer для с
 rate limits и audit. AI создаёт только черновики и заметки; Confirm/Validate
 остаются ручными действиями пользователя в Odoo UI.
 
+Сценарий контрагентов расширяет тот же tool layer:
+
+- `create_partner_draft` создаёт нового `res.partner` только после поиска
+  дубликата по ИНН и выбора категории.
+- `update_partner_draft` дополняет существующего контрагента только по пустым
+  полям, не меняет ИНН, добавляет тег категории и повышает ранги.
+- `add_partner_bank_draft` и `add_partner_contact_draft` работают через
+  плоские валидируемые параметры; denylist executor для сырых `bank_ids`,
+  `child_ids`, `category_id` не ослаблен.
+- Категории `Поставщик`, `Заказчик`, `Покупатель`, `Подрядчик` централизованы
+  в validators и синхронизированы с workflow `.cursor/skills/odoo-add-partner`.
+
 ```mermaid
 flowchart TD
     Chat[OWL chat widget] --> Controller[ai_assistant chat_controller]
@@ -100,9 +112,14 @@ flowchart TD
     ToolLayer --> Audit[ai_assistant.audit]
     ReadTools --> ProductSearch[custom_product_search.ai_search_products]
     ReadTools --> OdooRead[Odoo ORM read/search]
+    ReadTools --> FindPartner[find_partner — res.partner по ИНН/названию]
     WriteTools --> OR[object.request draft]
     WriteTools --> PO[purchase.order draft]
     WriteTools --> Picking[stock.picking internal draft]
     WriteTools --> Chatter[mail.thread message_post]
+    WriteTools --> PartnerCreate[create_partner_draft / update_partner_draft]
+    WriteTools --> PartnerBank[add_partner_bank_draft — res.partner.bank]
+    WriteTools --> PartnerContact[add_partner_contact_draft — дочерний контакт]
     Pending --> ConfirmCard[ConfirmationCard / ResultCard]
+    Controller --> CategoryChips[chips выбора категории контрагента]
 ```

@@ -14,6 +14,8 @@ from odoo.addons.ai_assistant.services.action_tools.registry import (
     ToolRegistry,
 )
 from odoo.addons.ai_assistant.services.action_tools.write_tools import (
+    AddPartnerBankDraftTool,
+    AddPartnerContactDraftTool,
     PostChatterNoteTool,
 )
 
@@ -170,6 +172,13 @@ class TestToolExecutorSecurity(TransactionCase):
 
         self.assertFalse(result['success'])
         self.assertEqual(result['error']['code'], 'access_denied')
+
+    def test_partner_tools_do_not_expose_forbidden_raw_fields(self):
+        for tool in (AddPartnerBankDraftTool(), AddPartnerContactDraftTool()):
+            properties = tool.parameters_schema['properties']
+            self.assertNotIn('bank_ids', properties)
+            self.assertNotIn('child_ids', properties)
+            self.assertNotIn('category_id', properties)
 
     def test_rate_limit_blocks_after_5_writes(self):
         registry = ToolRegistry()

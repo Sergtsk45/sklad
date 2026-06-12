@@ -24,37 +24,59 @@ export class ConfirmationCard extends Component {
     }
 
     get title() {
-        if (this.toolName === "create_partner_draft") {
-            return "Создать поставщика";
-        }
         return this.props.plan.title || "Подтвердите действие";
     }
 
     get fields() {
         const fields = this.props.plan.fields || [];
-        if (this.toolName !== "create_partner_draft") {
+        if (![
+            "create_partner_draft",
+            "update_partner_draft",
+            "add_partner_bank_draft",
+            "add_partner_contact_draft",
+        ].includes(this.toolName)) {
             return fields;
         }
         const labels = {
-            name: "Поставщик",
+            partner_id: "Контрагент",
+            name: "Название",
+            ref: "Сокращение",
             vat: "ИНН",
+            category: "Категория",
             is_company: "Тип",
             street: "Адрес",
             city: "Город",
+            state_name: "Регион",
             zip: "Индекс",
             phone: "Телефон",
             email: "Email",
             comment: "Комментарий",
+            acc_number: "Расчётный счёт",
+            bic: "БИК",
+            bank_name: "Банк",
+            acc_holder_name: "Получатель",
+            note: "Примечание",
+            function: "Должность",
         };
         const order = [
+            "partner_id",
             "name",
+            "ref",
             "vat",
+            "category",
             "is_company",
             "street",
             "city",
+            "state_name",
             "zip",
             "phone",
             "email",
+            "function",
+            "acc_number",
+            "bic",
+            "bank_name",
+            "acc_holder_name",
+            "note",
             "comment",
         ];
         return [...fields]
@@ -95,6 +117,7 @@ export class ResultCard extends Component {
         error: { type: Object, optional: true },
         nextHint: { type: String, optional: true },
         steps: { type: Array, optional: true },
+        details: { type: Array, optional: true },
     };
 
     get isSuccess() {
@@ -120,7 +143,7 @@ export class ResultCard extends Component {
     get title() {
         const record = this.props.record || {};
         if (this.isSuccess && record.model === "res.partner") {
-            return "Поставщик создан";
+            return "Контрагент готов";
         }
         return this.isSuccess ? "Черновик создан" : "Действие не выполнено";
     }

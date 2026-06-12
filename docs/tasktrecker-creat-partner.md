@@ -8,6 +8,7 @@
 - [`roadmap_ai_assistant_v3_invoice.md`](roadmap_ai_assistant_v3_invoice.md) — этап V3-10 (счёт → склад)
 - [`tasktracker_ai_assistant_v3.md`](tasktracker_ai_assistant_v3.md) — AIA-054…060 (образец invoice workflow)
 - [`.cursor/skills/odoo-supplier-from-invoice/SKILL.md`](../.cursor/skills/odoo-supplier-from-invoice/SKILL.md) — бизнес-правила полей `res.partner` (для MCP; переносим логику, не HTTP)
+- [`tasktrecker-creat-partner-v2.md`](tasktrecker-creat-partner-v2.md) — v2: контрагенты через чат (категории, update, банки, контакты)
 
 ---
 

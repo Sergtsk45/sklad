@@ -595,9 +595,11 @@ class AiAssistantController(http.Controller):
                     answer = nav_helper.enrich_answer(answer, nav_result)
                 if stock_helper and stock_result:
                     answer = stock_helper.enrich_answer(answer, stock_result)
+                suggestions = self._partner_category_suggestions(answer)
+                answer = self._strip_partner_category_marker(answer)
                 return {
                     'answer': answer,
-                    'suggestions': [],
+                    'suggestions': suggestions,
                     'cards': [],
                     'links': self._response_links(nav_result, stock_result),
                     'meta': {
@@ -845,15 +847,30 @@ class AiAssistantController(http.Controller):
             'type': 'confirmation',
             'pending_key': pending_key,
             'plan': {
-                'title': self._confirmation_title(tool_call['name']),
+                'title': self._confirmation_title(tool_call['name'], args),
                 'tool_name': tool_call['name'],
                 'fields': self._summarize_args(args),
             },
         }
 
-    def _confirmation_title(self, tool_name):
+    def _confirmation_title(self, tool_name, args=None):
+        args = args or {}
         if tool_name == 'create_partner_draft':
-            return 'Создать поставщика'
+            category = args.get('category')
+            if isinstance(category, list):
+                category = category[0] if category else ''
+            return {
+                'Поставщик': 'Создать поставщика',
+                'Заказчик': 'Создать заказчика',
+                'Покупатель': 'Создать покупателя',
+                'Подрядчик': 'Создать подрядчика',
+            }.get(category, 'Создать контрагента')
+        if tool_name == 'update_partner_draft':
+            return 'Обновить контрагента'
+        if tool_name == 'add_partner_bank_draft':
+            return 'Добавить банковские реквизиты'
+        if tool_name == 'add_partner_contact_draft':
+            return 'Добавить контактное лицо'
         return 'Подтвердите действие'
 
     def _summarize_args(self, args):
@@ -888,9 +905,28 @@ class AiAssistantController(http.Controller):
                 'name': result.get('name') or '',
                 'url': result.get('url') or '',
             },
+            'details': self._result_details(tool_name, result),
             'next_hint': steps[0] if steps else 'Откройте черновик.',
             'steps': steps,
         }
+
+    def _result_details(self, tool_name, result):
+        if tool_name != 'update_partner_draft':
+            return []
+        return [
+            {
+                'label': 'Обновлено',
+                'value': (
+                    ', '.join(result.get('updated_fields') or []) or 'нет'
+                ),
+            },
+            {
+                'label': 'Пропущено',
+                'value': (
+                    ', '.join(result.get('skipped_fields') or []) or 'нет'
+                ),
+            },
+        ]
 
     def _next_steps(self, tool_name):
         if tool_name == 'create_purchase_order_draft':
@@ -927,11 +963,16 @@ class AiAssistantController(http.Controller):
         if tool_name == 'create_partner_draft':
             return [
                 (
-                    'Теперь создайте товары из счёта; карточку поставщика '
-                    'можно открыть и проверить реквизиты.'
+                    'Откройте карточку поставщика/контрагента и проверьте '
+                    'реквизиты.'
                 ),
-                'Если товары уже готовы, можно создать закупку на склад.',
             ]
+        if tool_name == 'update_partner_draft':
+            return ['Откройте карточку контрагента и проверьте изменения.']
+        if tool_name == 'add_partner_bank_draft':
+            return ['Откройте карточку контрагента и проверьте банк и счёт.']
+        if tool_name == 'add_partner_contact_draft':
+            return ['Откройте карточку контрагента и проверьте контакт.']
         return ['Откройте черновик и проверьте данные.']
 
     def _result_card_error(self, error):
@@ -951,9 +992,39 @@ class AiAssistantController(http.Controller):
             return 'product.product', result.get('product_id')
         if tool_name == 'create_partner_draft':
             return 'res.partner', result.get('partner_id')
+        if tool_name == 'update_partner_draft':
+            return 'res.partner', result.get('partner_id')
+        if tool_name == 'add_partner_bank_draft':
+            return 'res.partner', result.get('partner_id')
+        if tool_name == 'add_partner_contact_draft':
+            return 'res.partner', result.get('partner_id')
         if tool_name == 'create_internal_picking_draft':
             return 'stock.picking', result.get('picking_id')
         return '', result.get('record_id')
+
+    def _partner_category_suggestions(self, answer):
+        text = answer or ''
+        if (
+            '[PARTNER_CATEGORY_REQUIRED]' not in text and
+            'К какой категории отнести' not in text
+        ):
+            return []
+        return [
+            {'label': category, 'action': category}
+            for category in (
+                'Поставщик',
+                'Заказчик',
+                'Покупатель',
+                'Подрядчик',
+            )
+        ]
+
+    def _strip_partner_category_marker(self, answer):
+        return (
+            (answer or '')
+            .replace('[PARTNER_CATEGORY_REQUIRED]', '')
+            .strip()
+        )
 
     def _json_dumps(self, value):
         return json.dumps(value, ensure_ascii=False)

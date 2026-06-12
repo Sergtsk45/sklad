@@ -352,6 +352,10 @@ class TestPromptBuilder(TransactionCase):
         )
         self.assertIn('create_partner_draft', system_content)
         self.assertIn('Банковские реквизиты', system_content)
+        self.assertIn('update_partner_draft', system_content)
+        self.assertIn('add_partner_bank_draft', system_content)
+        self.assertIn('add_partner_contact_draft', system_content)
+        self.assertIn('К какой категории отнести', system_content)
         self.assertIn('ШАГ В', system_content)
 
     # --- build_technical_context_block ---

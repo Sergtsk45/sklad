@@ -1,3 +1,20 @@
+## Задача: AI-ассистент — контрагенты через чат (по скиллу odoo-add-partner)
+- **Статус**: Завершена
+- **Описание**: Научить ai_assistant распознавать в чате намерение «добавить контрагента / дополнить данные контрагента» и вести сценарий по правилам скилла `.cursor/skills/odoo-add-partner/SKILL.md`: дубликат по ИНН, обязательное уточнение категории (Поставщик/Заказчик/Покупатель/Подрядчик), тег, банковские реквизиты, контактные лица. Детальный трекер: `docs/tasktrecker-creat-partner-v2.md`.
+- **Шаги выполнения**:
+ - [x] Анализ текущей архитектуры ai_assistant (tools, executor, prompt, UI).
+ - [x] Детальный трекер в `docs/tasktrecker-creat-partner-v2.md`.
+ - [x] Актуализация скилла `odoo-add-partner` (раздел для ai_assistant, правила update).
+ - [x] Этап CPV-1 (CPV-001…006): validators (категории, БИК, тег) + tools `update_partner_draft`, `add_partner_bank_draft`, `add_partner_contact_draft`, расширение `create_partner_draft`/`find_partner`.
+ - [x] Этап CPV-2 (CPV-007…009): правила в `_ACTIONS_RULES_BLOCK`, chips категорий, knowledge doc.
+ - [x] Этап CPV-3 (CPV-010): UI ConfirmationCard/ResultCard для новых tools.
+ - [x] Этап CPV-4 (CPV-011…013): тесты (validators, tools, executor security, E2E чат).
+ - [x] Этап CPV-5 (CPV-014): документация (changelog, project.md, user guide) и синхронизация со скиллом.
+- **Зависимости**:
+ - Скилл `.cursor/skills/odoo-add-partner/SKILL.md` — канонический workflow.
+ - Детальный трекер: `docs/tasktrecker-creat-partner-v2.md`.
+ - Модуль `ai_assistant`: registry/executor/PendingActionStore/ConfirmationCard.
+
 ## Задача: Улучшенный поиск товаров custom_product_search
 - **Статус**: Завершена
 - **Описание**: Реализовать отдельный addon `custom_product_search` для нормализованного поиска товаров в Odoo 19: backend UI, складские документы и сервисный метод для AI-ассистента.

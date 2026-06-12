@@ -7,8 +7,14 @@ from odoo.exceptions import AccessError, ValidationError
 from .base import AbstractWriteTool
 from .registry import default_registry
 from .validators import (
+    PARTNER_CATEGORIES,
+    get_or_create_partner_tag,
     infer_is_company,
+    normalize_partner_categories,
+    normalize_phone,
     normalize_vat,
+    validate_acc_number,
+    validate_bic,
     validate_partner_create_args,
     validate_partner_is_supplier,
     validate_picking_type_for_purchase,
@@ -301,27 +307,35 @@ default_registry.register(
 class CreatePartnerDraftTool(AbstractWriteTool):
     name = 'create_partner_draft'
     description = (
-        'Создать поставщика res.partner из реквизитов счёта. '
-        'Только новая запись, без обновления существующих контрагентов.'
+        'Создать нового контрагента res.partner. Перед вызовом всегда '
+        'проверь дубликат через find_partner по ИНН. Если пользователь не '
+        'указал категорию, сначала спроси: Поставщик, Заказчик, Покупатель '
+        'или Подрядчик. Не обновляет существующих контрагентов.'
     )
     required_groups = ['ai_assistant.group_ai_assistant_supply']
     parameters_schema = {
         'type': 'object',
         'properties': {
             'name': {'type': 'string', 'minLength': 1},
+            'ref': {'type': ['string', 'null']},
             'vat': {
                 'type': 'string',
                 'pattern': r'^\D*\d(?:\D*\d){9}(?:(?:\D*\d){2})?\D*$',
             },
+            'category': {
+                'type': ['string', 'array'],
+                'items': {'type': 'string', 'enum': list(PARTNER_CATEGORIES)},
+            },
             'is_company': {'type': ['boolean', 'null']},
             'street': {'type': ['string', 'null']},
             'city': {'type': ['string', 'null']},
+            'state_name': {'type': ['string', 'null']},
             'zip': {'type': ['string', 'null']},
             'phone': {'type': ['string', 'null']},
             'email': {'type': ['string', 'null']},
             'comment': {'type': ['string', 'null']},
         },
-        'required': ['name', 'vat'],
+        'required': ['name', 'vat', 'category'],
         'additionalProperties': False,
     }
 
@@ -341,14 +355,18 @@ class CreatePartnerDraftTool(AbstractWriteTool):
             )
 
         name = (args.get('name') or '').strip()
+        categories = normalize_partner_categories(args.get('category'))
         vals = {
             'name': name,
             'vat': vat,
             'is_company': self._is_company(args, name),
-            'supplier_rank': 1,
+            'supplier_rank': 0,
             'customer_rank': 0,
         }
+        self._apply_categories(env, vals, categories)
+        self._apply_country_and_state(env, vals, vat, args.get('state_name'))
         for field_name in (
+            'ref',
             'street',
             'city',
             'zip',
@@ -358,13 +376,15 @@ class CreatePartnerDraftTool(AbstractWriteTool):
         ):
             value = self._clean_optional(args.get(field_name))
             if value:
+                if field_name == 'phone':
+                    value = normalize_phone(value)
                 vals[field_name] = value
 
         partner = env['res.partner'].create(vals)
         partner.message_post(
             body=(
-                'Создано AI-ассистентом по запросу %s, источник: счёт.'
-            ) % env.user.name,
+                'Создано AI-ассистентом по запросу %s. Категории: %s.'
+            ) % (env.user.name, ', '.join(categories)),
             message_type='notification',
             subtype_xmlid='mail.mt_note',
         )
@@ -372,6 +392,7 @@ class CreatePartnerDraftTool(AbstractWriteTool):
             'partner_id': partner.id,
             'name': partner.display_name,
             'vat': partner.vat,
+            'categories': categories,
             'url': '/odoo/res.partner/%s' % partner.id,
         }
 
@@ -390,9 +411,396 @@ class CreatePartnerDraftTool(AbstractWriteTool):
             return ''
         return str(value).strip()
 
+    def _apply_categories(self, env, vals, categories):
+        tag_ids = []
+        for category in categories:
+            for rank_field, rank_value in PARTNER_CATEGORIES[category].items():
+                vals[rank_field] = max(vals.get(rank_field, 0), rank_value)
+            tag_ids.append(get_or_create_partner_tag(env, category).id)
+        vals['category_id'] = [(6, 0, tag_ids)]
+
+    def _apply_country_and_state(self, env, vals, vat, state_name=None):
+        if len(vat or '') not in (10, 12):
+            return
+        country = self._russia(env)
+        if not country:
+            return
+        vals['country_id'] = country.id
+        state_name = self._clean_optional(state_name)
+        if state_name:
+            state = env['res.country.state'].search([
+                ('country_id', '=', country.id),
+                '|',
+                ('name', '=ilike', state_name),
+                ('name', 'ilike', state_name),
+            ], limit=1)
+            if state:
+                vals['state_id'] = state.id
+
+    def _russia(self, env):
+        country = env.ref('base.ru', raise_if_not_found=False)
+        if country:
+            return country
+        return env['res.country'].search([
+            '|',
+            ('code', '=', 'RU'),
+            ('name', 'ilike', 'Россия'),
+        ], limit=1)
+
 
 default_registry.register(
     CreatePartnerDraftTool()
+)
+
+
+class UpdatePartnerDraftTool(AbstractWriteTool):
+    name = 'update_partner_draft'
+    description = (
+        'Безопасно дополнить существующего контрагента. Заполняет только '
+        'пустые поля, добавляет категорию/тег и повышает ранги 0→1. '
+        'ИНН существующей записи не меняет.'
+    )
+    required_groups = ['ai_assistant.group_ai_assistant_supply']
+    parameters_schema = {
+        'type': 'object',
+        'properties': {
+            'partner_id': {'type': 'integer'},
+            'name': {'type': ['string', 'null']},
+            'ref': {'type': ['string', 'null']},
+            'vat': {'type': ['string', 'null']},
+            'category': {
+                'type': ['string', 'array', 'null'],
+                'items': {'type': 'string', 'enum': list(PARTNER_CATEGORIES)},
+            },
+            'is_company': {'type': ['boolean', 'null']},
+            'street': {'type': ['string', 'null']},
+            'city': {'type': ['string', 'null']},
+            'state_name': {'type': ['string', 'null']},
+            'zip': {'type': ['string', 'null']},
+            'phone': {'type': ['string', 'null']},
+            'email': {'type': ['string', 'null']},
+            'comment': {'type': ['string', 'null']},
+        },
+        'required': ['partner_id'],
+        'additionalProperties': False,
+    }
+
+    def execute(self, env, args):
+        _ensure_tool_required_groups(self, env)
+        partner = env['res.partner'].browse(args['partner_id']).exists()
+        if not partner:
+            raise ValidationError('Контрагент не найден.')
+
+        self._validate_vat_unchanged(partner, args)
+        vals = {}
+        updated_fields = []
+        skipped_fields = []
+        for field_name in (
+            'name',
+            'ref',
+            'street',
+            'city',
+            'zip',
+            'phone',
+            'email',
+            'comment',
+        ):
+            value = self._clean_optional(args.get(field_name))
+            if not value:
+                continue
+            if field_name == 'phone':
+                value = normalize_phone(value)
+            if self._is_empty(partner, field_name):
+                vals[field_name] = value
+                updated_fields.append(field_name)
+            else:
+                skipped_fields.append(field_name)
+
+        if args.get('is_company') is not None:
+            if self._is_empty(partner, 'is_company'):
+                vals['is_company'] = bool(args['is_company'])
+                updated_fields.append('is_company')
+            else:
+                skipped_fields.append('is_company')
+
+        if args.get('state_name') and self._is_empty(partner, 'state_id'):
+            state = self._find_state(env, partner, args['state_name'])
+            if state:
+                vals['state_id'] = state.id
+                updated_fields.append('state_id')
+        elif args.get('state_name'):
+            skipped_fields.append('state_id')
+
+        categories = []
+        if args.get('category'):
+            categories = normalize_partner_categories(args.get('category'))
+            self._apply_category_update(env, partner, vals, categories)
+            updated_fields.append('category')
+
+        if vals:
+            partner.write(vals)
+        partner.message_post(
+            body=(
+                'Контрагент дополнен AI-ассистентом по запросу %s. '
+                'Обновлено: %s. Пропущено: %s.'
+            ) % (
+                env.user.name,
+                ', '.join(updated_fields) or 'нет',
+                ', '.join(skipped_fields) or 'нет',
+            ),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+        )
+        return {
+            'partner_id': partner.id,
+            'name': partner.display_name,
+            'url': '/odoo/res.partner/%s' % partner.id,
+            'updated_fields': updated_fields,
+            'skipped_fields': skipped_fields,
+            'categories': categories,
+        }
+
+    def idempotency_key(self, args):
+        payload = {
+            'partner_id': args.get('partner_id'),
+            'values': {
+                key: args[key]
+                for key in sorted(args)
+                if key != 'partner_id'
+            },
+        }
+        raw_payload = json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(',', ':'),
+        )
+        return hashlib.sha256(raw_payload.encode('utf-8')).hexdigest()
+
+    def _validate_vat_unchanged(self, partner, args):
+        vat = normalize_vat(args.get('vat'))
+        if vat and vat != (partner.vat or ''):
+            raise ValidationError(
+                'Изменение ИНН существующего контрагента запрещено.'
+            )
+
+    def _is_empty(self, record, field_name):
+        value = record[field_name]
+        return not bool(value)
+
+    def _clean_optional(self, value):
+        if value is None:
+            return ''
+        return str(value).strip()
+
+    def _find_state(self, env, partner, state_name):
+        country = partner.country_id or env.ref(
+            'base.ru',
+            raise_if_not_found=False,
+        )
+        domain = [
+            '|',
+            ('name', '=ilike', state_name),
+            ('name', 'ilike', state_name),
+        ]
+        if country:
+            domain = [('country_id', '=', country.id)] + domain
+        return env['res.country.state'].search(domain, limit=1)
+
+    def _apply_category_update(self, env, partner, vals, categories):
+        tag_ids = list(partner.category_id.ids)
+        for category in categories:
+            for rank_field, rank_value in PARTNER_CATEGORIES[category].items():
+                if getattr(partner, rank_field) < rank_value:
+                    vals[rank_field] = rank_value
+            tag = get_or_create_partner_tag(env, category)
+            if tag.id not in tag_ids:
+                tag_ids.append(tag.id)
+        vals['category_id'] = [(6, 0, tag_ids)]
+
+
+default_registry.register(
+    UpdatePartnerDraftTool()
+)
+
+
+class AddPartnerBankDraftTool(AbstractWriteTool):
+    name = 'add_partner_bank_draft'
+    description = (
+        'Добавить банковские реквизиты контрагента через плоские поля: '
+        'partner_id, acc_number, bic, bank_name.'
+    )
+    required_groups = ['ai_assistant.group_ai_assistant_supply']
+    parameters_schema = {
+        'type': 'object',
+        'properties': {
+            'partner_id': {'type': 'integer'},
+            'acc_number': {'type': 'string', 'minLength': 1},
+            'bic': {'type': 'string', 'minLength': 1},
+            'bank_name': {'type': 'string', 'minLength': 1},
+            'acc_holder_name': {'type': ['string', 'null']},
+            'note': {'type': ['string', 'null']},
+        },
+        'required': ['partner_id', 'acc_number', 'bic', 'bank_name'],
+        'additionalProperties': False,
+    }
+
+    def execute(self, env, args):
+        _ensure_tool_required_groups(self, env)
+        partner = env['res.partner'].browse(args['partner_id']).exists()
+        if not partner:
+            raise ValidationError('Контрагент не найден.')
+        acc_number = validate_acc_number(args.get('acc_number'))
+        bic = validate_bic(args.get('bic'))
+        duplicate = env['res.partner.bank'].search([
+            ('partner_id', '=', partner.id),
+            ('acc_number', '=', acc_number),
+        ], limit=1)
+        if duplicate:
+            raise ValidationError(
+                'Банковский счёт уже добавлен этому контрагенту.'
+            )
+        bank = self._get_or_create_bank(env, args['bank_name'], bic)
+        bank_vals = {
+            'partner_id': partner.id,
+            'acc_number': acc_number,
+            'bank_id': bank.id,
+        }
+        acc_holder_name = (args.get('acc_holder_name') or '').strip()
+        if acc_holder_name:
+            bank_vals['acc_holder_name'] = acc_holder_name
+        partner_bank = env['res.partner.bank'].create(bank_vals)
+        note = (args.get('note') or '').strip()
+        if note:
+            partner.comment = self._append_note(
+                partner.comment,
+                'Банковские реквизиты: %s' % note,
+            )
+        partner.message_post(
+            body=(
+                'Банковские реквизиты добавлены AI-ассистентом по запросу %s.'
+            ) % env.user.name,
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+        )
+        return {
+            'partner_bank_id': partner_bank.id,
+            'partner_id': partner.id,
+            'name': partner.display_name,
+            'url': '/odoo/res.partner/%s' % partner.id,
+        }
+
+    def idempotency_key(self, args):
+        raw_payload = json.dumps(
+            {
+                'partner_id': args.get('partner_id'),
+                'acc_number': validate_acc_number(args.get('acc_number')),
+                'bic': validate_bic(args.get('bic')),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(',', ':'),
+        )
+        return hashlib.sha256(raw_payload.encode('utf-8')).hexdigest()
+
+    def _get_or_create_bank(self, env, bank_name, bic):
+        bank = env['res.bank'].search([('bic', '=', bic)], limit=1)
+        if bank:
+            return bank
+        vals = {'name': bank_name.strip(), 'bic': bic}
+        country = env.ref('base.ru', raise_if_not_found=False)
+        if country:
+            vals['country'] = country.id
+        return env['res.bank'].create(vals)
+
+    def _append_note(self, current, note):
+        current = (current or '').strip()
+        if not current:
+            return note
+        if note in current:
+            return current
+        return current + '\n' + note
+
+
+default_registry.register(
+    AddPartnerBankDraftTool()
+)
+
+
+class AddPartnerContactDraftTool(AbstractWriteTool):
+    name = 'add_partner_contact_draft'
+    description = (
+        'Добавить контактное лицо контрагента как дочерний res.partner.'
+    )
+    required_groups = ['ai_assistant.group_ai_assistant_supply']
+    parameters_schema = {
+        'type': 'object',
+        'properties': {
+            'partner_id': {'type': 'integer'},
+            'name': {'type': 'string', 'minLength': 1},
+            'function': {'type': ['string', 'null']},
+            'phone': {'type': ['string', 'null']},
+            'email': {'type': ['string', 'null']},
+        },
+        'required': ['partner_id', 'name'],
+        'additionalProperties': False,
+    }
+
+    def execute(self, env, args):
+        _ensure_tool_required_groups(self, env)
+        partner = env['res.partner'].browse(args['partner_id']).exists()
+        if not partner:
+            raise ValidationError('Контрагент не найден.')
+        name = (args.get('name') or '').strip()
+        duplicate = env['res.partner'].search([
+            ('parent_id', '=', partner.id),
+            ('name', '=ilike', name),
+        ], limit=1)
+        if duplicate:
+            raise ValidationError(
+                'Контактное лицо с таким именем уже есть у контрагента.'
+            )
+        vals = {
+            'parent_id': partner.id,
+            'type': 'contact',
+            'name': name,
+        }
+        for field_name in ('function', 'phone', 'email'):
+            value = (args.get(field_name) or '').strip()
+            if value:
+                if field_name == 'phone':
+                    value = normalize_phone(value)
+                vals[field_name] = value
+        contact = env['res.partner'].create(vals)
+        partner.message_post(
+            body=(
+                'Контактное лицо добавлено AI-ассистентом по запросу %s: %s.'
+            ) % (env.user.name, contact.display_name),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+        )
+        return {
+            'contact_id': contact.id,
+            'partner_id': partner.id,
+            'name': contact.display_name,
+            'url': '/odoo/res.partner/%s' % partner.id,
+        }
+
+    def idempotency_key(self, args):
+        raw_payload = json.dumps(
+            {
+                'partner_id': args.get('partner_id'),
+                'name': (args.get('name') or '').strip().lower(),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(',', ':'),
+        )
+        return hashlib.sha256(raw_payload.encode('utf-8')).hexdigest()
+
+
+default_registry.register(
+    AddPartnerContactDraftTool()
 )
 
 

@@ -3,8 +3,13 @@ from odoo.tests.common import TransactionCase
 from odoo.tests import tagged
 
 from odoo.addons.ai_assistant.services.action_tools.validators import (
+    get_or_create_partner_tag,
     infer_is_company,
+    normalize_phone,
     normalize_vat,
+    validate_acc_number,
+    validate_bic,
+    validate_partner_category,
     validate_partner_create_args,
     validate_partner_is_supplier,
     validate_picking_type_for_purchase,
@@ -131,6 +136,44 @@ class TestActionToolValidators(TransactionCase):
     def test_validate_vat_unique_returns_none_for_new_vat(self):
         self.assertFalse(validate_vat_unique(self.env, '7727123456'))
 
+    def test_validate_partner_category_accepts_allowed_value(self):
+        self.assertEqual(
+            validate_partner_category('Поставщик'),
+            'Поставщик',
+        )
+
+    def test_validate_partner_category_rejects_unknown(self):
+        with self.assertRaises(ValidationError):
+            validate_partner_category('Агент')
+
+    def test_get_or_create_partner_tag(self):
+        tag = get_or_create_partner_tag(self.env, 'Покупатель')
+        self.assertEqual(tag.name, 'Покупатель')
+        self.assertEqual(
+            get_or_create_partner_tag(self.env, 'Покупатель'),
+            tag,
+        )
+
+    def test_validate_bic(self):
+        self.assertEqual(validate_bic('04 4525 225'), '044525225')
+        with self.assertRaises(ValidationError):
+            validate_bic('123')
+
+    def test_validate_acc_number(self):
+        self.assertEqual(
+            validate_acc_number('40702 810 3 0000 0000001'),
+            '40702810300000000001',
+        )
+        with self.assertRaises(ValidationError):
+            validate_acc_number('40702')
+
+    def test_normalize_phone_softly_normalizes_russian_8(self):
+        self.assertEqual(
+            normalize_phone('89161234567'),
+            '+7 (916) 123-45-67',
+        )
+        self.assertEqual(normalize_phone('+7 4162 123456'), '+7 4162 123456')
+
     def test_infer_is_company_for_ooo(self):
         self.assertTrue(infer_is_company('ООО "Ромашка"'))
 
@@ -141,6 +184,7 @@ class TestActionToolValidators(TransactionCase):
         errors = validate_partner_create_args({
             'name': 'ООО Ромашка',
             'vat': '',
+            'category': 'Поставщик',
         })
         self.assertTrue(errors)
         self.assertIn('ИНН', errors[0])
@@ -149,6 +193,7 @@ class TestActionToolValidators(TransactionCase):
         errors = validate_partner_create_args({
             'name': 'ООО Ромашка',
             'vat': '123',
+            'category': 'Поставщик',
         })
         self.assertTrue(errors)
         self.assertIn('10 или 12', errors[0])
@@ -157,6 +202,7 @@ class TestActionToolValidators(TransactionCase):
         errors = validate_partner_create_args({
             'name': 'ИП Иванов Иван Иванович',
             'vat': '143500036001',
+            'category': 'Поставщик',
         })
         self.assertEqual(errors, [])
 

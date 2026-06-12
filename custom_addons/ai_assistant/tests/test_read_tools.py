@@ -40,10 +40,17 @@ class TestActionReadTools(TransactionCase):
             'vat': '1435000000',
             'supplier_rank': 1,
         })
+        cls.supplier.category_id = [(6, 0, [
+            cls.env['res.partner.category'].create({
+                'name': 'Read Supplier Tag',
+            }).id,
+        ])]
         cls.customer = cls.env['res.partner'].create({
             'name': 'Read Customer',
             'vat': '1435000001',
             'supplier_rank': 0,
+            'customer_rank': 1,
+            'city': 'Якутск',
         })
         cls.warehouse = cls.env['stock.warehouse'].create({
             'name': 'ОбМ Read Tools',
@@ -130,6 +137,13 @@ class TestActionReadTools(TransactionCase):
         partner_ids = [item['id'] for item in result['partners']]
         self.assertIn(self.supplier.id, partner_ids)
         self.assertNotIn(self.customer.id, partner_ids)
+        partner = next(
+            item for item in result['partners']
+            if item['id'] == self.supplier.id
+        )
+        self.assertIn('customer_rank', partner)
+        self.assertIn('category_id', partner)
+        self.assertIn('city', partner)
 
     def test_find_partner_without_supplier_filter(self):
         result = FindPartnerTool().execute(
@@ -137,6 +151,14 @@ class TestActionReadTools(TransactionCase):
         )
         partner_ids = [item['id'] for item in result['partners']]
         self.assertIn(self.customer.id, partner_ids)
+
+    def test_find_partner_role_customer(self):
+        result = FindPartnerTool().execute(
+            self.env, {'query': '1435000001', 'role': 'customer'}
+        )
+        partner_ids = [item['id'] for item in result['partners']]
+        self.assertIn(self.customer.id, partner_ids)
+        self.assertNotIn(self.supplier.id, partner_ids)
 
     def test_read_tools_registered(self):
         self.assertIsInstance(

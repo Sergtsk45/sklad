@@ -16,7 +16,8 @@
       "module": "contacts",
       "label": "Контакты",
       "docs": [
-        "docs/contacts_management.md"
+        "docs/contacts_management.md",
+        "docs/partner_workflow.md"
       ],
       "generated": "generated/contacts_context.md"
     },

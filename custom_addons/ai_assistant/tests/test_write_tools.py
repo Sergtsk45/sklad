@@ -6,11 +6,14 @@ from odoo.addons.ai_assistant.services.action_tools.registry import (
     default_registry,
 )
 from odoo.addons.ai_assistant.services.action_tools.write_tools import (
+    AddPartnerBankDraftTool,
+    AddPartnerContactDraftTool,
     CreateInternalPickingDraftTool,
     CreateObjectRequestDraftTool,
     CreatePartnerDraftTool,
     CreateProductDraftTool,
     CreatePurchaseOrderDraftTool,
+    UpdatePartnerDraftTool,
 )
 
 
@@ -215,6 +218,7 @@ class TestActionWriteTools(TransactionCase):
             {
                 'name': 'ООО Новый Поставщик WT',
                 'vat': ' 7727 123456 ',
+                'category': 'Поставщик',
                 'street': '109012, г. Москва, ул. Тестовая, д. 1',
                 'comment': 'КПП: 772701001',
             },
@@ -226,6 +230,7 @@ class TestActionWriteTools(TransactionCase):
         self.assertEqual(partner.vat, '7727123456')
         self.assertEqual(partner.supplier_rank, 1)
         self.assertEqual(partner.customer_rank, 0)
+        self.assertIn('Поставщик', partner.category_id.mapped('name'))
         self.assertTrue(partner.is_company)
         self.assertEqual(
             partner.street,
@@ -237,7 +242,24 @@ class TestActionWriteTools(TransactionCase):
         )
         body = '\n'.join(partner.message_ids.mapped('body'))
         self.assertIn('AI-ассистентом', body)
-        self.assertIn('источник: счёт', body)
+        self.assertIn('Категории: Поставщик', body)
+
+    def test_create_partner_draft_customer_category(self):
+        tool = CreatePartnerDraftTool()
+
+        result = tool.execute(
+            self.env(user=self.supply_user),
+            {
+                'name': 'ООО Новый Покупатель WT',
+                'vat': '7727123458',
+                'category': 'Покупатель',
+            },
+        )
+
+        partner = self.env['res.partner'].browse(result['partner_id'])
+        self.assertEqual(partner.customer_rank, 1)
+        self.assertEqual(partner.supplier_rank, 0)
+        self.assertIn('Покупатель', partner.category_id.mapped('name'))
 
     def test_create_partner_draft_rejects_without_supply_group(self):
         tool = CreatePartnerDraftTool()
@@ -245,7 +267,11 @@ class TestActionWriteTools(TransactionCase):
         with self.assertRaises(AccessError):
             tool.execute(
                 self.env(user=self.no_ai_user),
-                {'name': 'ООО Без доступа WT', 'vat': '7727123457'},
+                {
+                    'name': 'ООО Без доступа WT',
+                    'vat': '7727123457',
+                    'category': 'Поставщик',
+                },
             )
 
     def test_create_partner_draft_rejects_duplicate_vat(self):
@@ -254,7 +280,11 @@ class TestActionWriteTools(TransactionCase):
         with self.assertRaises(ValidationError):
             tool.execute(
                 self.env(user=self.supply_user),
-                {'name': 'ООО Дубликат WT', 'vat': self.vendor.vat},
+                {
+                    'name': 'ООО Дубликат WT',
+                    'vat': self.vendor.vat,
+                    'category': 'Поставщик',
+                },
             )
 
     def test_create_partner_draft_rejects_empty_vat(self):
@@ -263,7 +293,11 @@ class TestActionWriteTools(TransactionCase):
         with self.assertRaises(ValidationError):
             tool.execute(
                 self.env(user=self.supply_user),
-                {'name': 'ООО Без ИНН WT', 'vat': ''},
+                {
+                    'name': 'ООО Без ИНН WT',
+                    'vat': '',
+                    'category': 'Поставщик',
+                },
             )
 
     def test_create_partner_draft_registered(self):
@@ -278,6 +312,116 @@ class TestActionWriteTools(TransactionCase):
         self.assertEqual(
             tool.idempotency_key({'vat': '7727 123456'}),
             tool.idempotency_key({'vat': '7727123456'}),
+        )
+
+    def test_update_partner_draft_only_empty_fields(self):
+        tool = UpdatePartnerDraftTool()
+        partner = self.env['res.partner'].create({
+            'name': 'ООО Update Partner WT',
+            'vat': '7727123459',
+            'phone': '+7 900 000-00-00',
+        })
+
+        result = tool.execute(
+            self.env(user=self.supply_user),
+            {
+                'partner_id': partner.id,
+                'phone': '89161234567',
+                'email': 'info@example.invalid',
+                'category': 'Заказчик',
+            },
+        )
+
+        self.assertEqual(partner.phone, '+7 900 000-00-00')
+        self.assertEqual(partner.email, 'info@example.invalid')
+        self.assertEqual(partner.customer_rank, 1)
+        self.assertIn('Заказчик', partner.category_id.mapped('name'))
+        self.assertIn('phone', result['skipped_fields'])
+        self.assertIn('email', result['updated_fields'])
+
+    def test_update_partner_draft_rejects_vat_change(self):
+        tool = UpdatePartnerDraftTool()
+
+        with self.assertRaises(ValidationError):
+            tool.execute(
+                self.env(user=self.supply_user),
+                {
+                    'partner_id': self.vendor.id,
+                    'vat': '7727123460',
+                },
+            )
+
+    def test_partner_bank_draft_creates_bank_and_account(self):
+        tool = AddPartnerBankDraftTool()
+
+        result = tool.execute(
+            self.env(user=self.supply_user),
+            {
+                'partner_id': self.vendor.id,
+                'acc_number': '40702810300000000001',
+                'bic': '044525225',
+                'bank_name': 'ПАО Тест Банк',
+                'note': 'л/с 123',
+            },
+        )
+
+        account = self.env['res.partner.bank'].browse(
+            result['partner_bank_id']
+        )
+        self.assertEqual(account.partner_id, self.vendor)
+        self.assertEqual(account.bank_id.bic, '044525225')
+        self.assertIn('л/с 123', self.vendor.comment)
+
+        with self.assertRaises(ValidationError):
+            tool.execute(
+                self.env(user=self.supply_user),
+                {
+                    'partner_id': self.vendor.id,
+                    'acc_number': '40702810300000000001',
+                    'bic': '044525225',
+                    'bank_name': 'ПАО Тест Банк',
+                },
+            )
+
+    def test_partner_contact_draft_creates_child_contact(self):
+        tool = AddPartnerContactDraftTool()
+
+        result = tool.execute(
+            self.env(user=self.supply_user),
+            {
+                'partner_id': self.vendor.id,
+                'name': 'Иванов Иван',
+                'function': 'Закупки',
+                'phone': '89161234567',
+            },
+        )
+
+        contact = self.env['res.partner'].browse(result['contact_id'])
+        self.assertEqual(contact.parent_id, self.vendor)
+        self.assertEqual(contact.type, 'contact')
+        self.assertEqual(contact.phone, '+7 (916) 123-45-67')
+
+        with self.assertRaises(ValidationError):
+            tool.execute(
+                self.env(user=self.supply_user),
+                {
+                    'partner_id': self.vendor.id,
+                    'name': 'Иванов Иван',
+                },
+            )
+
+    def test_partner_tools_registered(self):
+        self.assertIsInstance(
+            default_registry.get('update_partner_draft'),
+            UpdatePartnerDraftTool,
+        )
+        self.assertIsInstance(
+            default_registry.get('add_partner_bank_draft'),
+            AddPartnerBankDraftTool,
+        )
+        self.assertIsInstance(
+            default_registry.get('add_partner_contact_draft'),
+            AddPartnerContactDraftTool,
         )
 
     def test_create_product_draft_happy(self):

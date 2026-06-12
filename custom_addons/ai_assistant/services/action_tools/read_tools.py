@@ -86,11 +86,16 @@ class FindProductByIdTool(AbstractReadTool):
 
 class FindPartnerTool(AbstractReadTool):
     name = 'find_partner'
-    description = 'Поиск поставщика по имени или ИНН.'
+    description = 'Поиск контрагента по имени или ИНН.'
     parameters_schema = {
         'type': 'object',
         'properties': {
             'query': {'type': 'string', 'minLength': 2},
+            'role': {
+                'type': 'string',
+                'enum': ['any', 'supplier', 'customer'],
+                'default': 'any',
+            },
             'is_supplier': {'type': 'boolean', 'default': True},
         },
         'required': ['query'],
@@ -99,13 +104,26 @@ class FindPartnerTool(AbstractReadTool):
 
     def execute(self, env, args):
         query = args['query']
-        is_supplier = args.get('is_supplier', True)
+        role = args.get('role')
+        if not role:
+            role = 'supplier' if args.get('is_supplier', True) else 'any'
         domain = ['|', ('name', 'ilike', query), ('vat', '=', query)]
-        if is_supplier:
+        if role == 'supplier':
             domain = ['&', ('supplier_rank', '>', 0)] + domain
+        elif role == 'customer':
+            domain = ['&', ('customer_rank', '>', 0)] + domain
         partners = env['res.partner'].search_read(
             domain,
-            ['id', 'display_name', 'name', 'vat', 'supplier_rank'],
+            [
+                'id',
+                'display_name',
+                'name',
+                'vat',
+                'supplier_rank',
+                'customer_rank',
+                'category_id',
+                'city',
+            ],
             limit=10,
         )
         return {'partners': partners}

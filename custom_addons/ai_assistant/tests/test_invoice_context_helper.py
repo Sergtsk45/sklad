@@ -108,6 +108,7 @@ class TestInvoiceContextHelper(TransactionCase):
         args = partner['partner_draft_args']
         self.assertEqual(args['name'], invoice['supplier']['name'])
         self.assertEqual(args['vat'], invoice['supplier']['inn'])
+        self.assertEqual(args['category'], 'Поставщик')
         self.assertTrue(args['is_company'])
         self.assertEqual(args['street'], invoice['supplier']['address'])
         self.assertEqual(args['zip'], '109012')

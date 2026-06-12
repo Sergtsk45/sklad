@@ -101,6 +101,7 @@
                                             error="card.error"
                                             nextHint="card.next_hint"
                                             steps="card.steps"
+                                            details="card.details"
                                         />
                                     </t>
                                 </t>
@@ -244,6 +245,14 @@
             <div t-if="!isSuccess" class="o_ai_result_error_message">
                 <t t-esc="errorMessage"/>
             </div>
+            <table t-if="isSuccess and props.details and props.details.length" class="o_ai_card_fields">
+                <tbody>
+                    <tr t-foreach="props.details" t-as="detail" t-key="detail.label">
+                        <th><t t-esc="detail.label"/></th>
+                        <td><t t-esc="detail.value"/></td>
+                    </tr>
+                </tbody>
+            </table>
             <div t-if="isSuccess and props.nextHint" class="o_ai_result_hint">
                 <t t-esc="props.nextHint"/>
             </div>

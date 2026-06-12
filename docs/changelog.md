@@ -1,3 +1,47 @@
+## [2026-06-12] — feat(ai_assistant): контрагенты через чат
+
+### Добавлено
+- Справочник категорий контрагентов (`Поставщик`, `Заказчик`, `Покупатель`, `Подрядчик`) с маппингом на ранги и теги.
+- Tools: `update_partner_draft`, `add_partner_bank_draft`, `add_partner_contact_draft`.
+- `create_partner_draft` теперь принимает обязательную категорию, `ref`, регион и создаёт тег категории.
+- `find_partner` поддерживает `role=any|supplier|customer` и возвращает ранги, теги и город.
+- Prompt-правила для сценария контрагентов, chips выбора категории и knowledge doc `static/knowledge/docs/partner_workflow.md`.
+- UI-карточки подтверждения/результата для новых tools.
+- ACL для группы `AI Assistant / Снабжение` на партнёров, теги, банки и банковские счета без `sudo()`.
+
+### Проверено
+- `docker exec odoo19-local python3 -m flake8 ...`
+- `docker exec odoo19-local /bin/bash -lc "odoo -u ai_assistant -d odoo19_local --test-enable --stop-after-init --http-port=8071 ..."` — 0 failed, 0 error.
+
+---
+
+## [2026-06-12] — docs: переименование трекера контрагентов v2
+
+### Изменено
+- `docs/plan-ai-assistant-partner-workflow.md` переименован в `docs/tasktrecker-creat-partner-v2.md`; обновлены ссылки в `tasktracker.md`, `changelog.md`, скилле `odoo-add-partner`, `tasktrecker-creat-partner.md`.
+- `docs/tasktrecker-creat-partner-v2.md` переформатирован в принятый в проекте вид пошаговых задач (CPV-001…014: статус, приоритет, шаги-чекбоксы, зависимости, DoD, порядок инкрементов).
+
+---
+
+## [2026-06-12] — docs: план доработки ai_assistant (контрагенты через чат)
+
+### Добавлено
+- `docs/tasktrecker-creat-partner-v2.md` — трекер реализации workflow контрагентов в чате ассистента: новые tools (`update_partner_draft`, `add_partner_bank_draft`, `add_partner_contact_draft`), категория-enum с маппингом на ранги и теги, правила в системном промпте, chips категорий, UI-карточки, тесты.
+- Задача в `docs/tasktracker.md` с этапами 1–5.
+
+### Изменено
+- Скилл `odoo-add-partner`: правила обновления существующего контрагента (только пустые поля, не обнулять ранги, запрет смены ИНН, поиск по имени с выбором кандидата), раздел синхронизации с `ai_assistant`.
+
+---
+
+## [2026-06-12] — docs(skills): добавление контрагента в Odoo
+
+### Добавлено
+- `.cursor/skills/odoo-add-partner/SKILL.md` — проектный скилл для создания и обновления контрагентов в Odoo через MCP.
+- В скилле закреплены: явная команда перед записью в Odoo, проверка дубликатов по ИНН, обязательное уточнение категории (`Поставщик`, `Заказчик`, `Покупатель`, `Подрядчик`), создание тега категории, заполнение банковских реквизитов и контактных лиц.
+
+---
+
 ## [2026-06-12] — feat(ai_assistant): статус поставщика при upload + ИНН-первый поиск (счёт 2594)
 
 ### Добавлено

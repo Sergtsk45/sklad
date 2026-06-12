@@ -18,6 +18,12 @@ COMPANY_PREFIXES = (
     'МУП',
     'ГУП',
 )
+PARTNER_CATEGORIES = {
+    'Поставщик': {'supplier_rank': 1},
+    'Заказчик': {'customer_rank': 1},
+    'Покупатель': {'customer_rank': 1},
+    'Подрядчик': {'supplier_rank': 1},
+}
 
 
 def validate_picking_type_for_purchase(env, picking_type_id):
@@ -100,6 +106,69 @@ def validate_vat_unique(env, vat):
     return partner.id if partner else None
 
 
+def validate_partner_category(value):
+    category = (value or '').strip()
+    if category not in PARTNER_CATEGORIES:
+        raise ValidationError(
+            'Категория контрагента должна быть одной из: %s.'
+            % ', '.join(PARTNER_CATEGORIES)
+        )
+    return category
+
+
+def normalize_partner_categories(value):
+    if isinstance(value, list):
+        categories = value
+    else:
+        categories = [value]
+    normalized = []
+    for category in categories:
+        valid_category = validate_partner_category(category)
+        if valid_category not in normalized:
+            normalized.append(valid_category)
+    if not normalized:
+        raise ValidationError('Укажите категорию контрагента.')
+    return normalized
+
+
+def get_or_create_partner_tag(env, category):
+    category = validate_partner_category(category)
+    tag = env['res.partner.category'].search(
+        [('name', '=', category)],
+        limit=1,
+    )
+    if tag:
+        return tag
+    return env['res.partner.category'].create({'name': category})
+
+
+def validate_bic(value):
+    bic = ''.join(re.findall(r'\d', value or ''))
+    if len(bic) != 9:
+        raise ValidationError('БИК должен содержать 9 цифр.')
+    return bic
+
+
+def validate_acc_number(value):
+    acc_number = ''.join(re.findall(r'\d', value or ''))
+    if len(acc_number) != 20:
+        raise ValidationError('Расчётный счёт должен содержать 20 цифр.')
+    return acc_number
+
+
+def normalize_phone(value):
+    phone = (value or '').strip()
+    digits = ''.join(re.findall(r'\d', phone))
+    if len(digits) == 11 and digits.startswith('8'):
+        return '+7 (%s) %s-%s-%s' % (
+            digits[1:4],
+            digits[4:7],
+            digits[7:9],
+            digits[9:11],
+        )
+    return phone
+
+
 def infer_is_company(name):
     """Infer res.partner.is_company from common Russian legal prefixes."""
     text = (name or '').strip().upper()
@@ -119,12 +188,16 @@ def validate_partner_create_args(args):
     name = (args.get('name') or '').strip()
     vat = normalize_vat(args.get('vat'))
     if not name:
-        errors.append('Укажите название поставщика.')
+        errors.append('Укажите название контрагента.')
     if len(vat) not in (10, 12):
-        errors.append('Укажите ИНН поставщика: 10 или 12 цифр.')
+        errors.append('Укажите ИНН контрагента: 10 или 12 цифр.')
     email = (args.get('email') or '').strip()
     if email and '@' not in email:
-        errors.append('Некорректный email поставщика.')
+        errors.append('Некорректный email контрагента.')
+    try:
+        normalize_partner_categories(args.get('category') or [])
+    except ValidationError as err:
+        errors.append(str(err))
     return errors
 
 
