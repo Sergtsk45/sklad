@@ -13,6 +13,7 @@ from typing import Any
 import pdfplumber
 
 from .invoice_utils import extract_party_name, is_garbage_item
+from .llm_header_extractor import llm_extract_supplier_header
 from .normalizer import normalize_invoice
 
 _logger = logging.getLogger(__name__)
@@ -43,9 +44,13 @@ _MIN_HEADER_COLS = 3
 #  Публичный интерфейс
 # ═════════════════════════════════════════════════════════════
 
-def extract_invoice(file_bytes: bytes) -> dict:
+def extract_invoice(file_bytes: bytes, env=None) -> dict:
     """
     Принимает содержимое PDF-файла (bytes), возвращает нормализованный dict счёта.
+
+    :param env: Odoo environment (опционально). Если передан и regex не распознал
+                поставщика (name или inn пусты), будет вызван LLM-fallback для
+                извлечения реквизитов из шапки.
 
     Raises:
         ValueError: если файл не является PDF или не содержит текстового слоя.
@@ -56,8 +61,48 @@ def extract_invoice(file_bytes: bytes) -> dict:
         raise ValueError("Файл не является PDF (magic bytes %PDF отсутствуют)")
 
     data = _extract_text_mode(io.BytesIO(file_bytes))
+
+    # LLM-fallback: вызываем только если env доступен И regex не распознал
+    # name или inn поставщика.
+    supplier = data.get("supplier", {})
+    if env is not None and (not supplier.get("name") or not supplier.get("inn")):
+        _apply_llm_header_fallback(data, env)
+
     result = normalize_invoice(data)
     return result
+
+
+def _apply_llm_header_fallback(data: dict, env) -> None:
+    """
+    Вызывает LLM для заполнения пустых реквизитов поставщика.
+
+    Заполняет ТОЛЬКО те поля, которые regex оставил пустыми.
+    Не перезаписывает уже найденные данные.
+    Добавляет предупреждение в warnings, чтобы в сводке было видно
+    что данные получены через LLM.
+    """
+    full_text = data.get("_raw_text", "")
+    if not full_text:
+        return
+
+    llm = llm_extract_supplier_header(full_text, env)
+    if not llm:
+        return
+
+    supplier = data.setdefault("supplier", {})
+    filled = []
+    for field in ("name", "inn", "kpp", "address"):
+        if not supplier.get(field) and llm.get(field):
+            supplier[field] = llm[field]
+            filled.append(field)
+
+    if filled:
+        data.setdefault("warnings", []).append(
+            "llm_header: поставщик распознан через LLM (%s)" % ", ".join(filled)
+        )
+        _logger.info(
+            "[llm_header] filled supplier fields via LLM: %s", filled
+        )
 
 
 # ═════════════════════════════════════════════════════════════
@@ -97,6 +142,7 @@ def _extract_text_mode(pdf_stream: io.BytesIO) -> dict:
                     result["items"].extend(items)
 
     full_text = "\n".join(all_text_lines)
+    result["_raw_text"] = full_text
     _parse_header(full_text, result)
     _parse_totals(full_text, result)
 

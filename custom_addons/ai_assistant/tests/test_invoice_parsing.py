@@ -441,6 +441,75 @@ class TestExtractInvoice(TransactionCase):
         self.assertNotIn("2", names, msg="Мусорная строка '2' не должна попасть в позиции")
 
     @patch("odoo.addons.ai_assistant.services.invoice_parsing.extractor.pdfplumber")
+    def test_llm_fallback_fills_empty_supplier(self, mock_pdfplumber):
+        """LLM-fallback вызывается когда regex не нашёл name/inn, заполняет поля."""
+        # PDF без поставщика в шапке — regex вернёт пустое
+        mock_pdfplumber.open.return_value = _make_mock_pdf(
+            table_rows=_NF504_ITEMS_ROWS,
+            header_text="Счет № 999 от 1 января 2026 г.\nЧто-то непонятное",
+            totals_text=_NF504_TOTALS_TEXT,
+        )
+        llm_response = {"name": "ООО Тест ЛЛМ", "inn": "7727123456", "kpp": "772701001", "address": "г. Москва"}
+        mock_env = MagicMock()
+        with patch(
+            "odoo.addons.ai_assistant.services.invoice_parsing.extractor.llm_extract_supplier_header",
+            return_value=llm_response,
+        ) as mock_llm:
+            result = extract_invoice(_MINIMAL_PDF, env=mock_env)
+        mock_llm.assert_called_once()
+        self.assertEqual(result["supplier"]["name"], "ООО Тест ЛЛМ")
+        self.assertEqual(result["supplier"]["inn"], "7727123456")
+        # Предупреждение о LLM в warnings
+        self.assertTrue(any("llm_header" in w for w in result.get("warnings", [])))
+
+    @patch("odoo.addons.ai_assistant.services.invoice_parsing.extractor.pdfplumber")
+    def test_llm_fallback_not_called_when_regex_succeeds(self, mock_pdfplumber):
+        """LLM-fallback НЕ вызывается если regex уже нашёл name и inn."""
+        mock_pdfplumber.open.return_value = _make_mock_pdf(
+            table_rows=_NF504_ITEMS_ROWS,
+            header_text=_NF504_HEADER_TEXT,
+            totals_text=_NF504_TOTALS_TEXT,
+        )
+        with patch(
+            "odoo.addons.ai_assistant.services.invoice_parsing.extractor.llm_extract_supplier_header",
+        ) as mock_llm:
+            result = extract_invoice(_MINIMAL_PDF, env=MagicMock())
+        mock_llm.assert_not_called()
+        self.assertEqual(result["supplier"]["name"], "ИП Татаринов Вадим Владимирович")
+
+    @patch("odoo.addons.ai_assistant.services.invoice_parsing.extractor.pdfplumber")
+    def test_llm_fallback_not_called_without_env(self, mock_pdfplumber):
+        """LLM-fallback НЕ вызывается без env (стандартный вызов без Odoo)."""
+        mock_pdfplumber.open.return_value = _make_mock_pdf(
+            table_rows=_NF504_ITEMS_ROWS,
+            header_text="Счет № 999 без поставщика",
+        )
+        with patch(
+            "odoo.addons.ai_assistant.services.invoice_parsing.extractor.llm_extract_supplier_header",
+        ) as mock_llm:
+            extract_invoice(_MINIMAL_PDF)  # без env
+        mock_llm.assert_not_called()
+
+    @patch("odoo.addons.ai_assistant.services.invoice_parsing.extractor.pdfplumber")
+    def test_llm_fallback_does_not_overwrite_regex_name(self, mock_pdfplumber):
+        """LLM не перезаписывает поля, которые regex уже заполнил."""
+        mock_pdfplumber.open.return_value = _make_mock_pdf(
+            table_rows=_NF504_ITEMS_ROWS,
+            # Шапка со name, но без ИНН — regex найдёт name, не найдёт inn
+            header_text="Счет № 500 от 1 января 2026 г.\nПоставщик ООО Найдено Regex\n",
+        )
+        llm_response = {"name": "ООО LLM Перезапись", "inn": "7727999777", "kpp": "", "address": ""}
+        with patch(
+            "odoo.addons.ai_assistant.services.invoice_parsing.extractor.llm_extract_supplier_header",
+            return_value=llm_response,
+        ):
+            result = extract_invoice(_MINIMAL_PDF, env=MagicMock())
+        # name нашёл regex → не перезаписывается
+        self.assertEqual(result["supplier"]["name"], "ООО Найдено Regex")
+        # inn regex не нашёл → берётся из LLM
+        self.assertEqual(result["supplier"]["inn"], "7727999777")
+
+    @patch("odoo.addons.ai_assistant.services.invoice_parsing.extractor.pdfplumber")
     def test_nf504_zero_arithmetic_warnings_end_to_end(self, mock_pdfplumber):
         """После extract_invoice на фикстуре НФ-504 — нет arithmetic warnings."""
         mock_pdfplumber.open.return_value = _make_mock_pdf(

@@ -1,6 +1,6 @@
 # @file: __init__.py
-# @description: Пакет парсинга PDF/XLSX-счетов поставщиков (text-first, без vision).
-# @dependencies: pdfplumber (external), normalizer, validators, invoice_utils
+# @description: Пакет парсинга PDF/XLSX-счетов поставщиков (text-first + LLM fallback).
+# @dependencies: pdfplumber (external), normalizer, validators, invoice_utils, openrouter_client
 # @created: 2026-05-30
 
 from .extractor import extract_invoice

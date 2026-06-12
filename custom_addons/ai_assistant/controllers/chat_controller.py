@@ -149,7 +149,7 @@ class AiAssistantController(http.Controller):
             )
 
         try:
-            invoice_data = extract_invoice(file_bytes)
+            invoice_data = extract_invoice(file_bytes, env=request.env)
         except ValueError as exc:
             _logger.warning(
                 '[AI Assistant] upload_invoice: parse error for file=%s: %s',

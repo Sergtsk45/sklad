@@ -7,6 +7,19 @@
 
 ---
 
+## [2026-06-12] — feat(ai_assistant): LLM-fallback для извлечения поставщика из счёта
+
+### Добавлено
+- `services/invoice_parsing/llm_header_extractor.py` — вызывает LLM через `OpenRouterClient` когда regex не смог распознать `supplier.name` или `inn`. Отправляет только шапку (до таблицы, ≤80 строк), экономя токены. Валидирует ИНН/КПП в ответе.
+- `extract_invoice(file_bytes, env=None)` — новый опциональный параметр `env`. При наличии env и пустом name/inn включается LLM fallback. Без env (тесты, внешние вызовы) поведение не изменилось.
+- Если LLM заполнил поля — добавляется предупреждение `llm_header: поставщик распознан через LLM`.
+- 4 новых теста: fallback вызван, не вызван при успехе regex, не вызван без env, не перезаписывает найденное regex.
+
+### Изменено
+- `controllers/chat_controller.py`: `extract_invoice` теперь вызывается с `env=request.env`.
+
+---
+
 ## [2026-06-12] — fix(ai_assistant): поставщик «имя до Поставщик:» (счёт 1214 / Пензапромарматура)
 
 ### Исправлено

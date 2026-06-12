@@ -14,6 +14,7 @@ from .invoice_utils import is_garbage_item
 def normalize_invoice(data: dict) -> dict:
     """Приводит данные счёта к стандартному виду."""
     data = dict(data)
+    data.pop("_raw_text", None)  # служебное поле, не нужно в финальном результате
 
     totals = data.get("totals", {})
     data["totals"] = {
