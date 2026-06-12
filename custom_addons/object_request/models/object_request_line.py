@@ -1,6 +1,8 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
 
+from .excel_parser import _SKIP_ARTICLES
+
 
 class ObjectRequestLine(models.Model):
     _name = "object.request.line"
@@ -278,6 +280,170 @@ class ObjectRequestLine(models.Model):
     def _onchange_preferred_vendor_id(self):
         if self.preferred_vendor_id and self.manual_vendor_required:
             self.manual_vendor_required = False
+
+    def _check_supply_manager_matching_action(self):
+        if not self.env.user.has_group("object_request.group_supply_manager"):
+            if self.env.user.has_group("base.group_system"):
+                return
+            raise UserError(
+                "Запоминание сопоставлений доступно только снабженцу."
+            )
+
+    def _normalized_supplier_article(self):
+        self.ensure_one()
+        return self.env["object.request.excel.parser"].normalize_str(
+            self.supplier_article
+        )
+
+    def _supplierinfo_vendor(self):
+        self.ensure_one()
+        return (
+            self.preferred_vendor_id
+            or self.product_id.seller_ids[:1].partner_id
+        )
+
+    def _supplierinfo_product(self, supplier_info):
+        self.ensure_one()
+        if supplier_info.product_id:
+            return supplier_info.product_id
+        if supplier_info.product_tmpl_id:
+            return supplier_info.product_tmpl_id.product_variant_ids[:1]
+        return self.env["product.product"].browse()
+
+    def _validate_remember_matching_values(self):
+        self.ensure_one()
+        article = self._normalized_supplier_article()
+        if not self.product_id:
+            raise UserError("Выберите товар перед запоминанием сопоставления.")
+        if not article or article.lower() in _SKIP_ARTICLES:
+            raise UserError(
+                "Заполните корректный артикул перед запоминанием."
+            )
+        if len(article) < 3:
+            raise UserError("Артикул должен быть не короче 3 символов.")
+        vendor = self._supplierinfo_vendor()
+        if not vendor:
+            raise UserError(
+                "Выберите поставщика перед запоминанием сопоставления."
+            )
+        return article, vendor
+
+    def _supplierinfo_identical_domain(self, article, vendor):
+        self.ensure_one()
+        return [
+            ("product_code", "=ilike", article),
+            ("partner_id", "=", vendor.id),
+            ("product_tmpl_id", "=", self.product_id.product_tmpl_id.id),
+            ("product_id", "=", self.product_id.id),
+        ]
+
+    def _supplierinfo_conflicts(self, article):
+        self.ensure_one()
+        infos = self.env["product.supplierinfo"].search(
+            [("product_code", "=ilike", article)]
+        )
+        return infos.filtered(
+            lambda info: (
+                self._supplierinfo_product(info)
+                and self._supplierinfo_product(info) != self.product_id
+            )
+        )
+
+    def _supplierinfo_conflict_message(self, conflicts):
+        self.ensure_one()
+        lines = []
+        for info in conflicts:
+            product = self._supplierinfo_product(info)
+            vendor = info.partner_id.display_name or "без поставщика"
+            lines.append(
+                f"- {info.product_code}: {product.display_name} ({vendor})"
+            )
+        return (
+            "По этому артикулу уже есть сопоставление с другим товаром:\n"
+            + "\n".join(lines)
+        )
+
+    def _supplierinfo_create_vals(self, article, vendor):
+        self.ensure_one()
+        return {
+            "partner_id": vendor.id,
+            "product_tmpl_id": self.product_id.product_tmpl_id.id,
+            "product_id": self.product_id.id,
+            "product_code": article,
+        }
+
+    def _remember_matching_conflict_action(self, conflict_lines):
+        message = "\n\n".join(
+            line._supplierinfo_conflict_message(
+                line._supplierinfo_conflicts(
+                    line._normalized_supplier_article()
+                )
+            )
+            for line in conflict_lines
+        )
+        wizard = self.env["object.request.remember.matching.wizard"].create(
+            {
+                "line_ids": [(6, 0, conflict_lines.ids)],
+                "message": message,
+            }
+        )
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Подтвердить конфликт сопоставления",
+            "res_model": "object.request.remember.matching.wizard",
+            "res_id": wizard.id,
+            "view_mode": "form",
+            "target": "new",
+        }
+
+    def action_remember_matching(self):
+        self._check_supply_manager_matching_action()
+        SupplierInfo = self.env["product.supplierinfo"]
+        conflict_lines = self.env["object.request.line"].browse()
+        prepared = []
+        for line in self:
+            article, vendor = line._validate_remember_matching_values()
+            identical = SupplierInfo.search(
+                line._supplierinfo_identical_domain(article, vendor),
+                limit=1,
+            )
+            if identical:
+                prepared.append((line, article, vendor, "skipped"))
+                continue
+            conflicts = line._supplierinfo_conflicts(article)
+            if conflicts and not self.env.context.get(
+                "confirm_supplierinfo_conflict"
+            ):
+                conflict_lines |= line
+                continue
+            prepared.append((line, article, vendor, "create"))
+
+        if conflict_lines:
+            return self._remember_matching_conflict_action(conflict_lines)
+
+        created = 0
+        skipped = 0
+        for line, article, vendor, action in prepared:
+            if action == "skipped":
+                skipped += 1
+                continue
+            vals = line._supplierinfo_create_vals(article, vendor)
+            SupplierInfo.create(vals)
+            created += 1
+
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Сопоставление запомнено",
+                "message": (
+                    f"Создано записей: {created}. "
+                    f"Уже существовало: {skipped}."
+                ),
+                "type": "success" if created else "info",
+                "sticky": False,
+            },
+        }
 
     @api.onchange("qty_to_issue")
     def _onchange_qty_to_issue(self):

@@ -74,6 +74,12 @@
                                     <field name="price" string="Цена"/>
                                     <field name="supplier_raw" string="Поставщик"/>
                                     <field
+                                        name="candidate_product_ids"
+                                        string="Кандидаты"
+                                        widget="many2many_tags"
+                                        optional="show"
+                                    />
+                                    <field
                                         name="error_message"
                                         string="Ошибка"
                                         optional="show"

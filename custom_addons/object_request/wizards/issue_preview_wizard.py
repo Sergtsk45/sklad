@@ -50,8 +50,9 @@ class ObjectRequestIssuePreviewWizard(models.TransientModel):
         for warehouse, warehouse_stock_ids in groups_by_warehouse.items():
             if not warehouse:
                 raise UserError(
-                    "В строках распределения требования не заполнено поле склада задания. "
-                    "Проверьте распределение по складам перед созданием выдачи."
+                    "В строках распределения требования не заполнено поле "
+                    "склада задания. Проверьте распределение по складам "
+                    "перед созданием выдачи."
                 )
             group_vals.append(
                 (
@@ -78,7 +79,7 @@ class ObjectRequestIssuePreviewWizard(models.TransientModel):
         return res
 
     def _relink_issue_preview_stock_lines(self):
-        """Веб-клиент может обнулить M2m строк при переключении «Создать» — подставляем из требования."""
+        """Подставляет строки требования, если веб-клиент обнулил M2m."""
         request = self.request_id
         stock_ids = request.line_ids.mapped("stock_ids").filtered(
             lambda stock: stock.qty_to_issue > 0 and stock.line_id.product_id
@@ -88,8 +89,9 @@ class ObjectRequestIssuePreviewWizard(models.TransientModel):
         for stock in stock_ids:
             if not stock.warehouse_id:
                 raise UserError(
-                    "В строках распределения требования не заполнено поле склада задания. "
-                    "Проверьте распределение по складам перед созданием выдачи."
+                    "В строках распределения требования не заполнено поле "
+                    "склада задания. Проверьте распределение по складам "
+                    "перед созданием выдачи."
                 )
             by_wh.setdefault(stock.warehouse_id.id, Stock)
             by_wh[stock.warehouse_id.id] |= stock
@@ -98,12 +100,14 @@ class ObjectRequestIssuePreviewWizard(models.TransientModel):
             wh = group.picking_type_id.warehouse_id
             if not wh:
                 raise UserError(
-                    "Не удалось определить склад по типу операции группы предпросмотра."
+                    "Не удалось определить склад по типу операции группы "
+                    "предпросмотра."
                 )
             lines = by_wh.get(wh.id)
             if not lines:
                 raise UserError(
-                    f"Для склада «{wh.name}» не найдено строк распределения с количеством к выдаче."
+                    f"Для склада «{wh.name}» не найдено строк распределения "
+                    "с количеством к выдаче."
                 )
             group.write({"stock_line_ids": [(6, 0, lines.ids)]})
 
@@ -186,9 +190,11 @@ class ObjectRequestIssuePreviewGroup(models.TransientModel):
 
     @api.depends("stock_line_ids", "stock_line_ids.warehouse_id")
     def _compute_warehouse_id(self):
-        """Склад берётся из строк распределения (не допускает потери склада через UI)."""
+        """Вычисляет склад из строк распределения."""
         for group in self:
-            stocks = group.stock_line_ids.filtered(lambda stock: stock.warehouse_id)
+            stocks = group.stock_line_ids.filtered(
+                lambda stock: stock.warehouse_id
+            )
             group.warehouse_id = stocks[:1].warehouse_id
 
     @api.depends("stock_line_ids", "stock_line_ids.qty_to_issue")
@@ -215,7 +221,11 @@ class ObjectRequestIssuePreviewGroup(models.TransientModel):
             lambda stock: stock.qty_to_issue > 0
         )
         if not stock_lines:
-            wh_label = self.warehouse_id.name if self.warehouse_id else "неизвестен"
+            wh_label = (
+                self.warehouse_id.name
+                if self.warehouse_id
+                else "неизвестен"
+            )
             raise UserError(f"Нет строк к выдаче по складу {wh_label}.")
         picking = self.env["stock.picking"].create(
             {

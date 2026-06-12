@@ -105,6 +105,13 @@
                 />
                 <field name="matching_required" column_invisible="1"/>
                 <field name="manual_vendor_required" column_invisible="1"/>
+                <button
+                    name="action_remember_matching"
+                    string="Запомнить"
+                    type="object"
+                    groups="object_request.group_supply_manager"
+                    invisible="not product_id or not supplier_article"
+                />
             </list>
         </field>
     </record>
@@ -167,6 +174,15 @@
         <field name="binding_view_types">list</field>
         <field name="state">code</field>
         <field name="code">records.action_reset_split()</field>
+    </record>
+
+    <record id="server_action_object_request_line_remember_matching" model="ir.actions.server">
+        <field name="name">Запомнить сопоставление</field>
+        <field name="model_id" ref="model_object_request_line"/>
+        <field name="binding_model_id" ref="model_object_request_line"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">records.action_remember_matching()</field>
     </record>
 
 </odoo>

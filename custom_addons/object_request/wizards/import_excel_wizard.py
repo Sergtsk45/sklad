@@ -36,6 +36,11 @@ class ObjectRequestImportPreview(models.TransientModel):
         string="Поставщик (сопоставлен)",
         readonly=True,
     )
+    candidate_product_ids = fields.Many2many(
+        "product.product",
+        string="Кандидаты",
+        readonly=True,
+    )
     match_status = fields.Selection(
         [("matched", "Сопоставлен"), ("unmatched", "Не сопоставлен")],
         string="Статус",
@@ -373,6 +378,7 @@ class ObjectRequestImportWizard(models.TransientModel):
             match = parser.match_row(supplier_article, name_raw, supplier_raw)
             product = match["product"]
             vendor = match["vendor"]
+            candidates = match.get("candidate_products")
 
             preview_vals.append(
                 {
@@ -388,6 +394,9 @@ class ObjectRequestImportWizard(models.TransientModel):
                     "supplier_raw": supplier_raw,
                     "matched_product_id": product.id if product else False,
                     "matched_vendor_id": vendor.id if vendor else False,
+                    "candidate_product_ids": [
+                        (6, 0, candidates.ids)
+                    ] if candidates else False,
                     "match_status": "matched" if product else "unmatched",
                     "matching_required": match["matching_required"],
                     "manual_vendor_required": match["manual_vendor_required"],

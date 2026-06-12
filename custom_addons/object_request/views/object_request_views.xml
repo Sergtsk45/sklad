@@ -480,6 +480,13 @@
                                     <field name="matching_required" column_invisible="1"/>
                                     <field name="manual_vendor_required" column_invisible="1"/>
                                     <field name="comment" string="Комментарий" optional="hide"/>
+                                    <button
+                                        name="action_remember_matching"
+                                        string="Запомнить"
+                                        type="object"
+                                        groups="object_request.group_supply_manager"
+                                        invisible="not product_id or not supplier_article"
+                                    />
                                 </list>
                             </field>
                         </page>

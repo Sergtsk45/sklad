@@ -38,6 +38,7 @@
         "wizards/auto_split_confirm_wizard_views.xml",
         "wizards/confirm_state_wizard_views.xml",
         "wizards/purchase_wizard_views.xml",
+        "wizards/remember_matching_wizard_views.xml",
         "views/stock_picking_inherit_views.xml",
         "views/purchase_order_inherit_views.xml",
         "views/object_request_project_views.xml",
