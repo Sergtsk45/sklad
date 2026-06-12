@@ -125,16 +125,21 @@ _BANK_RE = re.compile(
     r'(?:банк[а-я\s]*получател[яи]?|наименование банка)[:\s]+"?([^\n"]+)', re.I
 )
 _SUPPLIER_RE = re.compile(
-    r"поставщик(?:\s*\([^)]*\))?\s*[:：]?\s*"
+    r"поставщик(?![а-яёА-ЯЁA-Za-z])(?:\s*\([^)]*\))?\s*[:：]?\s*"
     r"(.*?)(?=\n(?:грузоотправитель|покупатель|грузополучатель)\b|$)",
     re.I | re.S,
 )
 _BUYER_RE = re.compile(
-    r"покупатель(?:\s*\([^)]*\))?\s*[:：]?\s*"
+    r"покупатель(?![а-яёА-ЯЁA-Za-z])(?:\s*\([^)]*\))?\s*[:：]?\s*"
     r"(.*?)(?=\n(?:грузополучатель|основание)\b|\n№\s*(?:товар|наименование)|\n\s*\n)",
     re.I | re.S,
 )
+# «Поставщик:» на отдельной строке (ЦБ-675 / счёт 234).
 _SUPPLIER_LABEL_LINE_RE = re.compile(r"\n\s*поставщик\s*:\s*\n", re.I)
+# «Поставщик: <цифра>» — название на предыдущей строке, ИНН — сразу после метки.
+_SUPPLIER_LABEL_INLINE_RE = re.compile(r"\n\s*поставщик\s*:\s*(\d)", re.I)
+# Голый ИНН в начале строки (без слова «ИНН»).
+_BARE_INN_RE = re.compile(r"^(\d{10,12})\b")
 
 # Формат «ИНН … КПП … ООО/АО/ИП … адрес» — имя после ИНН-блока.
 _ORG_NAME_AFTER_INN_RE = re.compile(
@@ -169,6 +174,34 @@ def _supplier_pre_label_line(text: str) -> str:
     for line in reversed(lines[-8:]):
         if _INN_RE.search(line):
             return line
+    return ''
+
+
+def _supplier_inline_pre_name(text: str) -> str:
+    """
+    Имя поставщика из строки перед «Поставщик: <ИНН_число>».
+
+    Формат счёт 1214: имя (с «, ИНН» в конце строки), затем «Поставщик: 583501001…».
+    Если полное название содержит краткую форму в скобках — предпочитаем её.
+    """
+    m = _SUPPLIER_LABEL_INLINE_RE.search(text)
+    if not m:
+        return ''
+    before = text[:m.start()]
+    lines = [ln.strip() for ln in before.splitlines() if ln.strip()]
+    for line in reversed(lines[-6:]):
+        name = extract_party_name(line)
+        if not name or name[0].isdigit():
+            continue
+        # Краткая форма в скобках: «(ООО "Название")» → «ООО Название».
+        short = re.search(
+            r'\(\s*((?:ООО|АО|ОАО|ЗАО|ПАО|ИП|МУП|ГУП)\s+"?[^")]{2,50}"?)\s*\)',
+            line,
+            re.I,
+        )
+        if short:
+            return re.sub(r'["«»\']', '', short.group(1)).strip()
+        return name
     return ''
 
 
@@ -214,33 +247,44 @@ def _parse_header(text: str, result: dict) -> None:
 
     sup_post = _first(_SUPPLIER_RE, text)
     sup_pre = _supplier_pre_label_line(text)
-    sup_identity = (
-        sup_pre if sup_pre and _first(_INN_RE, sup_pre) else sup_post
-    )
-    if sup_identity or sup_post:
-        identity_block = sup_identity or sup_post
-        name = extract_party_name(identity_block)
+    inline_name = _supplier_inline_pre_name(text)
+
+    # Выбор источника реквизитов по формату документа.
+    if sup_pre and _first(_INN_RE, sup_pre):
+        # Формат ЦБ-675 / счёт 234: реквизиты строкой выше «Поставщик:\n».
+        sup_identity = sup_pre
+        name = extract_party_name(sup_pre)
         if not name:
-            # Формат «ИНН … КПП … ООО "Название"»: имя стоит после ИНН-блока.
-            m_inn_first = _ORG_NAME_AFTER_INN_RE.search(identity_block)
+            m_inn_first = _ORG_NAME_AFTER_INN_RE.search(sup_pre)
             if m_inn_first:
                 name = re.sub(r'["«»\']', '', m_inn_first.group(1)).strip()
                 name = ' '.join(name.split())
         result["supplier"]["name"] = name
-        result["supplier"]["inn"] = (
-            _first(_INN_RE, sup_pre) or _first(_INN_RE, sup_post)
-        )
-        result["supplier"]["kpp"] = (
-            _first(_KPP_RE, sup_pre) or _first(_KPP_RE, sup_post)
-        )
-        if sup_pre and sup_post and _first(_INN_RE, sup_pre):
-            result["supplier"]["address"] = _compose_supplier_address(
-                sup_pre, sup_post,
-            )
-        else:
-            result["supplier"]["address"] = _extract_address(
-                sup_post or sup_pre,
-            )
+        result["supplier"]["inn"] = _first(_INN_RE, sup_pre) or _first(_INN_RE, sup_post)
+        result["supplier"]["kpp"] = _first(_KPP_RE, sup_pre) or _first(_KPP_RE, sup_post)
+        result["supplier"]["address"] = _compose_supplier_address(sup_pre, sup_post)
+    elif inline_name:
+        # Формат счёт 1214: имя на строке перед «Поставщик: <ИНН_число>».
+        result["supplier"]["name"] = inline_name
+        # Голый ИНН в начале sup_post имеет приоритет над ИНН покупателя,
+        # который может встречаться позже в том же блоке.
+        m_bare = _BARE_INN_RE.match(sup_post.lstrip()) if sup_post else None
+        inn = m_bare.group(1) if m_bare else _first(_INN_RE, sup_post)
+        result["supplier"]["inn"] = inn
+        result["supplier"]["kpp"] = _first(_KPP_RE, sup_post)
+        result["supplier"]["address"] = _extract_address(sup_post)
+    elif sup_post:
+        # Формат НФ-504 / стандартный: реквизиты после «Поставщик».
+        name = extract_party_name(sup_post)
+        if not name:
+            m_inn_first = _ORG_NAME_AFTER_INN_RE.search(sup_post)
+            if m_inn_first:
+                name = re.sub(r'["«»\']', '', m_inn_first.group(1)).strip()
+                name = ' '.join(name.split())
+        result["supplier"]["name"] = name
+        result["supplier"]["inn"] = _first(_INN_RE, sup_post)
+        result["supplier"]["kpp"] = _first(_KPP_RE, sup_post)
+        result["supplier"]["address"] = _extract_address(sup_post)
 
     buy_block = _first(_BUYER_RE, text)
     if buy_block:

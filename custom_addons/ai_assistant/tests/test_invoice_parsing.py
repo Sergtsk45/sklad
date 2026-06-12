@@ -56,6 +56,17 @@ _INV234_HEADER_TEXT = """
 Благовещенск, ул. Фрунзе, д. 91, офис 3, тел. (4162) 66-01-06
 """
 
+_INV1214_HEADER_TEXT = """
+Внимание! Счет действителен до 01.10.2025.
+Оплата данного счета означает согласие с условиями поставки товара.
+Товар отпускается по факту прихода денег на р/с Поставщика, самовывозом, при наличии доверенности.
+Счет на оплату № 1214 от 1 октября 2025 г.
+Общество с ограниченной ответственностью "Пензапромарматура" (ООО "Пензапромарматура"), ИНН
+Поставщик: 5835036366, КПП 583501001, 440066, Пензенская обл, Пенза г, Строителей пр-кт, дом № 89, тел.: (8412) 90-93-00
+ООО "ДВ Партнёр", ИНН 2801138406, КПП 280101001
+Покупатель: 675000, Амурская обл, Благовещенск г
+"""
+
 _NF504_ITEMS_ROWS = [
     # строка-заголовок
     ["№", "Наименование товара", "Ед.", "Кол-во", "Цена",
@@ -258,6 +269,30 @@ class TestParseHeader(TransactionCase):
         self.assertNotIn("тел.", result["supplier"]["address"].lower())
         self.assertNotIn("ДВ ПАРТНЁР", result["supplier"]["address"])
         self.assertNotIn("ДВ ПАРТНЁР", result["supplier"]["name"])
+
+    def test_supplier_name_before_inline_label_inv1214(self):
+        """Имя строкой до «Поставщик: <ИНН_число>»; «Поставщика» не матчится."""
+        result = {
+            "invoice_number": "",
+            "invoice_date": "",
+            "supplier": {
+                "name": "", "inn": "", "kpp": "", "address": "",
+                "bank": {"name": "", "bik": "", "account": "", "corr_account": ""},
+            },
+            "buyer": {"name": "", "inn": "", "kpp": "", "address": ""},
+        }
+        _parse_header(_INV1214_HEADER_TEXT, result)
+        self.assertEqual(result["invoice_number"], "1214")
+        # Имя не содержит «самовывозом» или «Образец»
+        self.assertNotIn("самовывозом", result["supplier"]["name"])
+        self.assertNotIn("Образец", result["supplier"]["name"])
+        # Должна быть краткая форма из скобок, а не «Общество с ограниченной...»
+        self.assertNotIn("Общество с ограниченной", result["supplier"]["name"])
+        self.assertIn("Пензапромарматура", result["supplier"]["name"])
+        self.assertEqual(result["supplier"]["inn"], "5835036366")
+        self.assertEqual(result["supplier"]["kpp"], "583501001")
+        self.assertIn("Пензенская обл", result["supplier"]["address"])
+        self.assertNotIn("ДВ Партнёр", result["supplier"]["name"])
 
 
 @tagged('post_install', '-at_install')
