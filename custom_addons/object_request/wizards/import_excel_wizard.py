@@ -2,7 +2,7 @@ import base64
 import io
 import re
 
-from odoo import models, fields
+from odoo import api, models, fields
 from odoo.exceptions import UserError
 
 
@@ -57,6 +57,31 @@ class ObjectRequestImportPreview(models.TransientModel):
     has_error = fields.Boolean(string="Ошибка", readonly=True)
     error_message = fields.Char(string="Описание ошибки", readonly=True)
 
+    # --- AI-поля (PRV-001) ---
+    ai_suggested_product_id = fields.Many2one(
+        "product.product",
+        string="AI-предложение",
+        readonly=True,
+    )
+    ai_match_confidence = fields.Float(
+        string="Уверенность AI",
+        readonly=True,
+    )
+    ai_match_reason = fields.Text(
+        string="Причина AI",
+        readonly=True,
+    )
+    matching_source = fields.Selection(
+        [
+            ("deterministic", "Детерминированный"),
+            ("ai", "AI"),
+            ("memory", "Память"),
+            ("manual", "Ручной"),
+        ],
+        string="Источник",
+        readonly=True,
+    )
+
 
 class ObjectRequestImportWizard(models.TransientModel):
     _name = "object.request.import.wizard"
@@ -97,6 +122,17 @@ class ObjectRequestImportWizard(models.TransientModel):
         readonly=True,
     )
 
+    # --- Режим AI (PRV-002) ---
+    ai_mode = fields.Selection(
+        [
+            ("none", "Без AI"),
+            ("suggest", "AI-подсказки"),
+            ("auto", "AI-автоприменение"),
+        ],
+        string="Режим AI",
+        default="none",
+    )
+
     # --- Результаты парсинга ---
     preview_line_ids = fields.One2many(
         "object.request.import.preview",
@@ -125,6 +161,42 @@ class ObjectRequestImportWizard(models.TransientModel):
         string="Сообщения проверки",
         readonly=True,
     )
+
+    # --- AI-статистика (PRV-002) ---
+    ai_matched_count = fields.Integer(
+        string="Строк с AI-кандидатом",
+        compute="_compute_ai_stats",
+        store=False,
+    )
+    deterministic_matched_count = fields.Integer(
+        string="Сопоставлено детерминированно",
+        compute="_compute_ai_stats",
+        store=False,
+    )
+    manual_required_count = fields.Integer(
+        string="Требуют ручного ввода",
+        compute="_compute_ai_stats",
+        store=False,
+    )
+
+    @api.depends("preview_line_ids", "preview_line_ids.matching_source",
+                 "preview_line_ids.matching_required",
+                 "preview_line_ids.ai_suggested_product_id")
+    def _compute_ai_stats(self):
+        for wizard in self:
+            lines = wizard.preview_line_ids
+            wizard.ai_matched_count = sum(
+                1 for ln in lines if ln.ai_suggested_product_id
+            )
+            wizard.deterministic_matched_count = sum(
+                1 for ln in lines
+                if ln.matching_source == "deterministic"
+                or (ln.matched_product_id and not ln.matching_required)
+            )
+            wizard.manual_required_count = sum(
+                1 for ln in lines
+                if ln.matching_required and not ln.ai_suggested_product_id
+            )
 
     _COLUMN_SYNONYMS = {
         "supplier_article": ("артикул", "арт", "арт.", "обозначение"),
@@ -405,7 +477,90 @@ class ObjectRequestImportWizard(models.TransientModel):
                 }
             )
 
+        self._enrich_with_ai_candidates(preview_vals)
         return preview_vals, problem_count
+
+    def _enrich_with_ai_candidates(self, preview_vals):
+        """Для режима suggest/auto — добавляет AI-поля в preview_vals."""
+        if self.ai_mode == "none":
+            return
+        service = self.env["object.request.matching.candidate.service"]
+        for vals in preview_vals:
+            if not vals.get("matching_required"):
+                continue
+            candidate_result = service.build_candidates(
+                vals.get("name_raw", ""),
+                vals.get("supplier_article", ""),
+            )
+            candidates = candidate_result.get("candidates", [])
+            if not candidates:
+                continue
+            best = candidates[0]
+            vals["ai_suggested_product_id"] = best["product_id"]
+            vals["ai_match_confidence"] = best["local_score"]
+            vals["ai_match_reason"] = best.get("reason", "")
+            vals["matching_source"] = "ai"
+
+    def _build_line_vals(self, request, preview):
+        """Строит словарь значений строки заявки из строки предпросмотра."""
+        ai_suggested = preview.ai_suggested_product_id
+        ai_confidence = preview.ai_match_confidence
+        ai_reason = preview.ai_match_reason
+        ai_source = preview.matching_source
+
+        product, matching_source, matching_required = (
+            self._resolve_product_from_preview(
+                preview, ai_suggested, ai_confidence, ai_source,
+            )
+        )
+
+        uom_id = product.uom_id.id if product and product.uom_id else False
+        return {
+            "request_id": request.id,
+            "sequence": preview.sequence,
+            "source_row_no": preview.source_row_no,
+            "supplier_article": preview.supplier_article,
+            "name_raw": preview.name_raw,
+            "uom_raw": preview.uom_raw,
+            "qty_requested": preview.qty,
+            "price_raw": preview.price,
+            "comment": preview.comment,
+            "supplier_raw": preview.supplier_raw,
+            "product_id": product.id if product else False,
+            "uom_id": uom_id,
+            "preferred_vendor_id": preview.matched_vendor_id.id or False,
+            "matching_required": matching_required,
+            "manual_vendor_required": preview.manual_vendor_required,
+            "matching_note": (
+                "import auto match" if product and not matching_required
+                else False
+            ),
+            "matching_source": matching_source,
+            "ai_suggested_product_id": ai_suggested.id if ai_suggested
+            else False,
+            "ai_match_confidence": ai_confidence,
+            "ai_match_reason": ai_reason or False,
+        }
+
+    def _resolve_product_from_preview(
+        self, preview, ai_suggested, ai_confidence, ai_source
+    ):
+        """Определяет товар, источник и флаг matching_required для строки."""
+        auto_apply = (
+            self.ai_mode == "auto"
+            and ai_suggested
+            and ai_confidence >= 0.9
+            and not preview.matched_product_id
+        )
+        if auto_apply:
+            return ai_suggested, "llm_auto", False
+
+        product = preview.matched_product_id
+        if product:
+            source = ai_source or "import_auto"
+        else:
+            source = ai_source or "unknown"
+        return product, source, preview.matching_required
 
     # --- Публичные методы ---
 
@@ -481,6 +636,21 @@ class ObjectRequestImportWizard(models.TransientModel):
         ]
         if unmatched:
             messages.append(f"Требуют сопоставления: {unmatched}")
+        if self.ai_mode != "none":
+            ai_count = sum(
+                1 for v in preview_vals
+                if v.get("ai_suggested_product_id")
+            )
+            manual_count = sum(
+                1 for v in preview_vals
+                if v.get("matching_required")
+                and not v.get("ai_suggested_product_id")
+            )
+            messages.append(f"AI предложило кандидатов: {ai_count}")
+            if manual_count:
+                messages.append(
+                    f"Требуют ручного ввода: {manual_count}"
+                )
         if "uom_raw" not in column_mapping:
             messages.append(
                 "Предупреждение: колонка единицы измерения не распознана; "
@@ -527,42 +697,7 @@ class ObjectRequestImportWizard(models.TransientModel):
 
         line_vals = []
         for preview in self.preview_line_ids:
-            uom_id = False
-            product = preview.matched_product_id
-            if product and product.uom_id:
-                uom_id = product.uom_id.id
-            line_vals.append(
-                {
-                    "request_id": request.id,
-                    "sequence": preview.sequence,
-                    "source_row_no": preview.source_row_no,
-                    "supplier_article": preview.supplier_article,
-                    "name_raw": preview.name_raw,
-                    "uom_raw": preview.uom_raw,
-                    "qty_requested": preview.qty,
-                    "price_raw": preview.price,
-                    "comment": preview.comment,
-                    "supplier_raw": preview.supplier_raw,
-                    "product_id": preview.matched_product_id.id or False,
-                    "uom_id": uom_id,
-                    "preferred_vendor_id": preview.matched_vendor_id.id
-                    or False,
-                    "matching_required": preview.matching_required,
-                    "manual_vendor_required": preview.manual_vendor_required,
-                    "matching_note": (
-                        "import auto match"
-                        if preview.matched_product_id
-                        and not preview.matching_required
-                        else False
-                    ),
-                    "matching_source": (
-                        "import_auto"
-                        if preview.matched_product_id
-                        and not preview.matching_required
-                        else "unknown"
-                    ),
-                }
-            )
+            line_vals.append(self._build_line_vals(request, preview))
 
         if line_vals:
             self.env["object.request.line"].create(line_vals)

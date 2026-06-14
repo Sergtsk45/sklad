@@ -26,6 +26,7 @@
                         </group>
                         <group>
                             <field name="priority"/>
+                            <field name="ai_mode" widget="radio"/>
                             <field name="comment"/>
                         </group>
                     </group>
@@ -77,6 +78,22 @@
                                         name="candidate_product_ids"
                                         string="Кандидаты"
                                         widget="many2many_tags"
+                                        optional="show"
+                                    />
+                                    <field
+                                        name="ai_suggested_product_id"
+                                        string="AI-предложение"
+                                        optional="show"
+                                    />
+                                    <field
+                                        name="ai_match_confidence"
+                                        string="Уверенность"
+                                        optional="show"
+                                        digits="[4, 2]"
+                                    />
+                                    <field
+                                        name="matching_source"
+                                        string="Источник"
                                         optional="show"
                                     />
                                     <field

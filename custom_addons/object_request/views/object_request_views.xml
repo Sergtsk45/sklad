@@ -207,6 +207,25 @@
                         title="Повторно запустить автосопоставление по всем строкам документа"
                     />
                     <button
+                        name="action_prepare_ai_candidates"
+                        string="Подобрать AI-кандидатов"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="state in ('closed', 'cancelled')"
+                        groups="object_request.group_supply_manager"
+                        title="Подобрать shortlist кандидатов без записи товара в строки"
+                    />
+                    <button
+                        name="action_apply_confident_ai_matches"
+                        string="Применить уверенные AI-сопоставления"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="state in ('closed', 'cancelled')"
+                        groups="object_request.group_supply_manager"
+                        confirm="Применить только AI-кандидатов с уверенностью не ниже 0.90?"
+                        title="Записать товар только для строк с высокой уверенностью"
+                    />
+                    <button
                         name="action_open_issue_wizard"
                         string="Создать выдачу"
                         type="object"
@@ -479,6 +498,32 @@
                                     <!-- Примечание по сопоставлению -->
                                     <field name="matching_note" string="Примечание" optional="hide"/>
                                     <field
+                                        name="matching_source"
+                                        string="Источник"
+                                        optional="hide"
+                                    />
+                                    <field
+                                        name="ai_suggested_product_id"
+                                        string="AI-кандидат"
+                                        optional="show"
+                                    />
+                                    <field
+                                        name="ai_match_confidence"
+                                        string="AI confidence"
+                                        optional="hide"
+                                    />
+                                    <field
+                                        name="ai_match_reason"
+                                        string="AI пояснение"
+                                        optional="hide"
+                                    />
+                                    <field
+                                        name="ai_candidate_product_ids"
+                                        string="AI shortlist"
+                                        widget="many2many_tags"
+                                        optional="hide"
+                                    />
+                                    <field
                                         name="line_state"
                                         string="Статус строки"
                                         widget="badge"
@@ -490,6 +535,27 @@
                                     <field name="matching_required" column_invisible="1"/>
                                     <field name="manual_vendor_required" column_invisible="1"/>
                                     <field name="comment" string="Комментарий" optional="hide"/>
+                                    <button
+                                        name="action_accept_ai_candidate"
+                                        string="Принять AI"
+                                        type="object"
+                                        groups="object_request.group_supply_manager"
+                                        invisible="not ai_suggested_product_id"
+                                    />
+                                    <button
+                                        name="action_reject_ai_candidate"
+                                        string="Отклонить AI"
+                                        type="object"
+                                        groups="object_request.group_supply_manager"
+                                        invisible="not ai_suggested_product_id"
+                                    />
+                                    <button
+                                        name="action_accept_and_remember_ai_candidate"
+                                        string="Принять и запомнить"
+                                        type="object"
+                                        groups="object_request.group_supply_manager"
+                                        invisible="not ai_suggested_product_id or not supplier_article"
+                                    />
                                     <button
                                         name="action_remember_matching"
                                         string="Запомнить"
