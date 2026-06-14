@@ -21,3 +21,7 @@ from . import test_obr025_multiwarehouse_check  # noqa: F401
 from . import test_obr026_project_warehouse  # noqa: F401
 from . import test_obr027_matching  # noqa: F401
 from . import test_obr028_combined_matching  # noqa: F401
+from . import test_obr029_llm_matching  # noqa: F401
+from . import test_obr031_ai_security  # noqa: F401
+from . import test_obr032_memory  # noqa: F401
+from . import test_obr030_preview_ai  # noqa: F401

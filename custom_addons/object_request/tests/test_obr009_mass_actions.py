@@ -344,6 +344,121 @@ class TestObr009MassActions(TransactionCase):
         with self.assertRaises(UserError):
             wizard.action_assign()
 
+    # ----- AI candidates -----
+
+    def test_prepare_ai_candidates_fills_line_suggestion(self):
+        result = self.request.action_prepare_ai_candidates()
+
+        self.assertEqual(result["type"], "ir.actions.client")
+        self.assertEqual(
+            self.line_unmatched.ai_suggested_product_id,
+            self.product,
+        )
+        self.assertIn(
+            self.product,
+            self.line_unmatched.ai_candidate_product_ids,
+        )
+        self.assertGreaterEqual(self.line_unmatched.ai_match_confidence, 0.9)
+        self.assertTrue(self.line_unmatched.ai_match_reason)
+
+    def test_apply_confident_ai_matches_sets_product(self):
+        self.request.action_prepare_ai_candidates()
+        self.line_unmatched.write(
+            {
+                "product_id": False,
+                "matching_required": True,
+            }
+        )
+
+        self.request.action_apply_confident_ai_matches()
+
+        self.assertEqual(self.line_unmatched.product_id, self.product)
+        self.assertFalse(self.line_unmatched.matching_required)
+        self.assertEqual(self.line_unmatched.matching_source, "llm_auto")
+
+    def test_apply_confident_ai_matches_skips_low_confidence(self):
+        self.line_unmatched.write(
+            {
+                "ai_suggested_product_id": self.product.id,
+                "ai_match_confidence": 0.7,
+            }
+        )
+
+        self.request.action_apply_confident_ai_matches()
+
+        self.assertFalse(self.line_unmatched.product_id)
+        self.assertTrue(self.line_unmatched.matching_required)
+
+    def test_accept_ai_candidate_sets_manual_confirmation_source(self):
+        self.request.action_prepare_ai_candidates()
+
+        self.line_unmatched.action_accept_ai_candidate()
+
+        self.assertEqual(self.line_unmatched.product_id, self.product)
+        self.assertFalse(self.line_unmatched.matching_required)
+        self.assertEqual(self.line_unmatched.matching_source, "llm_confirmed")
+
+    def test_reject_ai_candidate_clears_suggestion(self):
+        self.request.action_prepare_ai_candidates()
+
+        self.line_unmatched.action_reject_ai_candidate()
+
+        self.assertFalse(self.line_unmatched.ai_suggested_product_id)
+        self.assertFalse(self.line_unmatched.ai_candidate_product_ids)
+        self.assertEqual(
+            self.line_unmatched.ai_match_reason,
+            "AI-кандидат отклонён.",
+        )
+
+    def test_accept_and_remember_ai_candidate_creates_supplierinfo(self):
+        product = self.env["product.product"].create(
+            {
+                "name": "OBR009 AI remember product",
+                "type": "consu",
+            }
+        )
+        line = self.env["object.request.line"].create(
+            {
+                "request_id": self.request.id,
+                "name_raw": "OBR009 AI remember product",
+                "supplier_article": "OBR009-AI-MEM-001",
+                "qty_requested": 1.0,
+                "preferred_vendor_id": self.vendor.id,
+                "matching_required": True,
+                "ai_suggested_product_id": product.id,
+                "ai_match_confidence": 0.95,
+                "ai_match_reason": "Тестовая AI-подсказка.",
+            }
+        )
+
+        line.action_accept_and_remember_ai_candidate()
+
+        info = self.env["product.supplierinfo"].search(
+            [
+                ("product_code", "=ilike", "OBR009-AI-MEM-001"),
+                ("partner_id", "=", self.vendor.id),
+                ("product_id", "=", product.id),
+            ]
+        )
+        self.assertEqual(len(info), 1)
+        self.assertEqual(line.product_id, product)
+        self.assertEqual(line.matching_source, "llm_confirmed")
+
+    def test_foreman_cannot_accept_ai_candidate(self):
+        self.request.action_prepare_ai_candidates()
+
+        with self.assertRaises(UserError):
+            self.line_unmatched.with_user(
+                self.foreman
+            ).action_accept_ai_candidate()
+
+    def test_ai_matching_buttons_are_present_in_form_view(self):
+        view = self.env.ref("object_request.view_object_request_form")
+
+        self.assertIn("action_prepare_ai_candidates", view.arch_db)
+        self.assertIn("action_apply_confident_ai_matches", view.arch_db)
+        self.assertIn("action_accept_ai_candidate", view.arch_db)
+
     # ----- line_count в wizard -----
 
     def test_wizard_line_count(self):

@@ -38,6 +38,71 @@ flowchart TD
 
 Модуль ведёт требования на комплектацию объектов. Склад не выбирается в шапке требования: при создании объекта автоматически создаётся связанный `stock.warehouse`, который используется как склад приёмки закупок. Выдача планируется на уровне строки требования через распределение `object.request.line.stock` по всем активным складам компании.
 
+## LLM-Assisted Product Matching v2
+
+Сопоставление товаров при импорте Excel-строк поддерживает трёхэтапный pipeline с использованием памяти, детерминированного поиска и LLM-ранжирования.
+
+```mermaid
+flowchart TD
+    Excel[Строка Excel\nname_raw + supplier_article] --> Memory[Проверить память\nobject.request.matching.memory]
+    Memory -->|Найдено| MatchedMemory[product_id\nsource=memory]
+    Memory -->|Не найдено| Classify[Классификация строки]
+    Classify -->|length/empty/manual_only| Manual[Ручной ввод]
+    Classify -->|product_candidate| Deterministic[Детерминированный поиск\nsupplierinfo + default_code + name_score + ai_search]
+    Deterministic -->|1 кандидат score≥0.9| AutoMatch[Auto match\nsource=import_auto]
+    Deterministic -->|несколько кандидатов| LLMCheck{AI enabled?}
+    LLMCheck -->|Нет| Suggest[Показать кандидатов]
+    LLMCheck -->|Да| LLM[LLM rerank shortlist\nOpenRouterClient]
+    LLM -->|confidence≥0.90\nнет critical flags| AutoAI[Auto match\nsource=llm_auto]
+    LLM -->|0.70-0.89| SuggestAI[Подсказка снабженцу\nПринять/Отклонить]
+    LLM -->|&lt;0.70 или ошибка| Manual
+    SuggestAI -->|Принять и запомнить| Memory2[Сохранить в память\n+ создать supplierinfo]
+```
+
+### Сервисы сопоставления
+
+**`object.request.matching.candidate.service`** (AbstractModel)
+- Формирует shortlist кандидатов из `product.supplierinfo`, `default_code`, token-scoring и `ai_search_products()`
+- Дедуплицирует по `product_id` и отдаёт лимиты: 15 для детерминированного поиска / 8 для LLM / 3 для preview импорта
+
+**`object.request.llm.matching.service`** (AbstractModel)
+- Принимает shortlist кандидатов, формирует prompt через `OpenRouterClient`, валидирует JSON-ответ
+- Возвращает структурированный результат: `{decision, product_id, confidence, reason, risk_flags}`
+- Критические флаги (`size_conflict` и т.д.) снижают confidence до ≤ 0.85
+
+**`object.request.matching.memory`** (Model)
+- Хранит подтверждённые сопоставления с полями: `name_normalized`, `designation_normalized`, `product_id`, `confirmed_by`, `source_request_id`, `confidence`, `active`
+- SQL constraint `UNIQUE(name_normalized, product_id)` предотвращает дубликаты
+- Используется перед LLM и детерминированным поиском — при попадании возвращает `source="memory"`, `can_call_llm=False`
+
+### Пороги уверенности
+
+| Порог | Действие | Источник совпадения |
+|---|---|---|
+| ≥ 0.90 (LLM) + нет critical flags | Авто-применение | `llm_auto` |
+| 0.70–0.89 (LLM) | Предложить снабженцу | — (подтверждение обязательно) |
+| &lt; 0.70 (LLM) | Ручной ввод | — (AI не применяется) |
+| &gt; 0.9 (детерминированный) | Авто-применение | `import_auto` |
+| память | Авто-применение | `memory` |
+
+### Конфигурация через ir.config_parameter
+
+| Параметр | Дефолт | Назначение |
+|---|---|---|
+| `object_request.ai_matching_enabled` | `True` | Включить/отключить LLM для сопоставления |
+| `object_request.ai_matching_auto_threshold` | `0.90` | Минимальный confidence для автоприменения LLM |
+| `object_request.ai_matching_suggest_threshold` | `0.70` | Минимальный confidence для подсказки снабженцу |
+| `object_request.ai_matching_batch_size` | `50` | Максимум строк за один LLM-вызов (rate limiting) |
+
+### Ограничения безопасности
+
+- **LLM выбирает только из shortlist** — не может назначить произвольный товар
+- **Batch size ограничивает стоимость API** — rate limiting в `action_prepare_ai_candidates`
+- **AI может быть отключён** — `ai_matching_enabled=False` полностью блокирует LLM, работает только детерминированный поиск
+- **Все AI-действия доступны только для `group_supply_manager`** — без специальной роли LLM не вызывается
+- **Логирование в chatter** — `_post_ai_candidates_note()` записывает статистику AI в документ требования
+- **Валидация параметров LLM-сервиса** — неверная конфигурация не вызывает исключение, используется graceful fallback
+
 ```mermaid
 flowchart TD
     Project[Объект object.request.project] --> ProjectWh[Склад объекта stock.warehouse]

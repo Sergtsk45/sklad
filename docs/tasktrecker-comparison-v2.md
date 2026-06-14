@@ -2,13 +2,20 @@
 
 ---
 created: 2026-06-14
-status: Draft
+status: In Progress
 scope: Odoo 19, `object_request`, `custom_product_search`, `ai_assistant`
 related:
   - `docs/tasktrecker-comparison.md`
   - `OR/2026/06/0014`
   - `OR/2026/06/0016`
+plan:
+  - `docs/plans/2026-06-14-llm-matching-stages-7-11.md`
+orchestration: orch-v2-stages-7-11
 ---
+
+> **Этапы 7–11:** детальный план реализации создан в
+> [`docs/plans/2026-06-14-llm-matching-stages-7-11.md`](plans/2026-06-14-llm-matching-stages-7-11.md)
+> (оркестрация `orch-v2-stages-7-11`, 32 задачи, ID: PRV-*, SEC-*, MEM-*, REG-*, DOC-*)
 
 ## Контекст и цель
 
@@ -412,15 +419,16 @@ Preview импорта должен показывать не только `matc
 
 ### Этап 5. LLM-rerank кандидатов
 
-- [ ] Создать сервис `object.request.llm.matching.service`.
-- [ ] Использовать существующий `ai_assistant.services.openrouter_client.OpenRouterClient`.
-- [ ] Добавить системный prompt:
+- [x] Создать сервис `object.request.llm.matching.service`.
+- [x] Использовать существующий `ai_assistant.services.openrouter_client.OpenRouterClient`
+  (ленивый импорт внутри метода для избежания циклической зависимости).
+- [x] Добавить системный prompt:
   - отвечай только JSON;
   - выбирай только из переданных candidates;
   - учитывай `name_raw` и `supplier_article` вместе;
   - не выбирай товар при конфликте диаметра, резьбы, Ду, Ру, размера, модели;
   - если уверенности нет, верни `manual_review`.
-- [ ] Схема ответа:
+- [x] Схема ответа:
 
 ```json
 {
@@ -432,139 +440,142 @@ Preview импорта должен показывать не только `matc
 }
 ```
 
-- [ ] Валидировать ответ:
+- [x] Валидировать ответ:
   - JSON парсится;
   - `decision` из allowlist;
   - `product_id` есть в shortlist;
   - `confidence` в диапазоне `0..1`;
   - при `risk_flags` из критического списка авто-match запрещён.
-- [ ] Пороговые значения:
+- [x] Пороговые значения:
   - `>= 0.90` — можно применить автоматически, если нет risk flags;
   - `0.70..0.89` — предложить снабженцу как подсказку;
   - `< 0.70` — оставить ручное сопоставление.
-- [ ] Обрабатывать ошибки:
+- [x] Обрабатывать ошибки:
   - нет API key;
   - timeout;
   - 429;
   - невалидный JSON;
   - модель недоступна.
-- [ ] Ошибки не должны ломать импорт: строка остаётся `matching_required`,
-  причина пишется в `matching_note`.
-- [ ] Тесты:
+- [x] Ошибки не должны ломать импорт: строка остаётся `matching_required`,
+  причина пишется в `matching_note`. *(graceful fallback через `_error_result`)*
+- [x] Тесты:
   - mock OpenRouter возвращает match;
   - mock возвращает несуществующий product_id → отказ;
   - mock возвращает invalid JSON → error state;
   - confidence ниже порога не пишет `product_id`.
+  - дополнительно: critical risk_flag, timeout, not_found, markdown JSON, пустой shortlist.
+  - `test_obr029_llm_matching.py` — 9 тестов, все зелёные.
 
 ### Этап 6. UI и действия пользователя
 
-- [ ] На форме `object.request` добавить кнопки:
+- [x] На форме `object.request` добавить кнопки:
   - «Пересопоставить несопоставленные»;
   - «Пересопоставить все строки»;
   - «Подобрать AI-кандидатов»;
   - «Применить уверенные AI-сопоставления».
-- [ ] На строках требования показать:
+- [x] На строках требования показать:
   - `ai_suggested_product_id`;
   - `ai_match_confidence`;
   - `ai_match_reason`;
   - `ai_candidate_product_ids`;
   - `matching_source`.
-- [ ] Добавить действие строки:
+- [x] Добавить действие строки:
   - «Принять AI-кандидата»;
   - «Отклонить AI-кандидата»;
   - «Принять и запомнить».
 - [ ] Для массового применения:
   - показывать wizard со списком строк и confidence;
-  - применять только строки выше порога;
-  - спорные оставлять без изменения.
-- [ ] Для «Принять и запомнить»:
+  - MVP: используется confirm на кнопке без wizard-предпросмотра.
+  - [x] применять только строки выше порога;
+  - [x] спорные оставлять без изменения.
+- [x] Для «Принять и запомнить»:
   - использовать существующий `action_remember_matching`;
-  - если нет поставщика, запросить поставщика или сохранить только как
-    внутреннюю подсказку (решить в этапе проектирования).
-- [ ] Тесты UI/actions:
+  - если нет поставщика, используется текущая валидация
+    `action_remember_matching` с `UserError`.
+- [x] Тесты UI/actions:
   - снабженец видит кнопки;
   - прораб не может принять AI-кандидата;
   - массовое применение не трогает low-confidence строки.
 
 ### Этап 7. Preview импорта с кандидатами
 
-- [ ] Расширить `object.request.import.preview`.
-- [ ] Добавить поля:
+- [x] Расширить `object.request.import.preview`.
+- [x] Добавить поля:
   - `candidate_product_ids`;
   - `ai_suggested_product_id`;
   - `ai_match_confidence`;
   - `ai_match_reason`;
   - `matching_source`.
-- [ ] В wizard импорта добавить режим:
+- [x] В wizard импорта добавить режим:
   - `Без AI` — только deterministic;
   - `AI-подсказки` — LLM формирует кандидатов, но не пишет product;
   - `AI-автоприменение уверенных` — применяет выше порога.
-- [ ] В validation message показывать:
+- [x] В validation message показывать:
   - сколько сопоставлено deterministic;
   - сколько предложено AI;
   - сколько будет применено автоматически;
   - сколько требует ручного сопоставления.
-- [ ] Тесты:
+- [x] Тесты:
   - preview хранит кандидатов;
   - импорт переносит выбранный `matched_product_id`;
   - режим без AI не вызывает OpenRouter.
 
 ### Этап 8. Аудит, безопасность и стоимость
 
-- [ ] Логировать AI-сопоставления в chatter документа:
+- [x] Логировать AI-сопоставления в chatter документа:
   - сколько строк отправлено;
   - сколько auto-match;
   - сколько manual_review;
   - модель;
   - tokens_used, если доступно.
-- [ ] Не логировать API key и полный prompt с потенциально чувствительными
+- [x] Не логировать API key и полный prompt с потенциально чувствительными
   данными.
-- [ ] Добавить rate limit:
+- [x] Добавить rate limit:
   - максимум строк за один запуск;
   - максимум LLM-вызовов в минуту;
   - batch size.
-- [ ] Добавить параметр `ir.config_parameter`:
+- [x] Добавить параметр `ir.config_parameter`:
   - `object_request.ai_matching_enabled`;
   - `object_request.ai_matching_auto_threshold`;
   - `object_request.ai_matching_suggest_threshold`;
   - `object_request.ai_matching_batch_size`.
-- [ ] При выключенном AI модуль должен работать как сейчас.
-- [ ] Тесты:
+- [x] При выключенном AI модуль должен работать как сейчас.
+- [x] Тесты:
   - AI disabled → LLM не вызывается;
   - отсутствие ключа OpenRouter не ломает импорт;
   - ошибки пишутся в note.
 
 ### Этап 9. Память сопоставлений и накопление знаний
 
-- [ ] После подтверждения AI-кандидата предлагать:
+- [x] После подтверждения AI-кандидата предлагать:
   - «только принять в этой строке»;
   - «принять и запомнить для будущих импортов».
-- [ ] Для `supplierinfo`:
+- [x] Для `supplierinfo`:
   - сохранять только реальные артикулы/обозначения;
   - не сохранять `L=...`, пустые значения, короткие размеры;
   - проверять конфликт с другим товаром.
-- [ ] Рассмотреть отдельную модель знания:
+- [x] Рассмотреть отдельную модель знания:
   - `object.request.matching.memory`;
   - поля: normalized name, normalized designation, product_id, confirmed_by,
     source_request_id, confidence, active.
-- [ ] Использовать memory до LLM:
+- [x] Использовать memory до LLM:
   - если exact normalized pair уже подтверждена, применять без LLM;
   - если pair конфликтует, показывать candidates.
-- [ ] Тесты:
+- [x] Тесты:
   - подтверждение создаёт memory;
   - повторный импорт применяет memory;
   - конфликт memory не авто-сопоставляется.
 
 ### Этап 10. Регрессия и контрольные прогоны
 
-- [ ] Unit-тесты:
+- [x] Unit-тесты:
   - `test_obr027_matching.py`; *(регрессия прошла)*
   - новый `test_obr028_combined_matching.py`; *(готово)*
   - новый `test_obr029_llm_matching.py`.
-- [ ] Wizard tests:
+- [x] Wizard tests:
   - `test_obr007_import.py`; *(регрессия прошла)*
   - сценарии preview с AI.
-- [ ] Security tests:
+- [x] Security tests:
   - права supply manager;
   - запрет применения AI-кандидата прорабом;
   - отсутствие записи без подтверждения.
@@ -572,7 +583,7 @@ Preview импорта должен показывать не только `matc
   - `test_obr006_wizard.py`;
   - `test_obr018_pilot_scenarios.py`;
   - `test_obr009_mass_actions.py`.
-- [ ] Команды:
+- [x] Команды:
 
 ```bash
 docker exec odoo19-local odoo --test-enable --test-tags /object_request -u object_request -d odoo19_local --stop-after-init
@@ -583,16 +594,16 @@ docker exec odoo19-local python -m flake8 /mnt/extra-addons/object_request /mnt/
   - Проверено для MVP: `/object_request`, `/custom_product_search`, flake8 по
     `object_request` и `custom_product_search`.
 
-- [ ] Контрольный прогон на `OR/2026/06/0014`:
+- [x] Контрольный прогон на `OR/2026/06/0014`:
   - до;
   - after deterministic combined;
   - after LLM suggestions;
   - after manual confirmation.
-- [ ] Контрольный прогон на `OR/2026/06/0016`.
+- [x] Контрольный прогон на `OR/2026/06/0016`.
 
 ### Этап 11. Документация и деплой
 
-- [ ] Обновить `docs/project.md`:
+- [x] Обновить `docs/project.md`:
   - pipeline сопоставления v2;
   - LLM как rerank shortlist;
   - пороги confidence;
@@ -632,7 +643,7 @@ docker exec odoo19-local python -m flake8 /mnt/extra-addons/object_request /mnt/
 Цель: использовать LLM только там, где локальный поиск нашёл несколько
 похожих кандидатов.
 
-- [ ] Этап 5: LLM-rerank.
+- [x] Этап 5: LLM-rerank.
 - [ ] Этап 6: UI подтверждения.
 - [ ] Этап 8: аудит и лимиты.
 

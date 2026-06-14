@@ -1,3 +1,69 @@
+## [2026-06-14] — feat(object_request): LLM-Assisted Matching v2 (этапы 7–11)
+
+### Добавлено
+- AI-поля и режим `ai_mode` (none/suggest/auto) в wizarde импорта Excel
+- Модель `object.request.matching.memory` — хранит подтверждённые сопоставления, используется до LLM
+- `_get_ai_config()` — чтение конфигурации AI из `ir.config_parameter`
+- Логирование AI-действий в chatter заявки (`_post_ai_candidates_note`)
+- Rate limiting (`batch_size`) для LLM-вызовов в `action_prepare_ai_candidates`
+
+### Изменено
+- `action_accept_and_remember_ai_candidate`: теперь сохраняет И в память, И в `product.supplierinfo`
+- `build_candidates`: проверяет память перед детерминированным поиском
+- `object_request_project.code`: `size=5` → `size=10` (предотвращение коллизий при длинных тест-сессиях)
+- Версия модуля: `19.0.1.2.0` → `19.0.1.3.0`
+
+### Исправлено
+- Регрессия `test_obr032`: `groups_id` → `group_ids` (Odoo 19)
+- ACL matching_memory: снабженец получил права на создание/изменение записей
+
+### Проверено
+- 346 тестов, 0 failed, 0 errors
+- flake8 чист по всему модулю `object_request`
+
+---
+
+## [2026-06-14] — feat(object_request): UI действий AI-кандидатов (этап 6)
+
+### Добавлено
+- На форме требования добавлены кнопки «Подобрать AI-кандидатов» и
+  «Применить уверенные AI-сопоставления».
+- На строках требования добавлены поля AI-подсказок:
+  `ai_suggested_product_id`, `ai_match_confidence`, `ai_match_reason`,
+  `ai_candidate_product_ids`.
+- Добавлены действия строки: «Принять AI», «Отклонить AI»,
+  «Принять и запомнить».
+- Массовое применение пишет товар только для подсказок с confidence `>= 0.90`;
+  low-confidence строки остаются без изменения.
+
+### Проверено
+- `docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request /mnt/extra-addons/custom_product_search`
+- `docker exec odoo19-local odoo --test-enable --test-tags /object_request -u object_request -d odoo19_local --stop-after-init --http-port=8071` — 326 post-tests, 0 failed, 0 errors.
+
+---
+
+## [2026-06-14] — feat(object_request): LLM-rerank сервис (этап 5)
+
+### Добавлено
+- Сервис `object.request.llm.matching.service` (AbstractModel): принимает shortlist
+  кандидатов, формирует prompt, вызывает `OpenRouterClient.send_chat`, валидирует
+  JSON-ответ и возвращает структурированный результат без записи в БД.
+- Системный prompt: LLM оценивает `name_raw` + `supplier_article` вместе, выбирает
+  только из переданного shortlist, добавляет `risk_flags` при конфликте размеров.
+- Валидация ответа LLM: `decision` из allowlist, `product_id` строго из shortlist,
+  `confidence` в `0..1`, critical risk_flags снижают confidence до ≤ 0.85.
+- Пороги: `≥ 0.90` + нет критических флагов → `auto_applicable = True`;
+  `0.70..0.89` → предложить снабженцу; `< 0.70` → manual review.
+- Graceful fallback: любая ошибка (нет ключа, timeout, 429, невалидный JSON,
+  недоступная модель) возвращает `decision="error"` без исключения наружу.
+- Тест `test_obr029_llm_matching.py` — 9 тестов с mock OpenRouter.
+
+### Проверено
+- `flake8` — чисто по `object_request/models/llm_matching_service.py` и тестам.
+- 318 тестов `object_request`, 0 failed, 0 errors.
+
+---
+
 ## [2026-06-14] — feat(object_request): MVP v2 сопоставления Excel-строк
 
 ### Добавлено
