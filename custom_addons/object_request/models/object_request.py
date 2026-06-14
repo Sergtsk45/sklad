@@ -1,5 +1,9 @@
+import logging
+
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
+
+_logger = logging.getLogger(__name__)
 
 
 class ObjectRequest(models.Model):
@@ -559,6 +563,161 @@ class ObjectRequest(models.Model):
                     f"Пропущено ручных: {stats['skipped']}."
                 ),
                 "type": "success" if stats["matched"] else "warning",
+                "sticky": False,
+            },
+        }
+
+    def action_prepare_ai_candidates(self):
+        """Заполнить AI-кандидатов из shortlist без записи товара."""
+        self.ensure_one()
+        config = self.env[
+            'object.request.llm.matching.service'
+        ]._get_ai_config()
+        all_lines = self.line_ids.filtered(
+            lambda line: (
+                not line.is_cancelled
+                and not line._is_manual_match_protected()
+                and (line.matching_required or not line.product_id)
+            )
+        )
+        total_pending = len(all_lines)
+        lines = all_lines[:config['batch_size']]
+        if not config['enabled']:
+            self._post_ai_disabled_note()
+        stats = self._process_ai_candidate_lines(lines, config)
+        self._post_ai_candidates_note(config, lines, stats, total_pending)
+        suffix = self._ai_batch_suffix(total_pending, len(lines))
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "AI-кандидаты подобраны",
+                "message": (
+                    f"Обработано строк: {stats['prepared']}. "
+                    f"С подсказкой: {stats['suggested']}.{suffix}"
+                ),
+                "type": (
+                    "success" if stats['suggested'] else "warning"
+                ),
+                "sticky": False,
+            },
+        }
+
+    def _ai_batch_suffix(self, total_pending, processed):
+        if total_pending > processed:
+            return (
+                f' (обработано {processed} из {total_pending},'
+                f' запустите ещё раз)'
+            )
+        return ''
+
+    def _post_ai_disabled_note(self):
+        self.message_post(
+            body=(
+                'AI-сопоставление отключено, '
+                'использован только детерминированный поиск.'
+            ),
+            subtype_xmlid='mail.mt_note',
+        )
+
+    def _process_ai_candidate_lines(self, lines, config):
+        service = self.env[
+            "object.request.matching.candidate.service"
+        ]
+        parser = self.env["object.request.excel.parser"]
+        prepared = 0
+        suggested = 0
+        errors = 0
+        for line in lines:
+            vendor = (
+                line.preferred_vendor_id
+                or parser.match_vendor_by_name(line.supplier_raw)
+            )
+            try:
+                candidate_result = service.build_candidates(
+                    line.name_raw,
+                    line.supplier_article,
+                    vendor=vendor,
+                )
+                line.write(
+                    line._ai_candidate_result_vals(candidate_result)
+                )
+            except Exception as exc:
+                _logger.warning(
+                    "[object_request] build_candidates error"
+                    " line=%s: %s",
+                    line.id,
+                    exc,
+                )
+                line.write({'ai_match_reason': str(exc)[:250]})
+                errors += 1
+            prepared += 1
+            if line.ai_suggested_product_id:
+                suggested += 1
+        return {
+            'prepared': prepared,
+            'suggested': suggested,
+            'errors': errors,
+        }
+
+    def _post_ai_candidates_note(
+        self, config, lines, stats, total_pending
+    ):
+        auto_count = sum(
+            1 for line in lines
+            if line.ai_match_confidence >= config['auto_threshold']
+            and line.ai_suggested_product_id
+        )
+        suggest_count = sum(
+            1 for line in lines
+            if (
+                config['suggest_threshold']
+                <= line.ai_match_confidence
+                < config['auto_threshold']
+            )
+            and line.ai_suggested_product_id
+        )
+        no_match = stats['prepared'] - auto_count - suggest_count
+        error_note = (
+            f'<br/>Ошибок LLM: {stats["errors"]}'
+            if stats['errors'] else ''
+        )
+        at = config['auto_threshold']
+        st = config['suggest_threshold']
+        self.message_post(
+            body=(
+                f'<b>AI-подбор кандидатов</b><br/>'
+                f'Обработано строк: {stats["prepared"]}<br/>'
+                f'Уверенные совпадения'
+                f' (≥{at:.0%}): {auto_count}<br/>'
+                f'Подсказки ({st:.0%}–{at:.0%}): {suggest_count}<br/>'
+                f'Ручной ввод: {no_match}{error_note}'
+            ),
+            subtype_xmlid='mail.mt_note',
+        )
+
+    def action_apply_confident_ai_matches(self):
+        """Применить AI-подсказки с высокой локальной уверенностью."""
+        self.ensure_one()
+        lines = self.line_ids.filtered(
+            lambda line: (
+                not line.is_cancelled
+                and not line._is_manual_match_protected()
+                and line.ai_suggested_product_id
+                and line.ai_match_confidence >= 0.9
+            )
+        )
+        for line in lines:
+            vals = line._apply_ai_suggestion_vals()
+            vals["matching_source"] = "llm_auto"
+            line.write(vals)
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Уверенные AI-сопоставления применены",
+                "message": f"Применено строк: {len(lines)}.",
+                "type": "success" if lines else "warning",
                 "sticky": False,
             },
         }
