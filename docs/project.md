@@ -44,7 +44,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Excel[Строка Excel\nname_raw + supplier_article] --> Memory[Проверить память\nobject.request.matching.memory]
+    Excel[Строка Excel\nname_raw + supplier_article + technical_designation] --> Memory[Проверить память\nobject.request.matching.memory]
     Memory -->|Найдено| MatchedMemory[product_id\nsource=memory]
     Memory -->|Не найдено| Classify[Классификация строки]
     Classify -->|length/empty/manual_only| Manual[Ручной ввод]
@@ -63,6 +63,7 @@ flowchart TD
 
 **`object.request.matching.candidate.service`** (AbstractModel)
 - Формирует shortlist кандидатов из `product.supplierinfo`, `default_code`, token-scoring и `ai_search_products()`
+- Использует `technical_designation` как контекст для combined search/scoring/LLM, но не как ключ exact matching
 - Дедуплицирует по `product_id` и отдаёт лимиты: 15 для детерминированного поиска / 8 для LLM / 3 для preview импорта
 
 **`object.request.llm.matching.service`** (AbstractModel)
@@ -73,7 +74,7 @@ flowchart TD
 **`object.request.matching.memory`** (Model)
 - Хранит подтверждённые сопоставления с полями: `name_normalized`, `designation_normalized`, `product_id`, `confirmed_by`, `source_request_id`, `confidence`, `active`
 - SQL constraint `UNIQUE(name_normalized, product_id)` предотвращает дубликаты
-- Используется перед LLM и детерминированным поиском — при попадании возвращает `source="memory"`, `can_call_llm=False`
+- Используется перед LLM и детерминированным поиском: сначала ищется точное совпадение `name_normalized + designation_normalized`, затем безопасный fallback к записям без designation; при попадании возвращает `source="memory"`, `can_call_llm=False`
 
 ### Пороги уверенности
 
@@ -134,12 +135,17 @@ flowchart TD
 - Excel-импорт `object.request.import.wizard` определяет колонки по заголовкам,
   а не по фиксированным позициям. Поддержаны стандартный формат
   `Артикул / Наименование / Ед. / Кол-во` и формат УУТЭ
-  `Наименование / Обозначение / Единица измерения / Количество`, где
-  `Обозначение` используется как артикул поставщика.
+  `Наименование / Обозначение / Единица измерения / Количество`. Реальный
+  артикул поставщика сохраняется только в `supplier_article`; колонка
+  `Обозначение` хранится отдельно в `technical_designation`.
 - Сопоставление товаров при Excel-импорте выполняется консервативно:
   нормализуются регистр, `ё/е`, NBSP, `Ду/Ру`, размеры `х/x/×` и
   десятичная запятая/точка; затем проверяются supplierinfo, артикул товара,
   точное имя и token-scoring по названию.
+- `technical_designation` участвует в combined query, локальном scoring и
+  LLM-shortlist как технический контекст строки, но значения вида `L=0.13`,
+  `21.3`, `Ду 80`, `ГОСТ` или модельные обозначения не используются как ключи
+  `product.supplierinfo.product_code` и `product.default_code`.
 - `product.supplierinfo` используется как явная память подтверждённых
   сопоставлений. Записи создаются только кнопкой «Запомнить сопоставление» на
   строке требования; ручной выбор товара без этой кнопки не пополняет память.

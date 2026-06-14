@@ -104,7 +104,12 @@ class TestObr031AISecurity(TransactionCase):
         )
         call_count = []
 
-        def fake_build(name_raw, article, vendor=None):
+        def fake_build(
+            name_raw,
+            article,
+            vendor=None,
+            technical_designation=None,
+        ):
             call_count.append(1)
             return _EMPTY_RESULT
 
@@ -129,7 +134,12 @@ class TestObr031AISecurity(TransactionCase):
         """Ошибка build_candidates не прерывает процесс."""
         line = self._create_unmatched_line('Отвод 90 Ду50')
 
-        def raise_error(name_raw, article, vendor=None):
+        def raise_error(
+            name_raw,
+            article,
+            vendor=None,
+            technical_designation=None,
+        ):
             raise RuntimeError('Test LLM error')
 
         with patch(_CANDIDATE_PATCH, side_effect=raise_error):

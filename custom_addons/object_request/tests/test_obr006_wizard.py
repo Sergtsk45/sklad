@@ -115,6 +115,7 @@ class TestOBR006ImportWizard(TransactionCase):
         wizard.action_validate()
         line = wizard.preview_line_ids[0]
         self.assertEqual(line.supplier_article, "ART-001")
+        self.assertFalse(line.technical_designation)
         self.assertEqual(line.name_raw, "Цемент М500")
         self.assertEqual(line.uom_raw, "мешок")
         self.assertAlmostEqual(line.qty, 10.0)
@@ -158,11 +159,28 @@ class TestOBR006ImportWizard(TransactionCase):
         self.assertEqual(wizard.validation_state, "valid")
         line = wizard.preview_line_ids[0]
         self.assertEqual(line.name_raw, "Кран муфтовый 15 мм")
-        self.assertEqual(line.supplier_article, "11Б27п1")
+        self.assertFalse(line.supplier_article)
+        self.assertEqual(line.technical_designation, "11Б27п1")
         self.assertEqual(line.uom_raw, "шт.")
         self.assertAlmostEqual(line.qty, 4.0)
         self.assertIn("спецификация УУТЭ", wizard.validation_messages)
         self.assertIn("Обозначение используется", wizard.validation_messages)
+
+    def test_validate_article_header_maps_to_supplier_article(self):
+        """Реальная колонка Артикул остаётся supplier_article."""
+        file_b64 = _make_xlsx(
+            [
+                ["№", "Артикул", "Наименование", "Кол-во"],
+                [1, "REAL-ART-001", "Кран муфтовый 15 мм", 4],
+            ]
+        )
+        if file_b64 is None:
+            self.skipTest("openpyxl не установлен")
+        wizard = self._create_wizard({"file": file_b64})
+        wizard.action_validate()
+        line = wizard.preview_line_ids[0]
+        self.assertEqual(line.supplier_article, "REAL-ART-001")
+        self.assertFalse(line.technical_designation)
 
     def test_validate_skips_empty_rows(self):
         """Полностью пустые строки пропускаются при парсинге."""

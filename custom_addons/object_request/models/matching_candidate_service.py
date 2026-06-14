@@ -12,19 +12,32 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
     _description = "Shortlist candidates for object request line matching"
 
     @api.model
-    def build_candidates(self, name_raw, supplier_article, vendor=None):
+    def build_candidates(
+        self,
+        name_raw,
+        supplier_article,
+        vendor=None,
+        technical_designation=None,
+    ):
         parser = self.env["object.request.excel.parser"]
-        line_type = parser._classify_import_line(name_raw, supplier_article)
+        designation_context = self._designation_context(
+            supplier_article,
+            technical_designation,
+        )
+        line_type = parser._classify_import_line(
+            name_raw,
+            designation_context,
+        )
         combined_query = parser._combined_match_query(
             name_raw,
-            supplier_article,
+            designation_context,
         )
         limits = {
             "internal": INTERNAL_CANDIDATE_LIMIT,
             "llm": LLM_CANDIDATE_LIMIT,
             "preview": PREVIEW_CANDIDATE_LIMIT,
         }
-        memory_match = self._find_in_memory(name_raw, supplier_article)
+        memory_match = self._find_in_memory(name_raw, designation_context)
         if memory_match:
             result = {
                 "line_type": "product_candidate",
@@ -50,17 +63,17 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
             "note": "",
             "limits": limits,
         }
-        if line_type in ("manual_only", "length_or_pipe_fragment"):
+        if line_type == "manual_only":
             result["note"] = "Строка оставлена для ручного сопоставления."
             return result
 
         self._add_supplierinfo_candidates(result, supplier_article, vendor)
         self._add_default_code_candidate(result, supplier_article)
-        self._add_name_score_candidates(result, name_raw, supplier_article)
+        self._add_name_score_candidates(result, name_raw, designation_context)
         self._add_combined_search_candidates(
             result,
             name_raw,
-            supplier_article,
+            designation_context,
         )
         result["candidates"] = result["candidates"][:INTERNAL_CANDIDATE_LIMIT]
         result["can_call_llm"] = bool(result["candidates"])
@@ -77,6 +90,11 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
             if item.get("product_id")
         ]
         return Product.browse(product_ids)
+
+    @api.model
+    def _designation_context(self, supplier_article, technical_designation):
+        parser = self.env["object.request.excel.parser"]
+        return parser.normalize_str(technical_designation) or supplier_article
 
     @api.model
     def llm_candidates(self, candidate_result):
@@ -254,18 +272,50 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
             )
 
     @api.model
-    def _find_in_memory(self, name_raw, supplier_article):
-        """Найти запись в памяти по нормализованному имени."""
+    def _find_in_memory(self, name_raw, designation_context):
+        """Найти запись в памяти по имени и техническому контексту."""
         parser = self.env['object.request.excel.parser']
         name_norm = parser.normalize_str(name_raw or '')
         if not name_norm or len(name_norm) < 3:
             return self.env['object.request.matching.memory'].browse()
+        designation_norm = parser.normalize_str(designation_context or '')
         Memory = self.env['object.request.matching.memory']
-        return Memory.search(
-            [('name_normalized', '=', name_norm), ('active', '=', True)],
+        base_domain = [
+            ('name_normalized', '=', name_norm),
+            ('active', '=', True),
+        ]
+        order = 'confidence desc, create_date desc'
+        empty_designation_domain = [
+            '|',
+            ('designation_normalized', '=', False),
+            ('designation_normalized', '=', ''),
+        ]
+        if designation_norm:
+            exact = Memory.search(
+                base_domain + [
+                    ('designation_normalized', '=', designation_norm),
+                ],
+                limit=1,
+                order=order,
+            )
+            if exact:
+                return exact
+            return Memory.search(
+                base_domain + empty_designation_domain,
+                limit=1,
+                order=order,
+            )
+        empty_designation = Memory.search(
+            base_domain + empty_designation_domain,
             limit=1,
-            order='confidence desc, create_date desc',
+            order=order,
         )
+        if empty_designation:
+            return empty_designation
+        legacy_candidates = Memory.search(base_domain, limit=2, order=order)
+        if len(legacy_candidates) == 1:
+            return legacy_candidates
+        return Memory.browse()
 
     @api.model
     def _candidate_token_diff(self, product, query):

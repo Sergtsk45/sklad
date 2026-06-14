@@ -142,15 +142,59 @@ class TestObr028CombinedMatching(TransactionCase):
         self._create_product("Переход 108-57 ст.")
 
         result = self.parser.match_row(
-            "80x50 ГОСТ 17378-2001",
+            "",
             "Переход",
             "",
+            technical_designation="80x50 ГОСТ 17378-2001",
         )
 
         self.assertFalse(result["product"])
         self.assertTrue(result["matching_required"])
         self.assertTrue(result["candidate_products"])
         self.assertTrue(result["candidate_details"])
+
+    def test_noisy_designation_keeps_name_candidates(self):
+        product = self._create_product("Труба d=80 OBR028 length context")
+
+        result = self.service.build_candidates(
+            "Труба d=80 OBR028",
+            "",
+            technical_designation="L=0.13",
+        )
+
+        candidate_ids = [item["product_id"] for item in result["candidates"]]
+        self.assertIn(product.id, candidate_ids)
+        self.assertTrue(result["can_call_llm"])
+
+    def test_real_article_still_matches_default_code(self):
+        product = self._create_product(
+            "Товар OBR028 real article",
+            default_code="OBR028-REAL-ARTICLE",
+        )
+
+        result = self.service.build_candidates(
+            "Товар OBR028",
+            "OBR028-REAL-ARTICLE",
+            technical_designation="L=0.13",
+        )
+
+        self.assertEqual(result["candidates"][0]["product_id"], product.id)
+        self.assertEqual(result["candidates"][0]["source"], "default_code")
+
+    def test_empty_technical_designation_keeps_article_fallback(self):
+        product = self._create_product(
+            "Товар OBR028 article OBR028-ARTICLE-IN-NAME"
+        )
+
+        result = self.parser.match_row(
+            "OBR028-ARTICLE-IN-NAME",
+            "Позиция без точного имени OBR028",
+            "",
+            technical_designation="",
+        )
+
+        self.assertEqual(result["product"], product)
+        self.assertFalse(result["matching_required"])
 
     def test_bobishka_oven_fixture_matches_exact_designation(self):
         product = self._create_product(
@@ -166,15 +210,20 @@ class TestObr028CombinedMatching(TransactionCase):
         self.assertEqual(result["product"], product)
         self.assertFalse(result["matching_required"])
 
-    def test_length_fragment_does_not_call_combined_search(self):
+    def test_length_designation_falls_back_to_name_search(self):
+        product = self._create_product("Труба OBR028 L context")
         with patch.object(
             type(self.env["product.product"]),
             "ai_search_products",
             wraps=self.env["product.product"].ai_search_products,
         ) as search_mock:
-            result = self.parser.match_row("L=0.13", "Отрезок трубы", "")
+            result = self.parser.match_row(
+                "",
+                "Отрезок трубы OBR028",
+                "",
+                technical_designation="L=0.13",
+            )
 
-        self.assertFalse(result["product"])
-        self.assertTrue(result["matching_required"])
+        self.assertIn(product, result["candidate_products"])
         self.assertEqual(result["line_type"], "length_or_pipe_fragment")
-        search_mock.assert_not_called()
+        search_mock.assert_called()

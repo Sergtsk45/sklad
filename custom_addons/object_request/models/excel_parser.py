@@ -262,6 +262,19 @@ class ExcelParser(models.AbstractModel):
         )
 
     @api.model
+    def _is_technical_designation_context(self, value):
+        designation = self._normalize_for_match(value)
+        if self._is_noise_article(designation):
+            return True
+        if re.match(r"^(ду|dn|ру|pn)\d+", designation):
+            return True
+        if "гост" in designation or "l=" in designation:
+            return True
+        if re.search(r"\d+\s*[xх×]\s*\d+", designation):
+            return True
+        return bool(re.search(r"[а-я]\.", designation))
+
+    @api.model
     def _classify_import_line(self, name_raw, supplier_article):
         name_tokens = self._tokenize(name_raw)
         article = self._normalize_for_match(supplier_article)
@@ -358,11 +371,17 @@ class ExcelParser(models.AbstractModel):
         return self._select_best_name_candidate(scored_candidates)
 
     @api.model
-    def _combined_candidate_products(self, name_raw, supplier_article):
+    def _combined_candidate_products(
+        self,
+        name_raw,
+        supplier_article,
+        technical_designation=None,
+    ):
         service = self.env["object.request.matching.candidate.service"]
         result = service.build_candidates(
             name_raw,
             supplier_article,
+            technical_designation=technical_designation,
         )
         return (
             service.candidate_products(result),
@@ -376,11 +395,13 @@ class ExcelParser(models.AbstractModel):
         candidates,
         name_raw,
         supplier_article,
+        technical_designation=None,
     ):
         service = self.env["object.request.matching.candidate.service"]
         result = service.build_candidates(
             name_raw,
             supplier_article,
+            technical_designation=technical_designation,
         )
         candidate_ids = set(candidates.ids)
         result["candidates"] = [
@@ -391,8 +412,13 @@ class ExcelParser(models.AbstractModel):
         return service.auto_match_candidate(result)
 
     @api.model
-    def match_product_by_article(self, supplier_article, vendor=None):
-        """Поиск product по артикулу/обозначению."""
+    def match_product_by_article(
+        self,
+        supplier_article,
+        vendor=None,
+        allow_name_fallback=True,
+    ):
+        """Поиск product по реальному артикулу."""
         article = self.normalize_str(supplier_article)
         if not article or article.lower() in _SKIP_ARTICLES:
             return self.env["product.product"].browse()
@@ -406,6 +432,8 @@ class ExcelParser(models.AbstractModel):
         )
         if product:
             return product
+        if not allow_name_fallback:
+            return self.env["product.product"].browse()
         return self._match_product_by_article_in_name(article)
 
     @api.model
@@ -447,16 +475,25 @@ class ExcelParser(models.AbstractModel):
         return partner
 
     @api.model
-    def match_row(self, supplier_article, name_raw, supplier_raw):
+    def match_row(
+        self,
+        supplier_article,
+        name_raw,
+        supplier_raw,
+        technical_designation=None,
+    ):
         """Комбинированное сопоставление строки Excel.
 
         Returns:
             dict: product, vendor, matching_required, manual_vendor_required
         """
+        technical_designation_norm = self.normalize_str(technical_designation)
+        designation_context = technical_designation_norm or supplier_article
         vendor = self.match_vendor_by_name(supplier_raw)
         product = self.match_product_by_article(
             supplier_article,
             vendor=vendor,
+            allow_name_fallback=not bool(technical_designation_norm),
         )
         match_source = "deterministic_auto" if product else ""
         candidate_products = self.env["product.product"].browse()
@@ -468,7 +505,7 @@ class ExcelParser(models.AbstractModel):
         if not product:
             product = self.match_product_by_name(
                 name_raw,
-                supplier_article=supplier_article,
+                supplier_article=designation_context,
             )
             if product:
                 match_source = "deterministic_auto"
@@ -477,6 +514,7 @@ class ExcelParser(models.AbstractModel):
             name_raw,
             supplier_article,
             vendor=vendor,
+            technical_designation=technical_designation,
         )
         line_type = candidate_result["line_type"]
         combined_query = ""

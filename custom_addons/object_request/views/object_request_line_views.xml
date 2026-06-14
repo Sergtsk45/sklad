@@ -11,6 +11,7 @@
             <search string="Строки требований">
                 <field name="name_raw" string="Наименование"/>
                 <field name="supplier_article" string="Артикул поставщика"/>
+                <field name="technical_designation" string="Обозначение"/>
                 <field name="product_id" string="Товар"/>
                 <field name="request_id" string="Документ"/>
                 <filter
@@ -80,6 +81,11 @@
                 <field name="sequence" string="№"/>
                 <field name="name_raw" string="Наименование (файл)"/>
                 <field name="supplier_article" string="Артикул" optional="show"/>
+                <field
+                    name="technical_designation"
+                    string="Обозначение"
+                    optional="show"
+                />
                 <field
                     name="product_id"
                     string="Товар"

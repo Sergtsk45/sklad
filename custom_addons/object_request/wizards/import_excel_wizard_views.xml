@@ -67,7 +67,13 @@
                                     <field name="source_row_no" string="Стр. Excel"/>
                                     <field
                                         name="supplier_article"
-                                        string="Артикул / Обозначение"
+                                        string="Артикул"
+                                        optional="show"
+                                    />
+                                    <field
+                                        name="technical_designation"
+                                        string="Обозначение"
+                                        optional="show"
                                     />
                                     <field name="name_raw" string="Наименование"/>
                                     <field name="uom_raw" string="Ед. изм."/>

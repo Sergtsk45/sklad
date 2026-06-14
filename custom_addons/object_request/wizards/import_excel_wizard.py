@@ -20,6 +20,7 @@ class ObjectRequestImportPreview(models.TransientModel):
     sequence = fields.Integer(string="№ п/п")
     source_row_no = fields.Integer(string="Строка Excel")
     supplier_article = fields.Char(string="Артикул")
+    technical_designation = fields.Char(string="Обозначение")
     name_raw = fields.Char(string="Наименование")
     uom_raw = fields.Char(string="Ед. изм.")
     qty = fields.Float(string="Количество")
@@ -199,7 +200,12 @@ class ObjectRequestImportWizard(models.TransientModel):
             )
 
     _COLUMN_SYNONYMS = {
-        "supplier_article": ("артикул", "арт", "арт.", "обозначение"),
+        "supplier_article": ("артикул", "арт", "арт."),
+        "technical_designation": (
+            "обозначение",
+            "тех. обозначение",
+            "техническое обозначение",
+        ),
         "name_raw": ("наименование", "наим", "наим.", "наименование товара"),
         "uom_raw": (
             "ед",
@@ -223,7 +229,8 @@ class ObjectRequestImportWizard(models.TransientModel):
 
     _REQUIRED_COLUMNS = ("name_raw", "qty")
     _COLUMN_LABELS = {
-        "supplier_article": "артикул / обозначение",
+        "supplier_article": "артикул",
+        "technical_designation": "обозначение",
         "name_raw": "наименование",
         "uom_raw": "единица измерения",
         "qty": "количество",
@@ -307,18 +314,23 @@ class ObjectRequestImportWizard(models.TransientModel):
             mapping,
             "supplier_article",
         )
+        designation_header = self._get_mapped_header(
+            header_row,
+            mapping,
+            "technical_designation",
+        )
         uom_header = self._get_mapped_header(header_row, mapping, "uom_raw")
         qty_header = self._get_mapped_header(header_row, mapping, "qty")
 
         if (
             name_header == "наименование"
-            and article_header == "обозначение"
+            and designation_header == "обозначение"
             and uom_header == "единица измерения"
             and qty_header == "количество"
         ):
             return (
                 "Распознан формат: спецификация УУТЭ "
-                "(Обозначение используется как артикул поставщика)"
+                "(Обозначение используется как технический контекст)"
             )
         if (
             article_header == "артикул"
@@ -415,6 +427,15 @@ class ObjectRequestImportWizard(models.TransientModel):
                     )
                 )
             )
+            technical_designation = parser.normalize_str(
+                self._to_str(
+                    self._get_mapped_cell(
+                        row,
+                        column_mapping,
+                        "technical_designation",
+                    )
+                )
+            )
             name_raw = self._to_str(
                 self._get_mapped_cell(row, column_mapping, "name_raw")
             )
@@ -447,7 +468,12 @@ class ObjectRequestImportWizard(models.TransientModel):
             if has_error:
                 problem_count += 1
 
-            match = parser.match_row(supplier_article, name_raw, supplier_raw)
+            match = parser.match_row(
+                supplier_article,
+                name_raw,
+                supplier_raw,
+                technical_designation=technical_designation,
+            )
             product = match["product"]
             vendor = match["vendor"]
             candidates = match.get("candidate_products")
@@ -458,6 +484,7 @@ class ObjectRequestImportWizard(models.TransientModel):
                     "sequence": seq,
                     "source_row_no": row_idx,
                     "supplier_article": supplier_article,
+                    "technical_designation": technical_designation,
                     "name_raw": name_raw,
                     "uom_raw": uom_raw,
                     "qty": qty,
@@ -491,6 +518,7 @@ class ObjectRequestImportWizard(models.TransientModel):
             candidate_result = service.build_candidates(
                 vals.get("name_raw", ""),
                 vals.get("supplier_article", ""),
+                technical_designation=vals.get("technical_designation", ""),
             )
             candidates = candidate_result.get("candidates", [])
             if not candidates:
@@ -520,6 +548,7 @@ class ObjectRequestImportWizard(models.TransientModel):
             "sequence": preview.sequence,
             "source_row_no": preview.source_row_no,
             "supplier_article": preview.supplier_article,
+            "technical_designation": preview.technical_designation,
             "name_raw": preview.name_raw,
             "uom_raw": preview.uom_raw,
             "qty_requested": preview.qty,

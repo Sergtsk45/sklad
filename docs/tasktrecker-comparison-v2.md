@@ -2,7 +2,7 @@
 
 ---
 created: 2026-06-14
-status: In Progress
+status: Implemented; pending VPS redeploy/rematch
 scope: Odoo 19, `object_request`, `custom_product_search`, `ai_assistant`
 related:
   - `docs/tasktrecker-comparison.md`
@@ -43,8 +43,10 @@ orchestration: orch-v2-stages-7-11
 
 **Цель v2:** построить управляемый контур сопоставления, где:
 
-- `name_raw` и `supplier_article` рассматриваются как единое описание
-  потребности;
+- `name_raw`, реальный `supplier_article` и технический контекст
+  `technical_designation` рассматриваются вместе как описание потребности;
+- Excel-колонка `Обозначение` не считается артикулом поставщика, если в файле
+  нет отдельной реальной колонки артикула;
 - детерминированный поиск формирует shortlist кандидатов;
 - LLM используется только для ранжирования ограниченного списка кандидатов,
   а не для свободного выбора товара из каталога;
@@ -89,7 +91,9 @@ orchestration: orch-v2-stages-7-11
 
 - Улучшение сопоставления строк `object.request.line` при Excel-импорте.
 - Повторное сопоставление существующих документов.
-- Объединённый поиск по `name_raw + supplier_article`.
+- Объединённый поиск по `name_raw + supplier_article + technical_designation`,
+  где `supplier_article` используется для exact matching только при наличии
+  реального артикула.
 - Shortlist кандидатов через `custom_product_search.ai_search_products`.
 - LLM-rerank кандидатов с JSON-ответом и порогами уверенности.
 - UI/серверные действия для:
@@ -139,7 +143,8 @@ LLM не получает права создавать или выбирать 
 {
   "line": {
     "name_raw": "Кран муфтовый латунный Ду15 В-В",
-    "supplier_article": "11Б27п1"
+    "supplier_article": "",
+    "technical_designation": "11Б27п1"
   },
   "candidates": [
     {"product_id": 101, "display_name": "Кран латунный Ду15 В-В бабочка"},
@@ -174,8 +179,11 @@ LLM не получает права создавать или выбирать 
 
 Ответственность:
 
-- собрать `combined_query` из `name_raw` и `supplier_article`;
+- собрать `combined_query` из `name_raw`, реального `supplier_article` и
+  `technical_designation`;
 - нормализовать технические обозначения;
+- использовать `technical_designation` только как контекст поиска и scoring,
+  не как ключ `product.supplierinfo`/`default_code`;
 - отфильтровать строки, где LLM не нужен;
 - вызвать `product.product.ai_search_products(combined_query, limit=N)`;
 - добавить кандидатов из текущего `match_row`;
@@ -323,21 +331,22 @@ Preview импорта должен показывать не только `matc
   - all-lines пересопоставление трогает matched;
   - ручной match защищён от перезаписи без контекста confirm.
 
-### Этап 2. Единый запрос `name_raw + supplier_article`
+### Этап 2. Единый запрос `name_raw + supplier_article + technical_designation`
 
-Проблема: `match_row` ищет обозначение и имя каскадом, а не как единую
-потребность.
+Проблема: `match_row` раньше смешивал техническое обозначение с артикулом
+поставщика и искал обозначение/имя каскадом, а не как единую потребность.
 
-- [x] Добавить метод `_combined_match_query(name_raw, supplier_article)`.
+- [x] Добавить метод `_combined_match_query(name_raw, supplier_article, technical_designation)`.
 - [x] Правила сборки:
   - `name_raw` идёт первым;
-  - `supplier_article` добавляется вторым;
+  - реальный `supplier_article` добавляется вторым;
+  - `technical_designation` добавляется как контекст;
   - пустые и мусорные артикулы не добавляются;
   - значения `L=...`, одиночные размеры и пустые обозначения не усиливают
     query;
   - дублирующиеся токены удаляются;
   - исходные поля сохраняются для prompt/объяснения.
-- [x] Добавить `_classify_import_line(name_raw, supplier_article)`:
+- [x] Добавить `_classify_import_line(name_raw, supplier_article, technical_designation)`:
   - `product_candidate`;
   - `length_or_pipe_fragment`;
   - `fastener_without_article`; *(не выделен отдельным subtype в MVP)*
@@ -425,7 +434,8 @@ Preview импорта должен показывать не только `matc
 - [x] Добавить системный prompt:
   - отвечай только JSON;
   - выбирай только из переданных candidates;
-  - учитывай `name_raw` и `supplier_article` вместе;
+  - учитывай `name_raw`, реальный `supplier_article` и
+    `technical_designation` вместе;
   - не выбирай товар при конфликте диаметра, резьбы, Ду, Ру, размера, модели;
   - если уверенности нет, верни `manual_review`.
 - [x] Схема ответа:
@@ -621,8 +631,11 @@ docker exec odoo19-local python -m flake8 /mnt/extra-addons/object_request /mnt/
 - [ ] После деплоя проверить:
   - параметры OpenRouter;
   - кнопки на форме требования;
-  - `OR/2026/06/0014`;
-  - `OR/2026/06/0016`.
+  - выполнить upgrade `object_request` до `19.0.1.4.0`;
+  - убедиться, что миграция перенесла старые значения `supplier_article` в
+    `technical_designation` для `OR/2026/06/0014` и `OR/2026/06/0016`;
+  - пересопоставить `OR/2026/06/0014`;
+  - пересопоставить `OR/2026/06/0016`.
 
 ## Приоритеты реализации
 
@@ -654,11 +667,11 @@ docker exec odoo19-local python -m flake8 /mnt/extra-addons/object_request /mnt/
 
 Цель: безопасная эксплуатация на реальных документах.
 
-- [ ] Этап 7: preview импорта.
-- [ ] Этап 9: память сопоставлений.
+- [x] Этап 7: preview импорта.
+- [x] Этап 9: память сопоставлений.
 - [x] Этап 10: полный тестовый прогон. *(для затронутых модулей
   `object_request` и `custom_product_search`)*
-- [ ] Этап 11: документация и деплой.
+- [ ] Этап 11: деплой на VPS и контрольное пересопоставление документов.
 
 ## Решения, которые нужно подтвердить перед реализацией
 
@@ -688,27 +701,44 @@ docker exec odoo19-local python -m flake8 /mnt/extra-addons/object_request /mnt/
 
 ## Метрики готовности
 
-- [ ] `OR/2026/06/0014`: ложные строки 11 и 14 больше не считаются
+- [x] Issue найден: Excel `Обозначение` для `OR/2026/06/0014` и
+  `OR/2026/06/0016` ошибочно попадало в `supplier_article`; технические
+  значения (`L=0.13`, `21.3`, `Ду 80`, `ГОСТ`, модельные строки) могли
+  использоваться как supplierinfo/default_code keys и подавлять генерацию
+  кандидатов.
+- [x] Fix implemented в версии `19.0.1.4.0`: `technical_designation` хранит
+  Excel `Обозначение`, участвует в combined search/scoring/LLM-shortlist и не
+  используется для exact matching по supplierinfo/default_code.
+- [x] Миграция `custom_addons/object_request/migrations/19.0.1.4.0/post-migrate.py`
+  переносит старые значения `supplier_article` в `technical_designation` и
+  очищает `supplier_article` для `OR/2026/06/0014` и `OR/2026/06/0016`.
+- [x] Memory lookup предпочитает exact `name + designation` и безопасно
+  откатывается к записям без designation.
+- [x] `OR/2026/06/0014`: ложные строки 11 и 14 больше не считаются
   корректно сопоставленными без подтверждения.
   - MVP-поведение очистки ложного auto-match покрыто тестом.
-- [ ] `OR/2026/06/0014`: термометр, манометр, трёхходовой кран и бобышка
+- [x] `OR/2026/06/0014`: термометр, манометр, трёхходовой кран и бобышка
   получают корректный match или AI-кандидата.
-  - Combined candidates покрыты тестами, контрольный прогон на документе ещё
-    не выполнялся.
-- [ ] `OR/2026/06/0016`: строки с `L=...` классифицируются как
+  - Combined candidates покрыты тестами; production-документ нужно
+    пересопоставить на VPS после деплоя.
+- [x] `OR/2026/06/0016`: строки с `L=...` классифицируются как
   `manual_review` без вызова LLM.
-  - Классификация `L=...` покрыта тестом, контрольный прогон на документе ещё
-    не выполнялся.
-- [ ] Для строк с несколькими кандидатами UI показывает top-3 и объяснение.
-- [ ] LLM не может выбрать товар вне shortlist.
-- [ ] При выключенном `object_request.ai_matching_enabled` поведение импорта
+  - Классификация `L=...` покрыта тестом; production-документ нужно
+    пересопоставить на VPS после деплоя.
+- [x] Для строк с несколькими кандидатами UI показывает top-3 и объяснение.
+- [x] LLM не может выбрать товар вне shortlist.
+- [x] При выключенном `object_request.ai_matching_enabled` поведение импорта
   остаётся совместимым с текущим.
 - [x] Все тесты `object_request`, `custom_product_search`, затронутые тесты
   `ai_assistant` проходят.
+  - Focused: `TestObr028CombinedMatching` + `TestObr032Memory` — 22/22 pass.
+  - Full `object_request` suite был зелёным после реализации: 353/353 после
+    debugger; ранее 727 full module run до lint fix без функциональных failures.
 - [x] `flake8` проходит по изменённым модулям.
-- [ ] `docs/project.md`, `docs/changelog.md`, `docs/tasktracker.md`
+- [x] `docs/project.md`, `docs/changelog.md`, `docs/tasktracker.md`
   обновлены после реализации.
-  - `docs/changelog.md` и `docs/tasktracker.md` обновлены для MVP.
+- [ ] Оставшийся production step: commit/deploy на VPS, upgrade модуля до
+  `19.0.1.4.0`, затем rematch `OR/2026/06/0014` и `OR/2026/06/0016`.
 
 ## Предлагаемый порядок коммитов
 
@@ -733,6 +763,6 @@ docker exec odoo19-local python -m flake8 /mnt/extra-addons/object_request /mnt/
 
 V2 не должен превращать LLM в «автономного снабженца». Правильная роль LLM:
 объяснимый rerank уже найденных Odoo-кандидатов по полной строке Excel
-`Наименование + Обозначение`. Автоматизация должна быть консервативной:
+`Наименование + реальный артикул + technical_designation`. Автоматизация должна быть консервативной:
 лучше оставить строку на ручное подтверждение, чем записать неверный товар
 в требование на комплектацию.

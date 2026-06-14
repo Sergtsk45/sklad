@@ -1,3 +1,22 @@
+## [2026-06-14] — fix(object_request): разделение артикула и технического обозначения
+
+### Изменено
+- Версия модуля `object_request` повышена до `19.0.1.4.0`.
+- Excel-колонка `Обозначение` больше не считается артикулом поставщика: реальные артикулы остаются в `supplier_article`, а технические обозначения, ГОСТ, Ду/Ру, модели и строки вида `L=...` сохраняются в `technical_designation`.
+- Combined search, scoring и LLM-shortlist используют `technical_designation` как контекст строки потребности, но не применяют его для exact matching через `product.supplierinfo` или `default_code`.
+- Поиск памяти сопоставлений теперь предпочитает точную пару `name + designation` и безопасно откатывается к записям без designation.
+
+### Исправлено
+- Исправлен Excel import/matching для `OR/2026/06/0014` и `OR/2026/06/0016`: технические значения из `Обозначение` (`L=0.13`, `21.3`, `Ду 80`, `ГОСТ`, модельные строки) больше не подавляют генерацию кандидатов и не трактуются как ключи supplierinfo/default_code.
+- Миграция `custom_addons/object_request/migrations/19.0.1.4.0/post-migrate.py` переносит старые значения `supplier_article` в `technical_designation` и очищает `supplier_article` для затронутых документов `OR/2026/06/0014` и `OR/2026/06/0016`.
+
+### Проверено
+- `flake8` чист по изменённым файлам.
+- Focused Odoo tests: `TestObr028CombinedMatching` + `TestObr032Memory` — 22/22 pass.
+- Полный suite `object_request` был зелёным после реализации: 353/353 в test-runner после debugger; ранее 727 full module run без функциональных failures до исправления lint.
+
+---
+
 ## [2026-06-14] — feat(object_request): LLM-Assisted Matching v2 (этапы 7–11)
 
 ### Добавлено

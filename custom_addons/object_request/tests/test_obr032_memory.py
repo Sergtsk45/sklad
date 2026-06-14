@@ -62,6 +62,21 @@ class TestObr032Memory(TransactionCase):
         self.assertTrue(record)
         self.assertEqual(record.product_id, self.product)
 
+    def test_memory_stores_technical_designation_first(self):
+        """Память сохраняет technical_designation перед supplier_article."""
+        _, line = self._create_request_with_line()
+        line.technical_designation = 'L=0.13'
+
+        line.with_user(
+            self.supply_manager
+        ).action_accept_and_remember_ai_candidate()
+
+        Memory = self.env['object.request.matching.memory']
+        parser = self.env['object.request.excel.parser']
+        name_norm = parser.normalize_str('Кран шаровой Ду15')
+        record = Memory.search([('name_normalized', '=', name_norm)])
+        self.assertEqual(record.designation_normalized, 'L=0.13')
+
     def test_memory_used_before_llm_in_build_candidates(self):
         """Если есть запись в памяти, LLM не вызывается."""
         parser = self.env['object.request.excel.parser']
@@ -77,6 +92,81 @@ class TestObr032Memory(TransactionCase):
         self.assertTrue(result['candidates'])
         self.assertEqual(result['candidates'][0]['source'], 'memory')
         self.assertFalse(result['can_call_llm'])
+
+    def test_memory_prefers_exact_designation_match(self):
+        """При совпадении имени память учитывает конкретное обозначение."""
+        parser = self.env['object.request.excel.parser']
+        name_norm = parser.normalize_str('Узел OBR032 общий')
+        product_a = self.env['product.product'].create({
+            'name': 'Память OBR032 обозначение A',
+            'type': 'consu',
+        })
+        product_b = self.env['product.product'].create({
+            'name': 'Память OBR032 обозначение B',
+            'type': 'consu',
+        })
+        Memory = self.env['object.request.matching.memory']
+        Memory.create({
+            'name_normalized': name_norm,
+            'designation_normalized': 'DES-B',
+            'product_id': product_b.id,
+            'confidence': 0.8,
+        })
+        Memory.create({
+            'name_normalized': name_norm,
+            'designation_normalized': 'DES-A',
+            'product_id': product_a.id,
+            'confidence': 1.0,
+        })
+
+        service = self.env['object.request.matching.candidate.service']
+        result = service.build_candidates(
+            'Узел OBR032 общий',
+            '',
+            technical_designation='DES-B',
+        )
+
+        self.assertEqual(result['candidates'][0]['source'], 'memory')
+        self.assertEqual(result['candidates'][0]['product_id'], product_b.id)
+
+    def test_memory_designation_fallback_uses_empty_only(self):
+        """Fallback не берёт запись с другим обозначением."""
+        parser = self.env['object.request.excel.parser']
+        name_norm = parser.normalize_str('Узел OBR032 fallback')
+        wrong_product = self.env['product.product'].create({
+            'name': 'Память OBR032 wrong designation',
+            'type': 'consu',
+        })
+        legacy_product = self.env['product.product'].create({
+            'name': 'Память OBR032 empty designation',
+            'type': 'consu',
+        })
+        Memory = self.env['object.request.matching.memory']
+        Memory.create({
+            'name_normalized': name_norm,
+            'designation_normalized': 'OTHER-DES',
+            'product_id': wrong_product.id,
+            'confidence': 1.0,
+        })
+        Memory.create({
+            'name_normalized': name_norm,
+            'designation_normalized': False,
+            'product_id': legacy_product.id,
+            'confidence': 0.8,
+        })
+
+        service = self.env['object.request.matching.candidate.service']
+        result = service.build_candidates(
+            'Узел OBR032 fallback',
+            '',
+            technical_designation='MISSING-DES',
+        )
+
+        self.assertEqual(result['candidates'][0]['source'], 'memory')
+        self.assertEqual(
+            result['candidates'][0]['product_id'],
+            legacy_product.id,
+        )
 
     def test_memory_not_saved_for_short_names(self):
         """Короткие имена и L=... не сохраняются в память."""

@@ -1,3 +1,18 @@
+## Задача: object_request — разделение артикула и технического обозначения
+- **Статус**: Завершена
+- **Описание**: Исправить регрессию Excel import/matching для `OR/2026/06/0014` и `OR/2026/06/0016`: колонка `Обозначение` содержит технический контекст строки, а не реальный артикул поставщика. Значения из этой колонки больше не должны попадать в exact matching по `product.supplierinfo`/`default_code` и подавлять генерацию кандидатов.
+- **Детальный трекер**: `docs/tasktrecker-comparison-v2.md`.
+- **Шаги выполнения**:
+ - [x] Добавить поле `technical_designation` для Excel-колонки `Обозначение`.
+ - [x] Ограничить `supplier_article` только реальными артикулами поставщика.
+ - [x] Использовать `technical_designation` в combined search, scoring и LLM-shortlist как контекст, без exact matching по supplierinfo/default_code.
+ - [x] Обновить lookup памяти: точная пара `name + designation` с fallback к записям без designation.
+ - [x] Добавить миграцию `19.0.1.4.0/post-migrate.py` для переноса старых значений по `OR/2026/06/0014` и `OR/2026/06/0016`.
+ - [x] Проверить flake8 и focused тесты `TestObr028CombinedMatching` + `TestObr032Memory` (22/22 pass); full `object_request` suite был зелёным после реализации.
+- **Зависимости**:
+ - Модуль `object_request` версии `19.0.1.4.0`.
+ - Требуется redeploy на VPS и повторное пересопоставление `OR/2026/06/0014` / `OR/2026/06/0016` после commit/deploy.
+
 ## Задача: object_request — MVP v2 сопоставления Excel-строк
 - **Статус**: Завершена
 - **Описание**: Реализован первый безопасный срез v2 из `docs/tasktrecker-comparison-v2.md`: пересопоставление всех строк, combined deterministic candidates без LLM, классификация технических фрагментов и синхронизация нормализации поиска товаров.

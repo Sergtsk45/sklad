@@ -413,6 +413,11 @@
                                     <field name="sequence" string="№"/>
                                     <field name="name_raw" string="Наименование (файл)"/>
                                     <field name="product_id" string="Товар"/>
+                                    <field
+                                        name="technical_designation"
+                                        string="Обозначение"
+                                        optional="hide"
+                                    />
                                     <field name="uom_id" string="Ед. изм." optional="show"/>
                                     <field name="qty_requested" string="Запрошено"/>
                                     <field name="qty_to_issue" string="К выдаче"/>
@@ -448,6 +453,11 @@
                                     <!-- Оригинальные данные из файла → поле выбора (Наименование) -->
                                     <field name="name_raw" string="Наименование (файл)" optional="show"/>
                                     <field name="supplier_article" string="Артикул" optional="show"/>
+                                    <field
+                                        name="technical_designation"
+                                        string="Обозначение"
+                                        optional="show"
+                                    />
                                     <field
                                         name="product_id"
                                         string="Товар"

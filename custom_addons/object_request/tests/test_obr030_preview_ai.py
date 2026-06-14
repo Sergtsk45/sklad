@@ -40,7 +40,13 @@ class TestObr030PreviewAI(TransactionCase):
             }
         )
 
-    def _fake_build_candidates(self, name_raw, supplier_article, vendor=None):
+    def _fake_build_candidates(
+        self,
+        name_raw,
+        supplier_article,
+        vendor=None,
+        technical_designation=None,
+    ):
         return {
             "candidates": [
                 {
@@ -56,7 +62,11 @@ class TestObr030PreviewAI(TransactionCase):
         }
 
     def _fake_build_candidates_empty(
-        self, name_raw, supplier_article, vendor=None
+        self,
+        name_raw,
+        supplier_article,
+        vendor=None,
+        technical_designation=None,
     ):
         return {
             "candidates": [],
@@ -118,6 +128,7 @@ class TestObr030PreviewAI(TransactionCase):
         line = self._make_preview_line(self.wizard, "Кабель КВВГ")
         line.write(
             {
+                "technical_designation": "L=0.13",
                 "ai_suggested_product_id": self.product.id,
                 "ai_match_confidence": 0.80,
                 "ai_match_reason": "Тест",
@@ -141,6 +152,7 @@ class TestObr030PreviewAI(TransactionCase):
         )
         self.assertAlmostEqual(line_vals["ai_match_confidence"], 0.80)
         self.assertEqual(line_vals["ai_match_reason"], "Тест")
+        self.assertEqual(line_vals["technical_designation"], "L=0.13")
 
     def test_import_auto_mode_applies_confident_matches(self):
         """В режиме auto уверенные кандидаты применяются автоматически."""

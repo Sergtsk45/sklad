@@ -620,6 +620,17 @@ class ObjectRequest(models.Model):
             subtype_xmlid='mail.mt_note',
         )
 
+    def _line_matching_inputs(self, line, parser):
+        supplier_article = line.supplier_article
+        technical_designation = line.technical_designation
+        if (
+            not technical_designation
+            and parser._is_technical_designation_context(supplier_article)
+        ):
+            technical_designation = supplier_article
+            supplier_article = ""
+        return supplier_article, technical_designation
+
     def _process_ai_candidate_lines(self, lines, config):
         service = self.env[
             "object.request.matching.candidate.service"
@@ -633,11 +644,15 @@ class ObjectRequest(models.Model):
                 line.preferred_vendor_id
                 or parser.match_vendor_by_name(line.supplier_raw)
             )
+            supplier_article, technical_designation = (
+                self._line_matching_inputs(line, parser)
+            )
             try:
                 candidate_result = service.build_candidates(
                     line.name_raw,
-                    line.supplier_article,
+                    supplier_article,
                     vendor=vendor,
+                    technical_designation=technical_designation,
                 )
                 line.write(
                     line._ai_candidate_result_vals(candidate_result)
@@ -730,8 +745,14 @@ class ObjectRequest(models.Model):
                 stats["skipped"] += 1
                 continue
             old_product = line.product_id
+            supplier_article, technical_designation = (
+                self._line_matching_inputs(line, parser)
+            )
             result = parser.match_row(
-                line.supplier_article, line.name_raw, line.supplier_raw
+                supplier_article,
+                line.name_raw,
+                line.supplier_raw,
+                technical_designation=technical_designation,
             )
             vals = self._rematch_line_values(line, result, mode, old_product)
             if vals:

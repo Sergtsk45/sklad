@@ -21,6 +21,7 @@ class ObjectRequestLine(models.Model):
     sequence = fields.Integer(string="№", default=10, index=True)
     source_row_no = fields.Integer(string="Строка Excel", index=True)
     supplier_article = fields.Char(string="Артикул поставщика", index=True)
+    technical_designation = fields.Char(string="Обозначение", index=True)
     name_raw = fields.Char(
         string="Наименование (из файла)", required=True, index=True
     )
@@ -415,7 +416,9 @@ class ObjectRequestLine(models.Model):
             return
         parser = self.env['object.request.excel.parser']
         name_norm = parser.normalize_str(self.name_raw or '')
-        designation_norm = parser.normalize_str(self.supplier_article or '')
+        designation_norm = parser.normalize_str(
+            self.technical_designation or self.supplier_article or ''
+        )
         Memory = self.env['object.request.matching.memory']
         existing = Memory.search([
             ('name_normalized', '=', name_norm),
