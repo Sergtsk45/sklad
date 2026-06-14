@@ -376,13 +376,7 @@ class ObjectRequestLine(models.Model):
             line.write(line._apply_ai_suggestion_vals())
         return {
             "type": "ir.actions.client",
-            "tag": "display_notification",
-            "params": {
-                "title": "AI-кандидат применён",
-                "message": f"Обработано строк: {len(self)}.",
-                "type": "success",
-                "sticky": False,
-            },
+            "tag": "reload",
         }
 
     def action_reject_ai_candidate(self):
@@ -393,13 +387,7 @@ class ObjectRequestLine(models.Model):
             line.write(vals)
         return {
             "type": "ir.actions.client",
-            "tag": "display_notification",
-            "params": {
-                "title": "AI-кандидат отклонён",
-                "message": f"Обработано строк: {len(self)}.",
-                "type": "info",
-                "sticky": False,
-            },
+            "tag": "reload",
         }
 
     def action_accept_and_remember_ai_candidate(self):
