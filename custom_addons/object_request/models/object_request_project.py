@@ -15,7 +15,7 @@ class ObjectRequestProject(models.Model):
         tracking=True,
         copy=False,
         readonly=True,
-        size=5,
+        size=10,
     )
     partner_id = fields.Many2one("res.partner", string="Заказчик")
     address = fields.Char(string="Адрес")

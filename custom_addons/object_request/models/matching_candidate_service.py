@@ -19,17 +19,36 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
             name_raw,
             supplier_article,
         )
+        limits = {
+            "internal": INTERNAL_CANDIDATE_LIMIT,
+            "llm": LLM_CANDIDATE_LIMIT,
+            "preview": PREVIEW_CANDIDATE_LIMIT,
+        }
+        memory_match = self._find_in_memory(name_raw, supplier_article)
+        if memory_match:
+            result = {
+                "line_type": "product_candidate",
+                "combined_query": combined_query,
+                "candidates": [],
+                "can_call_llm": False,
+                "note": "Найдено в памяти сопоставлений.",
+                "limits": limits,
+            }
+            self._add_candidate(
+                result,
+                memory_match.product_id,
+                "memory",
+                memory_match.confidence,
+                "Из памяти сопоставлений.",
+            )
+            return result
         result = {
             "line_type": line_type,
             "combined_query": combined_query,
             "candidates": [],
             "can_call_llm": False,
             "note": "",
-            "limits": {
-                "internal": INTERNAL_CANDIDATE_LIMIT,
-                "llm": LLM_CANDIDATE_LIMIT,
-                "preview": PREVIEW_CANDIDATE_LIMIT,
-            },
+            "limits": limits,
         }
         if line_type in ("manual_only", "length_or_pipe_fragment"):
             result["note"] = "Строка оставлена для ручного сопоставления."
@@ -233,6 +252,20 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
                 score,
                 "Найден нормализованным поиском по полной строке.",
             )
+
+    @api.model
+    def _find_in_memory(self, name_raw, supplier_article):
+        """Найти запись в памяти по нормализованному имени."""
+        parser = self.env['object.request.excel.parser']
+        name_norm = parser.normalize_str(name_raw or '')
+        if not name_norm or len(name_norm) < 3:
+            return self.env['object.request.matching.memory'].browse()
+        Memory = self.env['object.request.matching.memory']
+        return Memory.search(
+            [('name_normalized', '=', name_norm), ('active', '=', True)],
+            limit=1,
+            order='confidence desc, create_date desc',
+        )
 
     @api.model
     def _candidate_token_diff(self, product, query):

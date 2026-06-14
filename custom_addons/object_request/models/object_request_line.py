@@ -94,6 +94,23 @@ class ObjectRequestLine(models.Model):
         default="unknown",
         index=True,
     )
+    ai_candidate_product_ids = fields.Many2many(
+        "product.product",
+        "object_request_line_ai_candidate_rel",
+        "line_id",
+        "product_id",
+        string="AI-кандидаты",
+    )
+    ai_suggested_product_id = fields.Many2one(
+        "product.product",
+        string="AI-кандидат",
+        index=True,
+    )
+    ai_match_confidence = fields.Float(
+        string="AI confidence",
+        digits=(16, 2),
+    )
+    ai_match_reason = fields.Text(string="AI пояснение")
     manual_vendor_required = fields.Boolean(
         string="Требует выбора поставщика",
         default=False,
@@ -304,6 +321,141 @@ class ObjectRequestLine(models.Model):
                 "Запоминание сопоставлений доступно только снабженцу."
             )
 
+    def _ai_candidate_clear_vals(self):
+        return {
+            "ai_candidate_product_ids": [(5, 0, 0)],
+            "ai_suggested_product_id": False,
+            "ai_match_confidence": 0.0,
+            "ai_match_reason": False,
+        }
+
+    def _ai_candidate_result_vals(self, candidate_result):
+        candidates = candidate_result.get("candidates", [])
+        if not candidates:
+            vals = self._ai_candidate_clear_vals()
+            vals["ai_match_reason"] = (
+                candidate_result.get("note") or "Кандидаты не найдены."
+            )
+            return vals
+        best = candidates[0]
+        reason_parts = [
+            best.get("reason") or "Найден локальным shortlist.",
+            "Источник: %s." % best.get("source", "unknown"),
+        ]
+        missing_tokens = best.get("missing_tokens") or []
+        if missing_tokens:
+            reason_parts.append(
+                "Не совпали токены: %s." % ", ".join(missing_tokens[:6])
+            )
+        return {
+            "ai_candidate_product_ids": [
+                (6, 0, [item["product_id"] for item in candidates])
+            ],
+            "ai_suggested_product_id": best["product_id"],
+            "ai_match_confidence": best["local_score"],
+            "ai_match_reason": " ".join(reason_parts),
+        }
+
+    def _apply_ai_suggestion_vals(self):
+        self.ensure_one()
+        product = self.ai_suggested_product_id
+        if not product:
+            raise UserError("Нет AI-кандидата для применения.")
+        return {
+            "product_id": product.id,
+            "uom_id": product.uom_id.id,
+            "matching_required": False,
+            "matching_source": "llm_confirmed",
+            "matching_note": self.ai_match_reason or "AI-кандидат принят.",
+        }
+
+    def action_accept_ai_candidate(self):
+        self._check_supply_manager_matching_action()
+        for line in self:
+            line.write(line._apply_ai_suggestion_vals())
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "AI-кандидат применён",
+                "message": f"Обработано строк: {len(self)}.",
+                "type": "success",
+                "sticky": False,
+            },
+        }
+
+    def action_reject_ai_candidate(self):
+        self._check_supply_manager_matching_action()
+        for line in self:
+            vals = line._ai_candidate_clear_vals()
+            vals["ai_match_reason"] = "AI-кандидат отклонён."
+            line.write(vals)
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "AI-кандидат отклонён",
+                "message": f"Обработано строк: {len(self)}.",
+                "type": "info",
+                "sticky": False,
+            },
+        }
+
+    def action_accept_and_remember_ai_candidate(self):
+        self._check_supply_manager_matching_action()
+        for line in self:
+            line._accept_ai_and_save_memory()
+        return self.action_remember_matching()
+
+    def _accept_ai_and_save_memory(self):
+        """Принять AI-кандидата и сохранить в память сопоставлений."""
+        self.ensure_one()
+        self.write(self._apply_ai_suggestion_vals())
+        if not self._should_save_to_memory():
+            return
+        parser = self.env['object.request.excel.parser']
+        name_norm = parser.normalize_str(self.name_raw or '')
+        designation_norm = parser.normalize_str(self.supplier_article or '')
+        Memory = self.env['object.request.matching.memory']
+        existing = Memory.search([
+            ('name_normalized', '=', name_norm),
+            ('product_id', '=', self.ai_suggested_product_id.id),
+        ], limit=1)
+        if existing:
+            return
+        Memory.create({
+            'name_normalized': name_norm,
+            'designation_normalized': designation_norm or False,
+            'product_id': self.ai_suggested_product_id.id,
+            'confirmed_by': self.env.uid,
+            'source_request_id': self.request_id.id,
+            'confidence': self.ai_match_confidence or 1.0,
+        })
+
+    @staticmethod
+    def _should_save_to_memory_str(name_norm):
+        """
+        Проверить, стоит ли сохранять строку в память.
+
+        Возвращает False для пустых, коротких, L=..., числовых строк.
+        """
+        if not name_norm or len(name_norm) < 3:
+            return False
+        if name_norm.lower().startswith('l='):
+            return False
+        if name_norm.replace('.', '').replace(',', '').isdigit():
+            return False
+        return True
+
+    def _should_save_to_memory(self):
+        """Проверить контекст строки перед сохранением в память."""
+        self.ensure_one()
+        if not self.ai_suggested_product_id:
+            return False
+        parser = self.env['object.request.excel.parser']
+        name_norm = parser.normalize_str(self.name_raw or '')
+        return self._should_save_to_memory_str(name_norm)
+
     def _normalized_supplier_article(self):
         self.ensure_one()
         return self.env["object.request.excel.parser"].normalize_str(
@@ -419,7 +571,7 @@ class ObjectRequestLine(models.Model):
 
     def action_remember_matching(self):
         self._check_supply_manager_matching_action()
-        SupplierInfo = self.env["product.supplierinfo"]
+        SupplierInfo = self.env["product.supplierinfo"].sudo()
         conflict_lines = self.env["object.request.line"].browse()
         prepared = []
         for line in self:
