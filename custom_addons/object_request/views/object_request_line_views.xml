@@ -138,21 +138,21 @@
                     string="Принять AI"
                     type="object"
                     groups="object_request.group_supply_manager"
-                    invisible="not ai_suggested_product_id"
+                    invisible="not ai_suggested_product_id or not matching_required"
                 />
                 <button
                     name="action_reject_ai_candidate"
                     string="Отклонить AI"
                     type="object"
                     groups="object_request.group_supply_manager"
-                    invisible="not ai_suggested_product_id"
+                    invisible="not ai_suggested_product_id or not matching_required"
                 />
                 <button
                     name="action_accept_and_remember_ai_candidate"
                     string="Принять и запомнить"
                     type="object"
                     groups="object_request.group_supply_manager"
-                    invisible="not ai_suggested_product_id or not supplier_article"
+                    invisible="not ai_suggested_product_id or not supplier_article or not matching_required"
                 />
                 <button
                     name="action_remember_matching"
