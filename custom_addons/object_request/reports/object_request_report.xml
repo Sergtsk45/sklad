@@ -87,7 +87,7 @@
                             <thead>
                                 <tr class="bg-light">
                                     <th style="width: 4%; text-align: center;">№</th>
-                                    <th style="width: 8%;">Зона</th>
+                                    <th style="width: 8%;">Захватка</th>
                                     <th style="width: 8%;">Этаж</th>
                                     <th style="width: 8%;">Участок</th>
                                     <th style="width: 30%;">Наименование</th>
@@ -103,9 +103,9 @@
                                         <td style="text-align: center;">
                                             <span t-esc="line_index + 1"/>
                                         </td>
-                                        <td><span t-field="line.zone"/></td>
-                                        <td><span t-field="line.floor"/></td>
-                                        <td><span t-field="line.section"/></td>
+                                        <td><span t-esc="line.capture_id.name or line.zone or ''"/></td>
+                                        <td><span t-esc="line.floor_id.name or line.floor or ''"/></td>
+                                        <td><span t-esc="line.section_id.name or line.section or ''"/></td>
                                         <td>
                                             <t t-if="line.product_id">
                                                 <span t-field="line.product_id"/>

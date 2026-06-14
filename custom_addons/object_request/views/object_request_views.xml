@@ -394,6 +394,12 @@
                                         name="action_lines_reset_split"
                                         string="Сбросить разбивку"
                                         type="object"
+                                        class="btn-secondary me-2"
+                                    />
+                                    <button
+                                        name="action_sort_lines_by_location"
+                                        string="Отсортировать строки"
+                                        type="object"
                                         class="btn-secondary"
                                     />
                                 </div>
@@ -414,6 +420,9 @@
                                     <field name="sequence" string="№"/>
                                     <field name="name_raw" string="Наименование (файл)"/>
                                     <field name="product_id" string="Товар"/>
+                                    <field name="capture_id" string="Захватка" optional="show"/>
+                                    <field name="floor_id" string="Этаж" optional="show"/>
+                                    <field name="section_id" string="Участок" optional="show"/>
                                     <field
                                         name="technical_designation"
                                         string="Обозначение"
@@ -469,10 +478,13 @@
                                     <!-- Ед. изм. из файла → выбранная ед. изм. -->
                                     <field name="uom_raw" string="Ед. изм. (файл)" optional="show"/>
                                     <field name="uom_id" string="Ед. изм." optional="show"/>
-                                    <!-- Зоны -->
-                                    <field name="zone" string="Зона" optional="hide"/>
-                                    <field name="floor" string="Этаж" optional="hide"/>
-                                    <field name="section" string="Участок" optional="hide"/>
+                                    <!-- Размещение -->
+                                    <field name="capture_id" string="Захватка" optional="show"/>
+                                    <field name="floor_id" string="Этаж" optional="show"/>
+                                    <field name="section_id" string="Участок" optional="show"/>
+                                    <field name="zone" string="Захватка (старое)" optional="hide"/>
+                                    <field name="floor" string="Этаж (старое)" optional="hide"/>
+                                    <field name="section" string="Участок (старое)" optional="hide"/>
                                     <!-- Количества -->
                                     <field name="qty_requested" string="Запрошено" optional="show"/>
                                     <field

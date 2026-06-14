@@ -3,6 +3,7 @@ from . import matching_memory  # noqa: F401
 from . import matching_candidate_service  # noqa: F401
 from . import llm_matching_service  # noqa: F401
 from . import object_request_project  # noqa: F401
+from . import object_request_project_location  # noqa: F401
 from . import object_request  # noqa: F401
 from . import object_request_line  # noqa: F401
 from . import object_request_line_stock  # noqa: F401

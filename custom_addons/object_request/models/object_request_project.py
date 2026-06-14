@@ -41,6 +41,21 @@ class ObjectRequestProject(models.Model):
         "project_id",
         string="Требования",
     )
+    capture_ids = fields.One2many(
+        "object.request.project.capture",
+        "project_id",
+        string="Захватки",
+    )
+    floor_ids = fields.One2many(
+        "object.request.project.floor",
+        "project_id",
+        string="Этажи",
+    )
+    section_ids = fields.One2many(
+        "object.request.project.section",
+        "project_id",
+        string="Участки",
+    )
     request_count = fields.Integer(
         compute="_compute_request_count",
         string="Количество требований",

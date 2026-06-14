@@ -36,9 +36,30 @@ class ObjectRequestLine(models.Model):
     supplier_raw = fields.Char(string="Поставщик (из файла)", index=True)
 
     # --- Поля размещения ---
-    zone = fields.Char(string="Зона", index=True)
-    floor = fields.Char(string="Этаж", index=True)
-    section = fields.Char(string="Участок", index=True)
+    capture_id = fields.Many2one(
+        "object.request.project.capture",
+        string="Захватка",
+        domain="[('project_id', '=', request_id.project_id)]",
+        ondelete="restrict",
+        index=True,
+    )
+    floor_id = fields.Many2one(
+        "object.request.project.floor",
+        string="Этаж",
+        domain="[('project_id', '=', request_id.project_id)]",
+        ondelete="restrict",
+        index=True,
+    )
+    section_id = fields.Many2one(
+        "object.request.project.section",
+        string="Участок",
+        domain="[('project_id', '=', request_id.project_id)]",
+        ondelete="restrict",
+        index=True,
+    )
+    zone = fields.Char(string="Захватка (старое)", index=True)
+    floor = fields.Char(string="Этаж (старое)", index=True)
+    section = fields.Char(string="Участок (старое)", index=True)
 
     # --- Поля номенклатуры ---
     product_id = fields.Many2one("product.product", string="Товар", index=True)
@@ -270,6 +291,20 @@ class ObjectRequestLine(models.Model):
                 line.line_state = "ready"
             else:
                 line.line_state = "draft"
+
+    @api.constrains("request_id", "capture_id", "floor_id", "section_id")
+    def _check_location_project(self):
+        for line in self:
+            project = line.request_id.project_id
+            line._check_location_value_project(line.capture_id, project)
+            line._check_location_value_project(line.floor_id, project)
+            line._check_location_value_project(line.section_id, project)
+
+    def _check_location_value_project(self, value, project):
+        if value and value.project_id != project:
+            raise ValidationError(
+                "Значения размещения должны относиться к объекту требования."
+            )
 
     @api.depends("allowed_substitute_ids")
     def _compute_has_substitutes(self):

@@ -102,7 +102,7 @@
                                     <th style="width: 8%; text-align: center;">Ед. изм.</th>
                                     <th style="width: 10%; text-align: right;">Запрошено</th>
                                     <th style="width: 10%; text-align: right;">Выдано</th>
-                                    <th style="width: 8%;">Зона</th>
+                                    <th style="width: 8%;">Захватка</th>
                                     <th style="width: 8%;">Этаж</th>
                                     <th style="width: 8%;">Участок</th>
                                     <th style="width: 14%;">Примечание</th>
@@ -131,17 +131,17 @@
                                         </td>
                                         <td>
                                             <t t-if="req_line">
-                                                <span t-esc="req_line.zone or ''"/>
+                                                <span t-esc="req_line.capture_id.name or req_line.zone or ''"/>
                                             </t>
                                         </td>
                                         <td>
                                             <t t-if="req_line">
-                                                <span t-esc="req_line.floor or ''"/>
+                                                <span t-esc="req_line.floor_id.name or req_line.floor or ''"/>
                                             </t>
                                         </td>
                                         <td>
                                             <t t-if="req_line">
-                                                <span t-esc="req_line.section or ''"/>
+                                                <span t-esc="req_line.section_id.name or req_line.section or ''"/>
                                             </t>
                                         </td>
                                         <td>

@@ -217,6 +217,27 @@ class ObjectRequest(models.Model):
                 )
         return super().create(vals_list)
 
+    def write(self, vals):
+        project_changed = "project_id" in vals
+        res = super().write(vals)
+        if project_changed:
+            self._clear_line_locations_after_project_change()
+        return res
+
+    def _clear_line_locations_after_project_change(self):
+        for rec in self:
+            lines = rec.line_ids.filtered(
+                lambda line: (
+                    line.capture_id or line.floor_id or line.section_id
+                )
+            )
+            if lines:
+                lines.write({
+                    "capture_id": False,
+                    "floor_id": False,
+                    "section_id": False,
+                })
+
     # --- Computed methods ---
     def _compute_line_count(self):
         for rec in self:
@@ -490,6 +511,50 @@ class ObjectRequest(models.Model):
         self.ensure_one()
         self.line_ids.action_reset_split()
         return self._line_mass_action_notification("Сбросить разбивку")
+
+    def action_sort_lines_by_location(self):
+        self.ensure_one()
+        self._check_supply_manager_request_action()
+        for sequence, line in enumerate(self._sorted_lines_by_location(), 1):
+            line.sequence = sequence * 10
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Строки отсортированы",
+                "message": f"Обработано строк: {len(self.line_ids)}.",
+                "type": "success",
+                "sticky": False,
+                "next": {"type": "ir.actions.client", "tag": "reload"},
+            },
+        }
+
+    def _sorted_lines_by_location(self):
+        self.ensure_one()
+        return self.line_ids.sorted(key=self._line_location_sort_key)
+
+    def _line_location_sort_key(self, line):
+        return (
+            self._location_sort_key(line.capture_id),
+            self._location_sort_key(line.floor_id),
+            self._location_sort_key(line.section_id),
+            (line.preferred_vendor_id.display_name or "").casefold(),
+            line.sequence,
+            line.id,
+        )
+
+    def _location_sort_key(self, value):
+        if not value:
+            return (1, 0, "")
+        return (0, value.sequence or 0, (value.name or "").casefold())
+
+    def _check_supply_manager_request_action(self):
+        if not self.env.user.has_group("object_request.group_supply_manager"):
+            if self.env.user.has_group("base.group_system"):
+                return
+            raise UserError(
+                "Сортировка строк доступна только снабженцу."
+            )
 
     def _line_mass_action_notification(self, title):
         return {
