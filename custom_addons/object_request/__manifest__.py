@@ -52,6 +52,11 @@
     "demo": [
         "data/demo_data.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "object_request/static/src/scss/object_request.scss",
+        ],
+    },
     "installable": True,
     "application": True,
     "auto_install": False,

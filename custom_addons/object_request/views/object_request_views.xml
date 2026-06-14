@@ -400,6 +400,7 @@
                             </group>
                             <field
                                 name="line_ids"
+                                class="o_object_request_line_ids"
                                 readonly="1"
                                 groups="object_request.group_foreman"
                             >
@@ -438,6 +439,7 @@
                             </field>
                             <field
                                 name="line_ids"
+                                class="o_object_request_line_ids"
                                 readonly="state in ('closed', 'cancelled')"
                                 context="{'default_request_id': id}"
                                 groups="object_request.group_supply_manager,object_request.group_storekeeper"

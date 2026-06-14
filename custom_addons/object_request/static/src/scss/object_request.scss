@@ -1,0 +1,14 @@
+/**
+ * @file: object_request.scss
+ * @description: Backend UI refinements for object request forms.
+ * @dependencies: object_request form views, Odoo web backend assets.
+ * @created: 2026-06-14
+ */
+
+.o_form_view .o_object_request_line_ids {
+    .o_list_renderer,
+    .o_list_table {
+        max-height: calc(100vh - 320px);
+        overflow: auto;
+    }
+}
