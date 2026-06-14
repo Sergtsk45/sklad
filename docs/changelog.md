@@ -1,3 +1,26 @@
+## [2026-06-14] — feat(object_request): MVP v2 сопоставления Excel-строк
+
+### Добавлено
+- Кнопка «Пересопоставить все строки» в требовании: пересматривает auto-matched строки, пишет старый товар в `matching_note`, очищает старые автоматические совпадения, если новый алгоритм не нашёл товар.
+- Защита ручного выбора товара при all-lines rematch через консервативную эвристику по `matching_note`.
+- Combined query `name_raw + supplier_article` в `object.request.excel.parser`, классификация строк `length_or_pipe_fragment`, `empty_article`, `ambiguous`, `product_candidate`.
+- Shortlist кандидатов через `product.product.ai_search_products()` без LLM; несколько/спорные кандидаты не применяются автоматически.
+- Сервис `object.request.matching.candidate.service`: собирает кандидатов из `supplierinfo`, `default_code`, `name_score`, combined search, дедуплицирует по товару и отдаёт лимиты 15/8/3 для internal/LLM/preview.
+- Поле `matching_source` на строке требования: импорт, rematch, combined auto и ручной выбор теперь различаются явно; защита all-lines rematch больше не зависит от текста `matching_note`.
+- Маркер `matching_note = "import auto match"` для новых строк, сопоставленных при импорте.
+- Зависимость `object_request` от `custom_product_search`.
+
+### Изменено
+- Нормализация `custom_product_search` синхронизирована с техническими обозначениями импорта: `Ду/Ру/DN/PN`, `х/x/×`, десятичная запятая/точка.
+- `docs/deploy.md` дополнен явной инструкцией recompute stored `x_search_name` после изменения нормализации и backfill старых `matching_source`.
+
+### Проверено
+- `docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request /mnt/extra-addons/custom_product_search`
+- `docker exec odoo19-local odoo --test-enable --test-tags /object_request -u object_request -d odoo19_local --stop-after-init --http-port=8071` — 307 post-tests, 0 failed, 0 errors.
+- `docker exec odoo19-local odoo --test-enable --test-tags /custom_product_search -u custom_product_search -d odoo19_local --stop-after-init --http-port=8071` — 6 post-tests, 0 failed, 0 errors.
+
+---
+
 ## [2026-06-13] — feat(object_request): улучшенное автосопоставление Excel-импорта
 
 ### Добавлено
@@ -9,6 +32,13 @@
 ### Проверено
 - `docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request`
 - `docker exec odoo19-local odoo -u object_request -d odoo19_local --test-enable --test-tags /object_request --stop-after-init --http-port=8071` — 291 post-tests, 0 failed, 0 errors.
+
+---
+
+## [2026-06-12] — docs: TD-007 — превью изображения товара в колонке «Товар»
+
+### Добавлено
+- `docs/technical-debt.md` — **TD-007**: превью `image_128` при наведении на пункт выпадающего списка номенклатуры в колонке «Товар» таблицы строк требования на комплектацию (`object_request`).
 
 ---
 

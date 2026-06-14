@@ -138,6 +138,114 @@ class TestObr009MassActions(TransactionCase):
         result = self.request.action_rematch_lines()
         self.assertEqual(result["params"]["type"], "info")
 
+    def test_rematch_lines_does_not_touch_already_matched(self):
+        """Обычное пересопоставление не трогает уже сопоставленные строки."""
+        wrong_product = self.env["product.product"].create(
+            {
+                "name": "Ошибочный товар OBR009",
+                "type": "consu",
+            }
+        )
+        line = self.env["object.request.line"].create(
+            {
+                "request_id": self.request.id,
+                "name_raw": "Цемент М500",
+                "supplier_article": "ART-001",
+                "supplier_raw": "Поставщик ООО Тест",
+                "qty_requested": 1.0,
+                "product_id": wrong_product.id,
+                "matching_required": False,
+                "matching_note": "import auto match",
+                "matching_source": "import_auto",
+            }
+        )
+
+        self.request.action_rematch_lines()
+
+        self.assertEqual(line.product_id, wrong_product)
+
+    def test_rematch_all_lines_updates_auto_matched_line(self):
+        """Пересопоставление всех строк пересматривает auto matched строки."""
+        wrong_product = self.env["product.product"].create(
+            {
+                "name": "Ошибочный товар OBR009 all",
+                "type": "consu",
+            }
+        )
+        line = self.env["object.request.line"].create(
+            {
+                "request_id": self.request.id,
+                "name_raw": "Цемент М500",
+                "supplier_article": "ART-001",
+                "supplier_raw": "Поставщик ООО Тест",
+                "qty_requested": 1.0,
+                "product_id": wrong_product.id,
+                "matching_required": False,
+                "matching_note": "import auto match",
+                "matching_source": "import_auto",
+            }
+        )
+
+        self.request.action_rematch_all_lines()
+
+        self.assertEqual(line.product_id, self.product)
+        self.assertEqual(line.matching_source, "rematch_auto")
+        self.assertIn("old product:", line.matching_note)
+
+    def test_rematch_all_lines_clears_false_auto_match(self):
+        """All-lines очищает старый auto match, если товар не найден."""
+        wrong_product = self.env["product.product"].create(
+            {
+                "name": "Переход 108-57 ст.",
+                "type": "consu",
+            }
+        )
+        line = self.env["object.request.line"].create(
+            {
+                "request_id": self.request.id,
+                "name_raw": "Переход",
+                "supplier_article": "80x50 ГОСТ 17378-2001",
+                "qty_requested": 1.0,
+                "product_id": wrong_product.id,
+                "matching_required": False,
+                "matching_note": "import auto match",
+                "matching_source": "import_auto",
+            }
+        )
+
+        self.request.action_rematch_all_lines()
+
+        self.assertFalse(line.product_id)
+        self.assertTrue(line.matching_required)
+        self.assertEqual(line.matching_source, "unknown")
+        self.assertIn("old product:", line.matching_note)
+
+    def test_rematch_all_lines_keeps_manual_match(self):
+        """All-lines не перезаписывает строку, похожую на ручной выбор."""
+        manual_product = self.env["product.product"].create(
+            {
+                "name": "Ручной товар OBR009",
+                "type": "consu",
+            }
+        )
+        line = self.env["object.request.line"].create(
+            {
+                "request_id": self.request.id,
+                "name_raw": "Цемент М500",
+                "supplier_article": "ART-001",
+                "supplier_raw": "Поставщик ООО Тест",
+                "qty_requested": 1.0,
+                "product_id": manual_product.id,
+                "matching_required": False,
+                "matching_note": "выбрано снабженцем",
+                "matching_source": "manual",
+            }
+        )
+
+        self.request.action_rematch_all_lines()
+
+        self.assertEqual(line.product_id, manual_product)
+
     # ----- Wizard массового назначения: Назначить поставщика -----
 
     def test_assign_vendor_wizard(self):
@@ -205,6 +313,7 @@ class TestObr009MassActions(TransactionCase):
         wizard.action_assign()
         self.assertEqual(self.line_unmatched.product_id, self.product)
         self.assertFalse(self.line_unmatched.matching_required)
+        self.assertEqual(self.line_unmatched.matching_source, "manual")
 
     def test_assign_product_wizard_sets_uom(self):
         """Wizard при назначении товара выставляет uom_id."""

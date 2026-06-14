@@ -23,6 +23,7 @@
         "stock",
         "purchase",
         "contacts",
+        "custom_product_search",
     ],
     "data": [
         "data/ir_sequence_data.xml",

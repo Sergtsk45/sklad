@@ -233,6 +233,63 @@ docker compose exec odoo odoo -c /etc/odoo/odoo.conf -d ${POSTGRES_DB} -u module
 docker compose restart odoo
 ```
 
+### Recompute `x_search_name` после изменения нормализации
+
+Если менялась логика `custom_product_search` для `x_search_name`, после
+upgrade модуля явно пересчитайте stored-поля для шаблонов и вариантов:
+
+```bash
+docker compose exec odoo odoo shell -c /etc/odoo/odoo.conf -d ${POSTGRES_DB}
+```
+
+В shell:
+
+```python
+templates = env["product.template"].search([])
+products = env["product.product"].search([])
+templates._compute_x_search_name()
+products._compute_x_search_name()
+env.cr.commit()
+```
+
+После этого проверьте несколько технических запросов через поиск товаров или
+`ai_search_products`: `Ду 80`, `ДУ-80`, `М20х1,5`, `11б27пм(М)2`.
+
+### Backfill `matching_source` после добавления поля
+
+После деплоя версии, где у `object.request.line` появилось поле
+`matching_source`, старые строки получат значение `unknown`. Чтобы
+`action_rematch_all_lines` не перезаписал ручные сопоставления, выполните
+одноразовую классификацию старых строк:
+
+```bash
+docker compose exec odoo odoo shell -c /etc/odoo/odoo.conf -d ${POSTGRES_DB}
+```
+
+В shell:
+
+```python
+Line = env["object.request.line"]
+import_auto = Line.search([
+    ("matching_source", "=", "unknown"),
+    ("product_id", "!=", False),
+    ("matching_note", "ilike", "import"),
+])
+rematch_auto = Line.search([
+    ("matching_source", "=", "unknown"),
+    ("product_id", "!=", False),
+    ("matching_note", "ilike", "пересопоставлено"),
+])
+manual = Line.search([
+    ("matching_source", "=", "unknown"),
+    ("product_id", "!=", False),
+]) - import_auto - rematch_auto
+import_auto.write({"matching_source": "import_auto"})
+rematch_auto.write({"matching_source": "rematch_auto"})
+manual.write({"matching_source": "manual"})
+env.cr.commit()
+```
+
 ### Посмотреть логи
 
 ```bash
@@ -296,4 +353,3 @@ docker run --rm -v odoo-web-data:/data -v "$PWD":/backup alpine \
 ### Изменения в модуле не применились
 
 Обычно нужен `-u your_module --stop-after-init`, затем рестарт Odoo.
-

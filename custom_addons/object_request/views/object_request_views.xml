@@ -189,12 +189,22 @@
                     />
                     <button
                         name="action_rematch_lines"
-                        string="Пересопоставить"
+                        string="Пересопоставить несопоставленные"
                         type="object"
                         class="btn-secondary"
                         invisible="state in ('closed', 'cancelled')"
                         groups="object_request.group_supply_manager"
                         title="Повторно запустить автосопоставление по несопоставленным строкам"
+                    />
+                    <button
+                        name="action_rematch_all_lines"
+                        string="Пересопоставить все строки"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="state in ('closed', 'cancelled')"
+                        groups="object_request.group_supply_manager"
+                        confirm="Пересмотреть все строки документа? Автоматические старые совпадения могут быть изменены или очищены."
+                        title="Повторно запустить автосопоставление по всем строкам документа"
                     />
                     <button
                         name="action_open_issue_wizard"

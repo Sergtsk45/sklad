@@ -80,6 +80,20 @@ class ObjectRequestLine(models.Model):
         index=True,
     )
     matching_note = fields.Text(string="Примечание по сопоставлению")
+    matching_source = fields.Selection(
+        [
+            ("unknown", "Неизвестно"),
+            ("import_auto", "Авто при импорте"),
+            ("rematch_auto", "Авто при пересопоставлении"),
+            ("combined_auto", "Combined search"),
+            ("manual", "Ручной выбор"),
+            ("llm_auto", "AI авто"),
+            ("llm_confirmed", "AI подтверждено"),
+        ],
+        string="Источник сопоставления",
+        default="unknown",
+        index=True,
+    )
     manual_vendor_required = fields.Boolean(
         string="Требует выбора поставщика",
         default=False,
@@ -275,6 +289,7 @@ class ObjectRequestLine(models.Model):
             self.preferred_vendor_id = self.product_id.seller_ids[0].partner_id
         if self.matching_required:
             self.matching_required = False
+        self.matching_source = "manual"
 
     @api.onchange("preferred_vendor_id")
     def _onchange_preferred_vendor_id(self):
@@ -309,6 +324,12 @@ class ObjectRequestLine(models.Model):
         if supplier_info.product_tmpl_id:
             return supplier_info.product_tmpl_id.product_variant_ids[:1]
         return self.env["product.product"].browse()
+
+    def _is_manual_match_protected(self):
+        self.ensure_one()
+        if not self.product_id or self.matching_required:
+            return False
+        return self.matching_source == "manual"
 
     def _validate_remember_matching_values(self):
         self.ensure_one()

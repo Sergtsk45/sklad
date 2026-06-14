@@ -198,6 +198,31 @@ class TestImportWizardOBR007(TransactionCase):
         self.assertEqual(len(line), 1)
         self.assertTrue(line.matching_required)
         self.assertFalse(line.product_id)
+        self.assertEqual(line.matching_source, "unknown")
+
+    def test_import_matched_line_sets_import_auto_source(self):
+        product = self.env["product.product"].create(
+            {
+                "name": "OBR007 source product",
+                "default_code": "OBR007-SOURCE-001",
+                "type": "consu",
+            }
+        )
+        wizard = self._make_wizard(
+            [
+                ["№", "Артикул", "Наименование", "Ед.", "Кол-во"],
+                [1, "OBR007-SOURCE-001", "OBR007 source product", "шт", 1],
+            ]
+        )
+
+        wizard.action_validate()
+        result = wizard.action_import()
+
+        request = self.env["object.request"].browse(result["res_id"])
+        line = request.line_ids
+        self.assertEqual(line.product_id, product)
+        self.assertFalse(line.matching_required)
+        self.assertEqual(line.matching_source, "import_auto")
 
     def test_import_line_fields_copied_correctly(self):
         """Все поля строки (qty, price, comment) корректно переносятся."""

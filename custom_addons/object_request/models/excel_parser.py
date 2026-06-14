@@ -62,6 +62,8 @@ _NAME_SEARCH_LIMIT = 200
 _NAME_MIN_SCORE = 0.7
 _NAME_MIN_MARGIN = 0.15
 _ARTICLE_TOKEN_WEIGHT = 0.5
+_LINE_LENGTH_RE = re.compile(r"^l\s*=\s*\d+(?:[.,]\d+)?$", re.IGNORECASE)
+_LINE_SINGLE_SIZE_RE = re.compile(r"^\d+(?:[.,]\d+)?$")
 
 
 class ExcelParser(models.AbstractModel):
@@ -88,7 +90,7 @@ class ExcelParser(models.AbstractModel):
             return ""
         value = str(s).replace("\xa0", " ").strip().lower()
         value = value.replace("ё", "е")
-        value = re.sub(r"\b(ду|ру)\s*-?\s*(\d+)\b", r"\1\2", value)
+        value = re.sub(r"\b(ду|ру|dn|pn)\s*-?\s*(\d+)\b", r"\1\2", value)
         value = re.sub(r"(?<=\d)\s*[xх×]\s*(?=\d)", "x", value)
         value = re.sub(r"(?<=\d),(?=\d)", ".", value)
         value = re.sub(r"\s+", " ", value)
@@ -250,6 +252,46 @@ class ExcelParser(models.AbstractModel):
         return weighted_tokens
 
     @api.model
+    def _is_noise_article(self, supplier_article):
+        article = self._normalize_for_match(supplier_article)
+        if not article or article in _SKIP_ARTICLES:
+            return True
+        return bool(
+            _LINE_LENGTH_RE.match(article)
+            or _LINE_SINGLE_SIZE_RE.match(article)
+        )
+
+    @api.model
+    def _classify_import_line(self, name_raw, supplier_article):
+        name_tokens = self._tokenize(name_raw)
+        article = self._normalize_for_match(supplier_article)
+        if not name_tokens and not article:
+            return "manual_only"
+        if (
+            _LINE_LENGTH_RE.match(article)
+            or _LINE_SINGLE_SIZE_RE.match(article)
+        ):
+            return "length_or_pipe_fragment"
+        if not article or article in _SKIP_ARTICLES:
+            return "empty_article"
+        if len(name_tokens) <= 1 and len(self._tokenize(article)) <= 1:
+            return "ambiguous"
+        return "product_candidate"
+
+    @api.model
+    def _combined_match_query(self, name_raw, supplier_article):
+        tokens = []
+        seen = set()
+        for source in (name_raw, supplier_article):
+            if source == supplier_article and self._is_noise_article(source):
+                continue
+            for token in self._tokenize(source):
+                if token not in seen:
+                    tokens.append(token)
+                    seen.add(token)
+        return " ".join(tokens)
+
+    @api.model
     def _score_name_candidate(self, weighted_tokens, product):
         product_name = self._normalize_for_match(product.name)
         total_weight = sum(weight for _token, weight in weighted_tokens)
@@ -314,6 +356,39 @@ class ExcelParser(models.AbstractModel):
             if score:
                 scored_candidates.append((score, product))
         return self._select_best_name_candidate(scored_candidates)
+
+    @api.model
+    def _combined_candidate_products(self, name_raw, supplier_article):
+        service = self.env["object.request.matching.candidate.service"]
+        result = service.build_candidates(
+            name_raw,
+            supplier_article,
+        )
+        return (
+            service.candidate_products(result),
+            result["line_type"],
+            result["combined_query"],
+        )
+
+    @api.model
+    def _auto_match_combined_candidate(
+        self,
+        candidates,
+        name_raw,
+        supplier_article,
+    ):
+        service = self.env["object.request.matching.candidate.service"]
+        result = service.build_candidates(
+            name_raw,
+            supplier_article,
+        )
+        candidate_ids = set(candidates.ids)
+        result["candidates"] = [
+            item
+            for item in result["candidates"]
+            if item["product_id"] in candidate_ids
+        ]
+        return service.auto_match_candidate(result)
 
     @api.model
     def match_product_by_article(self, supplier_article, vendor=None):
@@ -383,6 +458,7 @@ class ExcelParser(models.AbstractModel):
             supplier_article,
             vendor=vendor,
         )
+        match_source = "deterministic_auto" if product else ""
         candidate_products = self.env["product.product"].browse()
         if not product:
             candidate_products = self._supplierinfo_candidate_products(
@@ -394,10 +470,34 @@ class ExcelParser(models.AbstractModel):
                 name_raw,
                 supplier_article=supplier_article,
             )
+            if product:
+                match_source = "deterministic_auto"
+        service = self.env["object.request.matching.candidate.service"]
+        candidate_result = service.build_candidates(
+            name_raw,
+            supplier_article,
+            vendor=vendor,
+        )
+        line_type = candidate_result["line_type"]
+        combined_query = ""
+        if not product:
+            combined_query = candidate_result["combined_query"]
+            combined_candidates = service.candidate_products(candidate_result)
+            product = service.auto_match_candidate(candidate_result)
+            if product:
+                match_source = "combined_auto"
+            if not product and combined_candidates:
+                candidate_products |= combined_candidates
         return {
             "product": product,
             "vendor": vendor,
             "matching_required": not bool(product),
             "manual_vendor_required": not bool(vendor),
             "candidate_products": candidate_products if not product else False,
+            "candidate_details": (
+                candidate_result["candidates"] if not product else []
+            ),
+            "line_type": line_type,
+            "combined_query": combined_query,
+            "match_source": match_source,
         }

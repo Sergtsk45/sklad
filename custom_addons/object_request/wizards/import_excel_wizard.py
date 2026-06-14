@@ -549,6 +549,18 @@ class ObjectRequestImportWizard(models.TransientModel):
                     or False,
                     "matching_required": preview.matching_required,
                     "manual_vendor_required": preview.manual_vendor_required,
+                    "matching_note": (
+                        "import auto match"
+                        if preview.matched_product_id
+                        and not preview.matching_required
+                        else False
+                    ),
+                    "matching_source": (
+                        "import_auto"
+                        if preview.matched_product_id
+                        and not preview.matching_required
+                        else "unknown"
+                    ),
                 }
             )
 

@@ -502,7 +502,6 @@ class ObjectRequest(models.Model):
     def action_rematch_lines(self):
         """Повторно запустить автосопоставление по несопоставленным строкам."""
         self.ensure_one()
-        parser = self.env["object.request.excel.parser"]
         unmatched = self.line_ids.filtered(
             lambda ln: ln.matching_required or not ln.product_id
         )
@@ -517,42 +516,117 @@ class ObjectRequest(models.Model):
                     "sticky": False,
                 },
             }
-        newly_matched = 0
-        for line in unmatched:
-            result = parser.match_row(
-                line.supplier_article, line.name_raw, line.supplier_raw
-            )
-            vals = {
-                "matching_required": result["matching_required"],
-                "manual_vendor_required": result["manual_vendor_required"],
-            }
-            if result["product"]:
-                vals["product_id"] = result["product"].id
-                vals["uom_id"] = result["product"].uom_id.id
-                if not line.preferred_vendor_id:
-                    if result["vendor"]:
-                        vals["preferred_vendor_id"] = result["vendor"].id
-                    elif result["product"].seller_ids:
-                        vals["preferred_vendor_id"] = (
-                            result["product"].seller_ids[0].partner_id.id
-                        )
-                newly_matched += 1
-            elif result["vendor"] and not line.preferred_vendor_id:
-                vals["preferred_vendor_id"] = result["vendor"].id
-            line.write(vals)
+        stats = self._rematch_request_lines(unmatched, mode="unmatched")
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
             "params": {
                 "title": "Пересопоставление завершено",
                 "message": (
-                    f"Обработано {len(unmatched)} строк. "
-                    f"Сопоставлено новых: {newly_matched}."
+                    f"Обработано {stats['processed']} строк. "
+                    f"Сопоставлено новых: {stats['matched']}."
                 ),
-                "type": "success" if newly_matched else "warning",
+                "type": "success" if stats["matched"] else "warning",
                 "sticky": False,
             },
         }
+
+    def action_rematch_all_lines(self):
+        """Повторно запустить автосопоставление по всем строкам документа."""
+        self.ensure_one()
+        lines = self.line_ids
+        if not lines:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Пересопоставление",
+                    "message": "В документе нет строк.",
+                    "type": "info",
+                    "sticky": False,
+                },
+            }
+        stats = self._rematch_request_lines(lines, mode="all")
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Пересопоставление всех строк завершено",
+                "message": (
+                    f"Обработано {stats['processed']} строк. "
+                    f"Сопоставлено: {stats['matched']}. "
+                    f"Очищено старых совпадений: {stats['cleared']}. "
+                    f"Пропущено ручных: {stats['skipped']}."
+                ),
+                "type": "success" if stats["matched"] else "warning",
+                "sticky": False,
+            },
+        }
+
+    def _rematch_request_lines(self, lines, mode="unmatched"):
+        parser = self.env["object.request.excel.parser"]
+        stats = {"processed": 0, "matched": 0, "cleared": 0, "skipped": 0}
+        for line in lines:
+            if mode == "all" and line._is_manual_match_protected():
+                stats["skipped"] += 1
+                continue
+            old_product = line.product_id
+            result = parser.match_row(
+                line.supplier_article, line.name_raw, line.supplier_raw
+            )
+            vals = self._rematch_line_values(line, result, mode, old_product)
+            if vals:
+                line.write(vals)
+            stats["processed"] += 1
+            if result["product"]:
+                stats["matched"] += 1
+            elif mode == "all" and old_product and not vals.get("product_id"):
+                stats["cleared"] += 1
+        return stats
+
+    def _rematch_line_values(self, line, result, mode, old_product):
+        vals = {
+            "matching_required": result["matching_required"],
+            "manual_vendor_required": result["manual_vendor_required"],
+        }
+        if result["product"]:
+            vals["product_id"] = result["product"].id
+            vals["uom_id"] = result["product"].uom_id.id
+            vals["matching_source"] = (
+                "combined_auto"
+                if result.get("match_source") == "combined_auto"
+                else "rematch_auto"
+            )
+            if not line.preferred_vendor_id:
+                if result["vendor"]:
+                    vals["preferred_vendor_id"] = result["vendor"].id
+                elif result["product"].seller_ids:
+                    vals["preferred_vendor_id"] = (
+                        result["product"].seller_ids[0].partner_id.id
+                    )
+        else:
+            if mode == "all" and old_product:
+                vals["product_id"] = False
+                vals["uom_id"] = False
+                vals["matching_source"] = "unknown"
+            if result["vendor"] and not line.preferred_vendor_id:
+                vals["preferred_vendor_id"] = result["vendor"].id
+        note_parts = [
+            "Пересопоставлено all-lines action"
+            if mode == "all"
+            else "Пересопоставлено unmatched action"
+        ]
+        if old_product:
+            note_parts.append(f"old product: {old_product.display_name}")
+        if (
+            result.get("line_type")
+            and result["line_type"] != "product_candidate"
+        ):
+            note_parts.append(f"line type: {result['line_type']}")
+        if result.get("combined_query"):
+            note_parts.append(f"combined query: {result['combined_query']}")
+        vals["matching_note"] = "; ".join(note_parts)
+        return vals
 
     def _notify_if_all_lines_supplied(self):
         """Уведомить, если все активные строки полностью обеспечены."""
