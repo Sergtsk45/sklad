@@ -102,6 +102,17 @@ class ObjectRequest(models.Model):
             "по выбранным складам."
         ),
     )
+    stock_distribution_filter_warehouse_id = fields.Many2one(
+        "stock.warehouse",
+        string="Фильтр по складу",
+        help="Показать в таблице только выбранный склад. Пусто — все склады выдачи.",
+        domain="[('company_id', '=', company_id), ('active', '=', True)]",
+    )
+    stock_distribution_refresh_key = fields.Integer(
+        copy=False,
+        default=0,
+        help="Служебное поле для обновления таблицы распределения в форме.",
+    )
 
     # --- Поля импорта ---
     source_file_name = fields.Char(string="Имя файла")
@@ -244,20 +255,48 @@ class ObjectRequest(models.Model):
     def write(self, vals):
         project_changed = "project_id" in vals
         warehouses_changed = "issue_warehouse_ids" in vals
+        distribution_changed = any(
+            key in vals
+            for key in (
+                "issue_warehouse_ids",
+                "stock_distribution_show_zero",
+                "stock_distribution_filter_warehouse_id",
+            )
+        )
         previous_warehouses = {}
         if warehouses_changed:
             previous_warehouses = {
                 rec.id: rec.issue_warehouse_ids for rec in self
             }
+        if distribution_changed and len(self) == 1:
+            vals = dict(vals)
+            vals["stock_distribution_refresh_key"] = (
+                (self.stock_distribution_refresh_key or 0) + 1
+            )
         res = super().write(vals)
         if warehouses_changed:
             for rec in self:
                 rec._sync_after_issue_warehouses_change(
                     previous_warehouses.get(rec.id, self.env["stock.warehouse"])
                 )
+                rec._clear_invalid_stock_distribution_filter()
         if project_changed:
             self._clear_line_locations_after_project_change()
+        if distribution_changed:
+            self.invalidate_recordset(["line_stock_ids"])
         return res
+
+    @api.onchange("issue_warehouse_ids")
+    def _onchange_issue_warehouse_ids(self):
+        self._clear_invalid_stock_distribution_filter()
+
+    def _clear_invalid_stock_distribution_filter(self):
+        for rec in self:
+            filter_wh = rec.stock_distribution_filter_warehouse_id
+            if not filter_wh:
+                continue
+            if filter_wh not in rec._get_issue_warehouses():
+                rec.stock_distribution_filter_warehouse_id = False
 
     def _clear_line_locations_after_project_change(self):
         for rec in self:
@@ -286,6 +325,8 @@ class ObjectRequest(models.Model):
         "line_ids.stock_ids.warehouse_id",
         "issue_warehouse_ids",
         "stock_distribution_show_zero",
+        "stock_distribution_filter_warehouse_id",
+        "stock_distribution_refresh_key",
     )
     def _compute_line_stock_ids(self):
         for rec in self:
@@ -294,6 +335,11 @@ class ObjectRequest(models.Model):
             if allowed_warehouses:
                 stocks = stocks.filtered(
                     lambda stock: stock.warehouse_id in allowed_warehouses
+                )
+            filter_wh = rec.stock_distribution_filter_warehouse_id
+            if filter_wh:
+                stocks = stocks.filtered(
+                    lambda stock: stock.warehouse_id == filter_wh
                 )
             if not rec.stock_distribution_show_zero:
                 stocks = stocks.filtered(
@@ -338,9 +384,6 @@ class ObjectRequest(models.Model):
             planned_stocks.with_context(**stock_context).write(
                 {"qty_to_issue": 0.0}
             )
-        stale_stocks = excluded_stocks.filtered(lambda stock: not stock.picking_id)
-        if stale_stocks:
-            stale_stocks.unlink()
 
     @api.depends("line_ids.matching_required", "line_ids.product_id")
     def _compute_matching_state(self):

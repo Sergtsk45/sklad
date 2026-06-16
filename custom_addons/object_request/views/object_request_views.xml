@@ -600,19 +600,30 @@
                                 string="Настройки выдачи"
                                 groups="object_request.group_supply_manager"
                             >
+                                <group>
+                                    <field
+                                        name="stock_distribution_filter_warehouse_id"
+                                        readonly="state in ('closed', 'cancelled')"
+                                        options="{'no_create': True, 'no_open': True}"
+                                    />
+                                    <field
+                                        name="stock_distribution_show_zero"
+                                        widget="boolean_toggle"
+                                        readonly="state in ('closed', 'cancelled')"
+                                    />
+                                </group>
                                 <field
                                     name="issue_warehouse_ids"
-                                    widget="many2many_tags"
+                                    widget="many2many_checkboxes"
                                     readonly="state in ('closed', 'cancelled')"
                                     options="{'no_create': True}"
                                 />
-                                <field
-                                    name="stock_distribution_show_zero"
-                                    widget="boolean_toggle"
-                                    readonly="state in ('closed', 'cancelled')"
-                                />
                             </group>
                             <field name="company_id" invisible="1"/>
+                            <field
+                                name="stock_distribution_refresh_key"
+                                invisible="1"
+                            />
                             <field
                                 name="line_stock_ids"
                                 readonly="state in ('closed', 'cancelled')"

@@ -169,6 +169,34 @@ class TestObr034IssueWarehouseFilter(TransactionCase):
         stock_wh1 = self.line.stock_ids.filtered(
             lambda stock: stock.warehouse_id == self.warehouse1
         )
-        self.assertFalse(stock_wh1)
+        self.assertTrue(stock_wh1)
+        self.assertAlmostEqual(stock_wh1.qty_to_issue, 0.0)
+        self.assertAlmostEqual(stock_wh1.qty_on_hand, 10.0)
         self.assertAlmostEqual(self.line.qty_to_issue, 0.0)
         self.assertAlmostEqual(self.line.qty_to_buy, 10.0)
+
+    def test_warehouse_filter_shows_only_selected_warehouse_rows(self):
+        """Фильтр по складу не требует переключателя нулевых остатков."""
+        self._put_stock(self.warehouse1, 5.0)
+        self._put_stock(self.warehouse2, 7.0)
+        self.request.action_check_stock()
+        self.assertEqual(len(self.request.line_stock_ids), 2)
+
+        self.request.write(
+            {
+                "stock_distribution_filter_warehouse_id": self.warehouse1.id,
+            }
+        )
+        visible = self.request.line_stock_ids
+        self.assertEqual(len(visible), 1)
+        self.assertEqual(visible.warehouse_id, self.warehouse1)
+        self.assertAlmostEqual(visible.qty_on_hand, 5.0)
+
+    def test_refresh_key_bumps_on_distribution_filter_change(self):
+        """Изменение фильтров увеличивает ключ обновления таблицы."""
+        key_before = self.request.stock_distribution_refresh_key
+        self.request.write({"stock_distribution_show_zero": True})
+        self.assertGreater(
+            self.request.stock_distribution_refresh_key,
+            key_before,
+        )
