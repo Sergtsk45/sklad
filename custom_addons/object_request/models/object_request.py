@@ -82,6 +82,26 @@ class ObjectRequest(models.Model):
         compute="_compute_line_stock_ids",
         string="Распределение по складам",
     )
+    issue_warehouse_ids = fields.Many2many(
+        "stock.warehouse",
+        "object_request_issue_warehouse_rel",
+        "request_id",
+        "warehouse_id",
+        string="Склады выдачи",
+        help=(
+            "Склады, с которых разрешено планировать и оформлять выдачу "
+            "по этому требованию."
+        ),
+        domain="[('company_id', '=', company_id), ('active', '=', True)]",
+    )
+    stock_distribution_show_zero = fields.Boolean(
+        string="Показать нулевые остатки",
+        default=False,
+        help=(
+            "Показывать строки распределения с нулевым остатком "
+            "по выбранным складам."
+        ),
+    )
 
     # --- Поля импорта ---
     source_file_name = fields.Char(string="Имя файла")
@@ -215,11 +235,26 @@ class ObjectRequest(models.Model):
                     .next_by_code("object.request.sequence")
                     or "New"
                 )
-        return super().create(vals_list)
+        records = super().create(vals_list)
+        for rec in records:
+            if not rec.issue_warehouse_ids:
+                rec.issue_warehouse_ids = rec._get_all_company_warehouses()
+        return records
 
     def write(self, vals):
         project_changed = "project_id" in vals
+        warehouses_changed = "issue_warehouse_ids" in vals
+        previous_warehouses = {}
+        if warehouses_changed:
+            previous_warehouses = {
+                rec.id: rec.issue_warehouse_ids for rec in self
+            }
         res = super().write(vals)
+        if warehouses_changed:
+            for rec in self:
+                rec._sync_after_issue_warehouses_change(
+                    previous_warehouses.get(rec.id, self.env["stock.warehouse"])
+                )
         if project_changed:
             self._clear_line_locations_after_project_change()
         return res
@@ -243,10 +278,69 @@ class ObjectRequest(models.Model):
         for rec in self:
             rec.line_count = len(rec.line_ids)
 
-    @api.depends("line_ids.stock_ids")
+    @api.depends(
+        "line_ids.stock_ids",
+        "line_ids.stock_ids.qty_on_hand",
+        "line_ids.stock_ids.qty_to_issue",
+        "line_ids.stock_ids.qty_reserved",
+        "line_ids.stock_ids.warehouse_id",
+        "issue_warehouse_ids",
+        "stock_distribution_show_zero",
+    )
     def _compute_line_stock_ids(self):
         for rec in self:
-            rec.line_stock_ids = rec.line_ids.mapped("stock_ids")
+            stocks = rec.line_ids.mapped("stock_ids")
+            allowed_warehouses = rec._get_issue_warehouses()
+            if allowed_warehouses:
+                stocks = stocks.filtered(
+                    lambda stock: stock.warehouse_id in allowed_warehouses
+                )
+            if not rec.stock_distribution_show_zero:
+                stocks = stocks.filtered(
+                    lambda stock: (
+                        stock.qty_on_hand > 0
+                        or stock.qty_to_issue > 0
+                        or stock.qty_reserved > 0
+                    )
+                )
+            rec.line_stock_ids = stocks
+
+    def _get_all_company_warehouses(self):
+        self.ensure_one()
+        return self.env["stock.warehouse"].search(
+            [
+                ("company_id", "=", self.company_id.id),
+                ("active", "=", True),
+            ]
+        )
+
+    def _get_issue_warehouses(self):
+        self.ensure_one()
+        if self.issue_warehouse_ids:
+            return self.issue_warehouse_ids
+        return self._get_all_company_warehouses()
+
+    def _sync_after_issue_warehouses_change(self, previous_warehouses):
+        """Сбросить план выдачи со складов, исключённых из списка."""
+        self.ensure_one()
+        allowed = self._get_issue_warehouses()
+        removed = previous_warehouses - allowed
+        if not removed:
+            return
+        stock_context = {"auto_stock_distribution": True}
+        excluded_stocks = self.line_ids.mapped("stock_ids").filtered(
+            lambda stock: stock.warehouse_id in removed
+        )
+        planned_stocks = excluded_stocks.filtered(
+            lambda stock: stock.qty_to_issue > 0 and not stock.picking_id
+        )
+        if planned_stocks:
+            planned_stocks.with_context(**stock_context).write(
+                {"qty_to_issue": 0.0}
+            )
+        stale_stocks = excluded_stocks.filtered(lambda stock: not stock.picking_id)
+        if stale_stocks:
+            stale_stocks.unlink()
 
     @api.depends("line_ids.matching_required", "line_ids.product_id")
     def _compute_matching_state(self):
@@ -892,12 +986,12 @@ class ObjectRequest(models.Model):
     def action_check_stock(self):
         """Проверить остатки по всем активным складам компании."""
         self.ensure_one()
-        warehouses = self.env["stock.warehouse"].search(
-            [
-                ("company_id", "=", self.company_id.id),
-                ("active", "=", True),
-            ]
-        )
+        warehouses = self._get_issue_warehouses()
+        if not warehouses:
+            raise UserError(
+                "Не выбран ни один склад выдачи. "
+                "Укажите склады на вкладке «Размещение по складам»."
+            )
         lines = self.line_ids.filtered(
             lambda ln: ln.product_id and not ln.is_cancelled
         )
@@ -1066,76 +1160,8 @@ class ObjectRequest(models.Model):
                     "default_manual_line_count": len(manual_lines),
                 },
             }
-        stock_context = {"auto_stock_distribution": True}
         for line in lines:
-            requested = max(line.qty_requested - line.qty_issued, 0.0)
-            project_warehouse = line.request_id.project_id.warehouse_id
-            project_stock = line.stock_ids.filtered(
-                lambda stock: (
-                    stock.warehouse_id == project_warehouse
-                    and stock.qty_on_hand > 0
-                )
-            )[:1]
-            other_stock_ids = (line.stock_ids - project_stock).sorted(
-                key=lambda stock: stock.qty_on_hand,
-                reverse=True,
-            )
-            stock_ids = project_stock | other_stock_ids
-            stock_ids.with_context(**stock_context).write(
-                {
-                    "qty_to_issue": 0.0,
-                }
-            )
-            remaining = requested
-            single_stock = next(
-                (
-                    stock
-                    for stock in stock_ids
-                    if (
-                        stock.qty_on_hand >= requested
-                        and stock.id not in project_stock.ids
-                    )
-                ),
-                False,
-            )
-            if single_stock and not project_stock:
-                single_stock.with_context(**stock_context).write(
-                    {
-                        "qty_to_issue": requested,
-                    }
-                )
-                remaining = 0.0
-            else:
-                for stock in stock_ids:
-                    if remaining <= 0:
-                        break
-                    qty = min(max(stock.qty_on_hand, 0.0), remaining)
-                    if qty <= 0:
-                        continue
-                    stock.with_context(**stock_context).write(
-                        {
-                            "qty_to_issue": qty,
-                        }
-                    )
-                    remaining -= qty
-            qty_to_issue = sum(line.stock_ids.mapped("qty_to_issue"))
-            qty_to_buy = requested - qty_to_issue
-            if qty_to_issue > 0 and qty_to_buy > 0:
-                mode = "mixed"
-            elif qty_to_issue > 0:
-                mode = "issue"
-            elif qty_to_buy > 0:
-                mode = "buy"
-            else:
-                mode = "manual"
-            line.write(
-                {
-                    "qty_to_issue": qty_to_issue,
-                    "qty_to_buy": qty_to_buy,
-                    "procurement_mode": mode,
-                    "manual_plan_override": False,
-                }
-            )
+            line._apply_auto_issue_distribution(reset_manual_override=True)
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
@@ -1150,8 +1176,13 @@ class ObjectRequest(models.Model):
     def action_open_issue_wizard(self):
         """Открыть wizard создания выдачи со склада."""
         self.ensure_one()
+        allowed_warehouses = self._get_issue_warehouses()
         stock_to_issue = self.line_ids.mapped("stock_ids").filtered(
-            lambda stock: stock.qty_to_issue > 0 and stock.line_id.product_id
+            lambda stock: (
+                stock.qty_to_issue > 0
+                and stock.line_id.product_id
+                and stock.warehouse_id in allowed_warehouses
+            )
         )
         if not stock_to_issue:
             raise UserError(

@@ -596,6 +596,23 @@
                             name="page_stock_distribution"
                             groups="object_request.group_supply_manager,object_request.group_storekeeper"
                         >
+                            <group
+                                string="Настройки выдачи"
+                                groups="object_request.group_supply_manager"
+                            >
+                                <field
+                                    name="issue_warehouse_ids"
+                                    widget="many2many_tags"
+                                    readonly="state in ('closed', 'cancelled')"
+                                    options="{'no_create': True}"
+                                />
+                                <field
+                                    name="stock_distribution_show_zero"
+                                    widget="boolean_toggle"
+                                    readonly="state in ('closed', 'cancelled')"
+                                />
+                            </group>
+                            <field name="company_id" invisible="1"/>
                             <field
                                 name="line_stock_ids"
                                 readonly="state in ('closed', 'cancelled')"

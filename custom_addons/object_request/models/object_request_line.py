@@ -727,77 +727,84 @@ class ObjectRequestLine(models.Model):
 
     def action_issue_max(self):
         self._check_supply_manager_mass_action()
-        stock_context = {"auto_stock_distribution": True}
         for line in self.filtered(
             lambda ln: ln.product_id and not ln.is_cancelled
         ):
-            requested = max(line.qty_requested - line.qty_issued, 0.0)
-            project_warehouse = line.request_id.project_id.warehouse_id
-            project_stock = line.stock_ids.filtered(
-                lambda stock: (
-                    stock.warehouse_id == project_warehouse
-                    and stock.qty_on_hand > 0
-                )
-            )[:1]
-            other_stock_ids = (line.stock_ids - project_stock).sorted(
-                key=lambda stock: stock.qty_on_hand,
-                reverse=True,
-            )
-            stock_ids = project_stock | other_stock_ids
-            stock_ids.with_context(**stock_context).write(
-                {
-                    "qty_to_issue": 0.0,
-                }
-            )
-            remaining = requested
-            single_stock = next(
-                (
-                    stock
-                    for stock in stock_ids
-                    if (
-                        stock.qty_on_hand >= requested
-                        and stock.id not in project_stock.ids
-                    )
-                ),
-                False,
-            )
-            if single_stock and not project_stock:
-                single_stock.with_context(**stock_context).write(
-                    {
-                        "qty_to_issue": requested,
-                    }
-                )
-                remaining = 0.0
-            else:
-                for stock in stock_ids:
-                    if remaining <= 0:
-                        break
-                    qty = min(max(stock.qty_on_hand, 0.0), remaining)
-                    if qty <= 0:
-                        continue
-                    stock.with_context(**stock_context).write(
-                        {"qty_to_issue": qty}
-                    )
-                    remaining -= qty
-            qty_to_issue = sum(line.stock_ids.mapped("qty_to_issue"))
-            qty_to_buy = max(requested - qty_to_issue, 0.0)
-            if qty_to_issue > 0 and qty_to_buy > 0:
-                mode = "mixed"
-            elif qty_to_issue > 0:
-                mode = "issue"
-            elif qty_to_buy > 0:
-                mode = "buy"
-            else:
-                mode = "manual"
-            line.write(
-                {
-                    "qty_to_issue": qty_to_issue,
-                    "qty_to_buy": qty_to_buy,
-                    "procurement_mode": mode,
-                    "manual_plan_override": False,
-                }
-            )
+            line._apply_auto_issue_distribution(reset_manual_override=True)
         return True
+
+    def _apply_auto_issue_distribution(self, reset_manual_override=False):
+        """Распределить qty_to_issue по разрешённым складам требования."""
+        self.ensure_one()
+        stock_context = {"auto_stock_distribution": True}
+        allowed_warehouse_ids = set(
+            self.request_id._get_issue_warehouses().ids
+        )
+        requested = max(self.qty_requested - self.qty_issued, 0.0)
+        project_warehouse = self.request_id.project_id.warehouse_id
+        allowed_stocks = self.stock_ids.filtered(
+            lambda stock: stock.warehouse_id.id in allowed_warehouse_ids
+        )
+        project_stock = allowed_stocks.filtered(
+            lambda stock: (
+                stock.warehouse_id == project_warehouse
+                and stock.qty_on_hand > 0
+            )
+        )[:1]
+        other_stock_ids = (allowed_stocks - project_stock).sorted(
+            key=lambda stock: stock.qty_on_hand,
+            reverse=True,
+        )
+        stock_ids = project_stock | other_stock_ids
+        self.stock_ids.with_context(**stock_context).write(
+            {"qty_to_issue": 0.0}
+        )
+        remaining = requested
+        single_stock = next(
+            (
+                stock
+                for stock in stock_ids
+                if (
+                    stock.qty_on_hand >= requested
+                    and stock.id not in project_stock.ids
+                )
+            ),
+            False,
+        )
+        if single_stock and not project_stock:
+            single_stock.with_context(**stock_context).write(
+                {"qty_to_issue": requested}
+            )
+            remaining = 0.0
+        else:
+            for stock in stock_ids:
+                if remaining <= 0:
+                    break
+                qty = min(max(stock.qty_on_hand, 0.0), remaining)
+                if qty <= 0:
+                    continue
+                stock.with_context(**stock_context).write(
+                    {"qty_to_issue": qty}
+                )
+                remaining -= qty
+        qty_to_issue = sum(self.stock_ids.mapped("qty_to_issue"))
+        qty_to_buy = max(requested - qty_to_issue, 0.0)
+        if qty_to_issue > 0 and qty_to_buy > 0:
+            mode = "mixed"
+        elif qty_to_issue > 0:
+            mode = "issue"
+        elif qty_to_buy > 0:
+            mode = "buy"
+        else:
+            mode = "manual"
+        line_vals = {
+            "qty_to_issue": qty_to_issue,
+            "qty_to_buy": qty_to_buy,
+            "procurement_mode": mode,
+        }
+        if reset_manual_override:
+            line_vals["manual_plan_override"] = False
+        self.write(line_vals)
 
     def action_reset_split(self):
         self._check_supply_manager_mass_action()

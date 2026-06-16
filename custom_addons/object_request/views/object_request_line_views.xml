@@ -179,6 +179,44 @@
         <field name="search_view_id" ref="view_object_request_line_search"/>
     </record>
 
+    <record id="view_object_request_line_stock_search" model="ir.ui.view">
+        <field name="name">object.request.line.stock.search</field>
+        <field name="model">object.request.line.stock</field>
+        <field name="arch" type="xml">
+            <search string="Распределение по складам">
+                <field name="line_id"/>
+                <field name="warehouse_id"/>
+                <filter
+                    name="filter_has_stock"
+                    string="Есть остаток"
+                    domain="[('qty_on_hand', '>', 0)]"
+                />
+                <filter
+                    name="filter_to_issue"
+                    string="К выдаче"
+                    domain="[('qty_to_issue', '>', 0)]"
+                />
+                <filter
+                    name="filter_hide_zero"
+                    string="Скрыть нулевые"
+                    domain="['|', ('qty_on_hand', '>', 0), ('qty_to_issue', '>', 0)]"
+                />
+                <group>
+                    <filter
+                        name="group_warehouse"
+                        string="Склад"
+                        context="{'group_by': 'warehouse_id'}"
+                    />
+                    <filter
+                        name="group_line"
+                        string="Строка"
+                        context="{'group_by': 'line_id'}"
+                    />
+                </group>
+            </search>
+        </field>
+    </record>
+
     <record id="view_object_request_line_stock_list" model="ir.ui.view">
         <field name="name">object.request.line.stock.list</field>
         <field name="model">object.request.line.stock</field>
@@ -199,6 +237,8 @@
         <field name="name">Распределение по складам</field>
         <field name="res_model">object.request.line.stock</field>
         <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_object_request_line_stock_search"/>
+        <field name="context">{'search_default_filter_hide_zero': 1}</field>
     </record>
 
     <record id="server_action_object_request_line_buy_all" model="ir.actions.server">

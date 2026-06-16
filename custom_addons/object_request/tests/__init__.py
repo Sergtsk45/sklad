@@ -25,4 +25,5 @@ from . import test_obr029_llm_matching  # noqa: F401
 from . import test_obr031_ai_security  # noqa: F401
 from . import test_obr032_memory  # noqa: F401
 from . import test_obr033_project_locations  # noqa: F401
+from . import test_obr034_issue_warehouse_filter  # noqa: F401
 from . import test_obr030_preview_ai  # noqa: F401
