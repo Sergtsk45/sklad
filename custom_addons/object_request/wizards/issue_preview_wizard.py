@@ -113,10 +113,21 @@ class ObjectRequestIssuePreviewWizard(models.TransientModel):
 
     def action_create_issues(self):
         self.ensure_one()
+        self.request_id._check_supply_manager_processing_action()
+        self.request_id._check_processing_state()
+        self.request_id._check_issue_plan_stock_limits()
         self._relink_issue_preview_stock_lines()
         groups = self.group_ids.filtered("included")
         if not groups:
             raise UserError("Нет выбранных складов для создания выдач.")
+        linked = groups.mapped("stock_line_ids").filtered(
+            lambda stock: stock.picking_id or stock.move_id
+        )
+        if linked:
+            raise UserError(
+                "По части строк уже создана выдача. "
+                "Повторное создание выдачи по тем же строкам запрещено."
+            )
         pickings = self.env["stock.picking"]
         for group in groups:
             pickings |= group._create_picking()

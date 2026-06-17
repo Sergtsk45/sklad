@@ -63,6 +63,7 @@ class StockPickingInherit(models.Model):
 
     def _sync_qty_issued_to_request_lines(self):
         """Обновить qty_issued строк требования по done-количеству."""
+        current_picking_ids = set(self.ids)
         for picking in self:
             stock_lines = self.env["object.request.line.stock"].search(
                 [
@@ -77,12 +78,23 @@ class StockPickingInherit(models.Model):
                 ]
             )
             for line in request_lines:
-                issue_moves = (
-                    line.stock_ids.mapped("move_id").filtered(
-                        lambda move: move.exists()
+                issue_moves = line.stock_ids.mapped("move_id").filtered(
+                    lambda move: move.exists()
+                    and move.picking_id.is_object_request_issue
+                    and (
+                        move.picking_id.id in current_picking_ids
+                        or move.state == "done"
                     )
-                    or line.issue_move_id
                 )
+                if (
+                    not issue_moves
+                    and line.issue_move_id
+                    and (
+                        line.issue_move_id.picking_id.id in current_picking_ids
+                        or line.issue_move_id.state == "done"
+                    )
+                ):
+                    issue_moves = line.issue_move_id
                 if not issue_moves:
                     continue
                 qty_done = sum(issue_moves.mapped("quantity"))

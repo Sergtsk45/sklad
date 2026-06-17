@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import io
 import re
 
@@ -269,6 +270,12 @@ class ObjectRequestImportWizard(models.TransientModel):
             return None, "Файл пустой."
 
         return rows, None
+
+    def _file_checksum(self):
+        self.ensure_one()
+        if not self.file:
+            return False
+        return hashlib.sha256(base64.b64decode(self.file)).hexdigest()
 
     @classmethod
     def _normalize_header(cls, value):
@@ -710,6 +717,20 @@ class ObjectRequestImportWizard(models.TransientModel):
             )
         if not self.preview_line_ids:
             raise UserError("Нет строк для импорта. Загрузите файл повторно.")
+        checksum = self._file_checksum()
+        if checksum:
+            duplicate = self.env["object.request"].search(
+                [
+                    ("source_file_checksum", "=", checksum),
+                    ("company_id", "=", self.company_id.id),
+                ],
+                limit=1,
+            )
+            if duplicate:
+                raise UserError(
+                    "Этот файл уже импортирован в требование "
+                    f"{duplicate.display_name}."
+                )
 
         request = self.env["object.request"].create(
             {
@@ -719,6 +740,7 @@ class ObjectRequestImportWizard(models.TransientModel):
                 "priority": self.priority,
                 "comment": self.comment,
                 "source_file_name": self.file_name or "",
+                "source_file_checksum": checksum or False,
                 "imported_at": fields.Datetime.now(),
                 "imported_by_user_id": self.env.uid,
             }

@@ -86,6 +86,8 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
 
     def action_create_purchase(self):
         self.ensure_one()
+        self.request_id._check_supply_manager_processing_action()
+        self.request_id._check_purchase_preparation_state()
         lines = self.line_ids.filtered(
             lambda ln: ln.qty_to_buy > 0 and ln.product_id
         )
@@ -102,6 +104,14 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                 f"Нет строк с указанным поставщиком "
                 f"({len(lines_no_vendor)} строк не имеют поставщика). "
                 "Назначьте поставщиков перед созданием закупки."
+            )
+        already_linked = lines_with_vendor.filtered(
+            lambda ln: ln.purchase_order_id or ln.purchase_order_line_id
+        )
+        if already_linked:
+            raise UserError(
+                "По части строк уже создана закупка. "
+                "Повторное создание PO по тем же строкам запрещено."
             )
 
         created_orders = self._create_orders_by_vendor(lines_with_vendor)

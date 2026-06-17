@@ -94,6 +94,11 @@ class ObjectRequest(models.Model):
         ),
         domain="[('company_id', '=', company_id), ('active', '=', True)]",
     )
+    issue_warehouse_selection_manual = fields.Boolean(
+        string="Склады выдачи выбраны вручную",
+        default=False,
+        copy=False,
+    )
     stock_distribution_show_zero = fields.Boolean(
         string="Показать нулевые остатки",
         default=False,
@@ -249,12 +254,25 @@ class ObjectRequest(models.Model):
         records = super().create(vals_list)
         for rec in records:
             if not rec.issue_warehouse_ids:
-                rec.issue_warehouse_ids = rec._get_all_company_warehouses()
+                rec.with_context(auto_issue_warehouse_selection=True).sudo().write(
+                    {
+                        "issue_warehouse_ids": [
+                            (6, 0, rec._get_all_company_warehouses().ids)
+                        ]
+                    }
+                )
         return records
 
     def write(self, vals):
         project_changed = "project_id" in vals
         warehouses_changed = "issue_warehouse_ids" in vals
+        if (
+            warehouses_changed
+            and not self.env.context.get("auto_issue_warehouse_selection")
+            and "issue_warehouse_selection_manual" not in vals
+        ):
+            vals = dict(vals)
+            vals["issue_warehouse_selection_manual"] = True
         distribution_changed = any(
             key in vals
             for key in (
@@ -353,7 +371,7 @@ class ObjectRequest(models.Model):
 
     def _get_all_company_warehouses(self):
         self.ensure_one()
-        return self.env["stock.warehouse"].search(
+        return self.env["stock.warehouse"].sudo().search(
             [
                 ("company_id", "=", self.company_id.id),
                 ("active", "=", True),
@@ -384,6 +402,42 @@ class ObjectRequest(models.Model):
             planned_stocks.with_context(**stock_context).write(
                 {"qty_to_issue": 0.0}
             )
+
+    def _check_issue_plan_stock_limits(self):
+        """Проверить, что план выдачи не превышает остаток по товару/складу."""
+        for rec in self:
+            planned_by_key = {}
+            available_by_key = {}
+            label_by_key = {}
+            stock_ids = rec.line_ids.mapped("stock_ids").filtered(
+                lambda stock: stock.line_id.product_id and stock.warehouse_id
+            )
+            for stock in stock_ids:
+                key = (stock.line_id.product_id.id, stock.warehouse_id.id)
+                available_by_key[key] = max(
+                    available_by_key.get(key, 0.0),
+                    stock.qty_on_hand,
+                )
+                label_by_key[key] = (
+                    stock.line_id.product_id.display_name,
+                    stock.warehouse_id.display_name,
+                )
+                if stock.line_id.is_cancelled or stock.qty_to_issue <= 0:
+                    continue
+                planned_by_key[key] = (
+                    planned_by_key.get(key, 0.0) + stock.qty_to_issue
+                )
+            for key, planned in planned_by_key.items():
+                available = max(available_by_key.get(key, 0.0), 0.0)
+                if planned > available + 0.00001:
+                    if available <= 0.00001:
+                        continue
+                    product_name, warehouse_name = label_by_key[key]
+                    raise ValidationError(
+                        "План выдачи превышает доступный остаток: "
+                        f"{product_name}, склад {warehouse_name}. "
+                        f"Запланировано {planned:g}, доступно {available:g}."
+                    )
 
     @api.depends("line_ids.matching_required", "line_ids.product_id")
     def _compute_matching_state(self):
@@ -477,12 +531,20 @@ class ObjectRequest(models.Model):
     def action_approve(self):
         """Согласовать документ."""
         self.ensure_one()
+        if self.approval_state != "pending" or self.state != "draft":
+            raise UserError("Согласовать можно только черновик на согласовании.")
+        if (
+            self.approver_user_id
+            and self.approver_user_id != self.env.user
+            and not self.env.user.has_group("base.group_system")
+        ):
+            raise UserError("Согласовать может только назначенный согласующий.")
         self.write({"approval_state": "approved"})
+        foreman_partner = self.foreman_user_id.sudo().partner_id
+        buyer_partner = self.buyer_user_id.sudo().partner_id
         partner_ids = [
             p.id
-            for p in (
-                self.foreman_user_id.partner_id | self.buyer_user_id.partner_id
-            )
+            for p in (foreman_partner | buyer_partner)
             if p
         ]
         self.message_post(
@@ -498,12 +560,20 @@ class ObjectRequest(models.Model):
     def action_reject(self):
         """Отклонить документ."""
         self.ensure_one()
+        if self.approval_state != "pending" or self.state != "draft":
+            raise UserError("Отклонить можно только черновик на согласовании.")
+        if (
+            self.approver_user_id
+            and self.approver_user_id != self.env.user
+            and not self.env.user.has_group("base.group_system")
+        ):
+            raise UserError("Отклонить может только назначенный согласующий.")
         self.write({"approval_state": "rejected"})
+        foreman_partner = self.foreman_user_id.sudo().partner_id
+        buyer_partner = self.buyer_user_id.sudo().partner_id
         partner_ids = [
             p.id
-            for p in (
-                self.foreman_user_id.partner_id | self.buyer_user_id.partner_id
-            )
+            for p in (foreman_partner | buyer_partner)
             if p
         ]
         self.message_post(
@@ -691,6 +761,24 @@ class ObjectRequest(models.Model):
                 return
             raise UserError(
                 "Сортировка строк доступна только снабженцу."
+            )
+
+    def _check_supply_manager_processing_action(self):
+        if not self.env.user.has_group("object_request.group_supply_manager"):
+            if self.env.user.has_group("base.group_system"):
+                return
+            raise UserError("Обработка требования доступна только снабженцу.")
+
+    def _check_processing_state(self):
+        self.ensure_one()
+        if self.state != "in_progress":
+            raise UserError("Действие доступно только для требования в работе.")
+
+    def _check_purchase_preparation_state(self):
+        self.ensure_one()
+        if self.state not in ("draft", "in_progress"):
+            raise UserError(
+                "Подготовить закупку можно только в черновике или в работе."
             )
 
     def _line_mass_action_notification(self, title):
@@ -1029,6 +1117,17 @@ class ObjectRequest(models.Model):
     def action_check_stock(self):
         """Проверить остатки по всем активным складам компании."""
         self.ensure_one()
+        self._check_supply_manager_processing_action()
+        if self.state not in ("draft", "in_progress"):
+            raise UserError(
+                "Рассчитать наличие можно только в черновике или в работе."
+            )
+        if not self.issue_warehouse_selection_manual:
+            all_warehouses = self._get_all_company_warehouses()
+            if set(self.issue_warehouse_ids.ids) != set(all_warehouses.ids):
+                self.with_context(auto_issue_warehouse_selection=True).sudo().write(
+                    {"issue_warehouse_ids": [(6, 0, all_warehouses.ids)]}
+                )
         warehouses = self._get_issue_warehouses()
         if not warehouses:
             raise UserError(
@@ -1075,13 +1174,6 @@ class ObjectRequest(models.Model):
                             **vals,
                         }
                     )
-            stale_stock_ids = line.stock_ids.filtered(
-                lambda stock: stock.warehouse_id not in warehouses
-            )
-            if stale_stock_ids:
-                stale_stock_ids.with_context(
-                    auto_stock_distribution=True
-                ).unlink()
         lines_with_stock = lines.filtered(lambda ln: ln.stock_qty_on_hand > 0)
         if lines_with_stock:
             return {
@@ -1177,6 +1269,11 @@ class ObjectRequest(models.Model):
     def action_auto_split(self):
         """Авто-разбивка по складам с минимизацией числа складов."""
         self.ensure_one()
+        self._check_supply_manager_processing_action()
+        if self.state not in ("draft", "in_progress"):
+            raise UserError(
+                "Авто-разбивка доступна только в черновике или в работе."
+            )
         lines = self.line_ids.filtered(
             lambda ln: ln.product_id and not ln.is_cancelled
         )
@@ -1219,12 +1316,27 @@ class ObjectRequest(models.Model):
     def action_open_issue_wizard(self):
         """Открыть wizard создания выдачи со склада."""
         self.ensure_one()
+        self._check_supply_manager_processing_action()
+        self._check_processing_state()
         allowed_warehouses = self._get_issue_warehouses()
+        already_linked = self.line_ids.mapped("stock_ids").filtered(
+            lambda stock: stock.qty_to_issue > 0
+            and stock.line_id.product_id
+            and stock.warehouse_id in allowed_warehouses
+            and (stock.picking_id or stock.move_id)
+        )
+        if already_linked:
+            raise UserError(
+                "По части строк уже создана выдача. "
+                "Сбросьте или отмените существующую выдачу перед повторным созданием."
+            )
         stock_to_issue = self.line_ids.mapped("stock_ids").filtered(
             lambda stock: (
                 stock.qty_to_issue > 0
                 and stock.line_id.product_id
                 and stock.warehouse_id in allowed_warehouses
+                and not stock.picking_id
+                and not stock.move_id
             )
         )
         if not stock_to_issue:
@@ -1232,6 +1344,7 @@ class ObjectRequest(models.Model):
                 "Нет строк с заполненным количеством к выдаче. "
                 "Заполните распределение по складам."
             )
+        self._check_issue_plan_stock_limits()
         return {
             "type": "ir.actions.act_window",
             "name": "Создать выдачи",
@@ -1246,6 +1359,8 @@ class ObjectRequest(models.Model):
     def action_open_purchase_wizard(self):
         """Открыть wizard создания черновиков закупки."""
         self.ensure_one()
+        self._check_supply_manager_processing_action()
+        self._check_purchase_preparation_state()
         lines_to_buy = self.line_ids.filtered(
             lambda ln: ln.qty_to_buy > 0 and ln.product_id
         )
@@ -1253,6 +1368,14 @@ class ObjectRequest(models.Model):
             raise UserError(
                 "Нет строк с товаром и количеством к закупке. "
                 "Заполните поле «К закупке» в строках документа."
+            )
+        already_linked = lines_to_buy.filtered(
+            lambda ln: ln.purchase_order_id or ln.purchase_order_line_id
+        )
+        if already_linked:
+            raise UserError(
+                "По части строк уже создана закупка. "
+                "Проверьте связанные PO перед повторной подготовкой закупки."
             )
         return {
             "type": "ir.actions.act_window",

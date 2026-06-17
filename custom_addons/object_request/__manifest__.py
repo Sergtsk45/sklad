@@ -1,6 +1,6 @@
 {
     "name": "Object Request — Требование на комплектацию объекта",
-    "version": "19.0.1.7.0",
+    "version": "19.0.1.7.1",
     "category": "Inventory/Inventory",
     "summary": "Управление требованиями на комплектацию строительных объектов",
     "description": """
@@ -25,6 +25,7 @@
         "contacts",
         "custom_product_search",
     ],
+    "external_dependencies": {"python": ["openpyxl"]},
     "data": [
         "data/ir_sequence_data.xml",
         "security/object_request_security.xml",
