@@ -1,3 +1,14 @@
+## [2026-06-18] — fix(ai_assistant): схема create_partner_draft для Gemini/OpenRouter
+
+### Исправлено
+- JSON Schema поля `category` в tools `create_partner_draft` и `update_partner_draft`:
+  union `type: ["string", "array"]` с `items` отклонялся Google Gemini через OpenRouter
+  (HTTP 400 «Provider returned error») при создании поставщика из чата.
+- В `odoo19_whm_stage` модель AI обновлена с `google/gemini-2.0-flash-001` на
+  `google/gemini-2.5-flash`.
+
+---
+
 ## [2026-06-16] — fix(object_request): фильтр распределения по складам
 
 ### Исправлено

@@ -25,6 +25,12 @@ PARTNER_CATEGORIES = {
     'Подрядчик': {'supplier_rank': 1},
 }
 
+# OpenAI/Gemini-compatible JSON Schema (без union type string|array).
+PARTNER_CATEGORY_SCHEMA = {
+    'type': 'string',
+    'enum': list(PARTNER_CATEGORIES),
+}
+
 
 def validate_picking_type_for_purchase(env, picking_type_id):
     """Проверить incoming picking type для черновика закупки (любой склад)."""

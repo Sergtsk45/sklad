@@ -8,6 +8,7 @@ from .base import AbstractWriteTool
 from .registry import default_registry
 from .validators import (
     PARTNER_CATEGORIES,
+    PARTNER_CATEGORY_SCHEMA,
     get_or_create_partner_tag,
     infer_is_company,
     normalize_partner_categories,
@@ -322,10 +323,7 @@ class CreatePartnerDraftTool(AbstractWriteTool):
                 'type': 'string',
                 'pattern': r'^\D*\d(?:\D*\d){9}(?:(?:\D*\d){2})?\D*$',
             },
-            'category': {
-                'type': ['string', 'array'],
-                'items': {'type': 'string', 'enum': list(PARTNER_CATEGORIES)},
-            },
+            'category': dict(PARTNER_CATEGORY_SCHEMA),
             'is_company': {'type': ['boolean', 'null']},
             'street': {'type': ['string', 'null']},
             'city': {'type': ['string', 'null']},
@@ -468,10 +466,7 @@ class UpdatePartnerDraftTool(AbstractWriteTool):
             'name': {'type': ['string', 'null']},
             'ref': {'type': ['string', 'null']},
             'vat': {'type': ['string', 'null']},
-            'category': {
-                'type': ['string', 'array', 'null'],
-                'items': {'type': 'string', 'enum': list(PARTNER_CATEGORIES)},
-            },
+            'category': dict(PARTNER_CATEGORY_SCHEMA),
             'is_company': {'type': ['boolean', 'null']},
             'street': {'type': ['string', 'null']},
             'city': {'type': ['string', 'null']},
