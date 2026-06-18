@@ -212,13 +212,14 @@ OWL-наследование перестали применяться.
 | На складе / Доступно | `stock_qty_labels_ru` | `views/product_qty_labels_views.xml` | `stock/views/*`, kanban, forecast |
 | Отправить запрос | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_rfq_send`, `invisible="state != 'draft'"` / `state != 'sent'` |
 | Отправить заказ | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_rfq_send`, `invisible="state != 'purchase'"` |
-| Подтвердить получение | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `Acknowledge` |
+| Поставщик принял заказ | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_acknowledge` |
+| Получить | `object_request` | `views/purchase_order_inherit_views.xml` (inherit `purchase_stock`) | `purchase_stock/views/purchase_views.xml` — `action_view_picking` |
 | Загрузить счёт | `object_request` | `static/src/components/purchase_file_uploader/purchase_file_uploader.xml` | `purchase/static/src/components/purchase_file_uploader/` — `Upload Bill` |
 
 **Чеклист после `-u` или смены образа Odoo:**
 
-1. Открыть форму закупки (RFQ и подтверждённый PO) — проверить подписи кнопок.
-2. На подтверждённом PO проверить кнопку «Загрузить счёт» (не «Upload Bill»).
+1. Открыть форму закупки (RFQ и подтверждённый PO) — проверить подписи и подсказки кнопок (наведение мыши).
+2. На подтверждённом PO проверить «Загрузить счёт», «Получить», «Поставщик принял заказ».
 3. Открыть список товаров на складе — проверить «На складе» / «Доступно».
 4. При ошибках загрузки assets — обновить xpath в указанных файлах по актуальному upstream.
 

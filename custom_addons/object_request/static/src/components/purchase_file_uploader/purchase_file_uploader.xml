@@ -4,7 +4,8 @@
          При обновлении Odoo проверить шаблон purchase.DocumentFileUploader. -->
     <t t-inherit="purchase.DocumentFileUploader" t-inherit-mode="extension">
         <xpath expr="//button[hasclass('btn', 'btn-secondary')]" position="replace">
-            <button type="button" class="btn btn-secondary" data-hotkey="shift+i">
+            <button type="button" class="btn btn-secondary" data-hotkey="shift+i"
+                title="Загрузить PDF счёта поставщика и создать черновик vendor bill в Odoo. Учёт оплат ведётся в 1С.">
                 Загрузить счёт
             </button>
         </xpath>

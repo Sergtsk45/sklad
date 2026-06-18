@@ -6,20 +6,87 @@
         <field name="model">purchase.order</field>
         <field name="inherit_id" ref="purchase.purchase_order_form"/>
         <field name="arch" type="xml">
-            <!-- Локализация кнопок закупок (upstream: purchase/views/purchase_views.xml).
-                 При обновлении Odoo проверить xpath по атрибуту invisible (string — не селектор). -->
+            <!-- Локализация и подсказки кнопок (upstream: purchase/views/purchase_views.xml).
+                 При обновлении Odoo проверить xpath по invisible / id / name (string — не селектор). -->
+
+            <!-- === Запрос котировки (RFQ) === -->
             <xpath expr="//button[@name='action_rfq_send'][@invisible=&quot;state != 'draft'&quot;]" position="attributes">
                 <attribute name="string">Отправить запрос</attribute>
+                <attribute name="help">Отправить запрос цен поставщику по email или через портал. Документ останется запросом котировки.</attribute>
             </xpath>
             <xpath expr="//button[@name='action_rfq_send'][@invisible=&quot;state != 'sent'&quot;]" position="attributes">
                 <attribute name="string">Отправить запрос</attribute>
+                <attribute name="help">Повторно отправить запрос котировки поставщику.</attribute>
             </xpath>
+            <xpath expr="//button[@id='draft_confirm']" position="attributes">
+                <attribute name="string">Подтвердить заказ</attribute>
+                <attribute name="help">Преобразовать черновик запроса в заказ на закупку без предварительной отправки поставщику.</attribute>
+            </xpath>
+            <xpath expr="//button[@id='bid_confirm']" position="attributes">
+                <attribute name="string">Подтвердить заказ</attribute>
+                <attribute name="help">Преобразовать отправленный запрос котировки в заказ на закупку после ответа поставщика.</attribute>
+            </xpath>
+            <xpath expr="//button[@name='button_approve']" position="attributes">
+                <attribute name="string">Согласовать заказ</attribute>
+                <attribute name="help">Утвердить заказ, если включено двойное согласование (лимит суммы закупки).</attribute>
+            </xpath>
+            <xpath expr="//button[@name='print_quotation']" position="attributes">
+                <attribute name="string">Печать</attribute>
+                <attribute name="help">Распечатать или сохранить PDF запроса котировки. При печати черновик может перейти в статус «Отправлен».</attribute>
+            </xpath>
+
+            <!-- === Заказ на закупку (PO) === -->
             <xpath expr="//button[@name='action_rfq_send'][@invisible=&quot;state != 'purchase'&quot;]" position="attributes">
                 <attribute name="string">Отправить заказ</attribute>
+                <attribute name="help">Отправить подтверждённый заказ поставщику по email или через портал.</attribute>
+            </xpath>
+            <xpath expr="//widget[@name='purchase_file_uploader']" position="attributes">
+                <attribute name="help">Загрузить PDF счёта поставщика и создать черновик vendor bill в Odoo. Учёт оплат ведётся в 1С.</attribute>
             </xpath>
             <xpath expr="//button[@name='action_acknowledge']" position="attributes">
-                <attribute name="string">Подтвердить получение</attribute>
+                <attribute name="string">Поставщик принял заказ</attribute>
+                <attribute name="help">Отметить, что поставщик подтвердил получение заказа. Не оприходует товар — для прихода на склад нажмите «Получить».</attribute>
             </xpath>
+            <xpath expr="//button[@type='action'][@invisible=&quot;state != 'purchase'&quot;]" position="attributes">
+                <attribute name="string">Печать</attribute>
+                <attribute name="help">Распечатать или сохранить PDF заказа на закупку.</attribute>
+            </xpath>
+            <xpath expr="//button[@name='button_lock']" position="attributes">
+                <attribute name="string">Заблокировать</attribute>
+                <attribute name="help">Запретить изменение подтверждённого заказа.</attribute>
+            </xpath>
+            <xpath expr="//button[@name='button_unlock']" position="attributes">
+                <attribute name="string">Разблокировать</attribute>
+                <attribute name="help">Снять блокировку заказа для редактирования (только для менеджера закупок).</attribute>
+            </xpath>
+
+            <!-- === Общие === -->
+            <xpath expr="//button[@name='button_draft']" position="attributes">
+                <attribute name="string">В черновик</attribute>
+                <attribute name="help">Вернуть отменённый документ в черновик для повторного редактирования.</attribute>
+            </xpath>
+            <xpath expr="//header/button[@name='button_cancel']" position="attributes">
+                <attribute name="string">Отменить</attribute>
+                <attribute name="help">Отменить документ. Непроведённые складские операции будут отменены.</attribute>
+            </xpath>
+
+            <!-- === Smart-кнопки === -->
+            <xpath expr="//button[@name='action_bill_matching']" position="attributes">
+                <attribute name="help">Сверить счёт поставщика с заказом и фактически полученным количеством.</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_view_invoice']" position="attributes">
+                <attribute name="help">Открыть счета поставщика (vendor bills), связанные с этим заказом.</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_purchase_comparison']" position="attributes">
+                <attribute name="help">Сравнить цены по позициям заказа с предыдущими закупками.</attribute>
+            </xpath>
+
+            <!-- === Строки заказа === -->
+            <xpath expr="//button[@name='action_add_from_catalog']" position="attributes">
+                <attribute name="string">Каталог</attribute>
+                <attribute name="help">Добавить товары из каталога поставщика в строки заказа.</attribute>
+            </xpath>
+
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button
                     class="oe_stat_button"
@@ -27,6 +94,7 @@
                     type="object"
                     name="action_open_object_requests"
                     invisible="not is_object_request_purchase or object_request_count == 0"
+                    help="Открыть требования на комплектацию объекта, из которых создан этот заказ."
                 >
                     <field
                         name="object_request_count"
@@ -35,6 +103,24 @@
                     />
                 </button>
                 <field name="is_object_request_purchase" invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_purchase_order_inherit_stock_tooltips" model="ir.ui.view">
+        <field name="name">purchase.order.inherit.stock.tooltips</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase_stock.purchase_order_view_form_inherit"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header/button[@name='action_view_picking']" position="attributes">
+                <attribute name="string">Получить</attribute>
+                <attribute name="help">Открыть приходную накладную и оприходовать товар на склад. После Validate остатки появятся на складе.</attribute>
+            </xpath>
+            <xpath expr="//div[hasclass('oe_button_box')]//button[@name='action_view_picking']" position="attributes">
+                <attribute name="help">Открыть список приходных накладных по этому заказу.</attribute>
+            </xpath>
+            <xpath expr="//div[hasclass('oe_button_box')]//button[@name='action_view_picking']//field[@name='incoming_picking_count']" position="attributes">
+                <attribute name="string">Поступления</attribute>
             </xpath>
         </field>
     </record>
