@@ -1,3 +1,18 @@
+## [2026-06-18] — feat(object_request): русские подписи кнопок закупок
+
+### Добавлено
+- Локализация кнопок формы заказа на закупку в модуле `object_request`:
+  - **Send RFQ** → «Отправить запрос»
+  - **Send PO** → «Отправить заказ»
+  - **Acknowledge** → «Подтвердить получение»
+  - **Upload Bill** → «Загрузить счёт» (OWL-наследование шаблона `purchase.DocumentFileUploader`).
+- Раздел **«Переопределения UI при обновлении Odoo»** в `docs/project.md` и чеклист в `docs/deploy.md`.
+
+### Изменено
+- Версия модуля: `19.0.1.7.2`.
+
+---
+
 ## [2026-06-18] — fix(ai_assistant): схема create_partner_draft для Gemini/OpenRouter
 
 ### Исправлено

@@ -233,6 +233,30 @@ docker compose exec odoo odoo -c /etc/odoo/odoo.conf -d ${POSTGRES_DB} -u module
 docker compose restart odoo
 ```
 
+### После обновления версии Odoo: проверить переопределения UI
+
+Проект переименовывает часть англоязычных кнопок и колонок через
+`object_request` и `stock_qty_labels_ru` (см. раздел **«Переопределения UI
+при обновлении Odoo»** в `docs/project.md`).
+
+После смены образа Odoo или массового `-u`:
+
+```bash
+docker compose exec odoo odoo -c /etc/odoo/odoo.conf -d ${POSTGRES_DB} -u object_request,stock_qty_labels_ru --stop-after-init
+docker compose restart odoo
+```
+
+Проверить в UI:
+
+- Закупки → форма PO: «Отправить запрос», «Отправить заказ», «Подтвердить
+  получение», «Загрузить счёт» (не английские `Send RFQ` / `Send PO` /
+  `Acknowledge` / `Upload Bill`).
+- Склад → товары: колонки «На складе» и «Доступно».
+
+Если подписи снова на английском — сверить xpath с актуальным upstream в
+`odoo/addons/purchase/` и `odoo/addons/stock/`, поправить файлы в
+`custom_addons/` и повторить upgrade.
+
 ### Recompute `x_search_name` после изменения нормализации
 
 Если менялась логика `custom_product_search` для `x_search_name`, после

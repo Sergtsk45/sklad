@@ -200,6 +200,35 @@ flowchart TD
 - Новые объектные склады создаются только через `Комплектация объектов → Объекты`; ручное создание `stock.warehouse` для объектов запрещено регламентом.
 - Legacy-запросы `ОбМ-2` и `ОбМ-4` временно поддерживаются AI Assistant как aliases на `O001` и `O002`.
 
+## Переопределения UI при обновлении Odoo
+
+Часть англоязычных подписей стандартного интерфейса переопределена в
+`custom_addons/` (ядро `odoo/` не меняется). **После обновления версии Odoo**
+нужно проверить, что upstream-файлы не изменились настолько, что xpath или
+OWL-наследование перестали применяться.
+
+| Подпись в UI | Модуль | Файл проекта | Upstream (Odoo 19) |
+|--------------|--------|--------------|---------------------|
+| На складе / Доступно | `stock_qty_labels_ru` | `views/product_qty_labels_views.xml` | `stock/views/*`, kanban, forecast |
+| Отправить запрос | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `Send RFQ` |
+| Отправить заказ | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `Send PO` |
+| Подтвердить получение | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `Acknowledge` |
+| Загрузить счёт | `object_request` | `static/src/components/purchase_file_uploader/purchase_file_uploader.xml` | `purchase/static/src/components/purchase_file_uploader/` — `Upload Bill` |
+
+**Чеклист после `-u` или смены образа Odoo:**
+
+1. Открыть форму закупки (RFQ и подтверждённый PO) — проверить подписи кнопок.
+2. На подтверждённом PO проверить кнопку «Загрузить счёт» (не «Upload Bill»).
+3. Открыть список товаров на складе — проверить «На складе» / «Доступно».
+4. При ошибках загрузки assets — обновить xpath в указанных файлах по актуальному upstream.
+
+Команда upgrade после деплоя:
+
+```bash
+docker compose exec odoo odoo -c /etc/odoo/odoo.conf -d ${POSTGRES_DB} -u object_request,stock_qty_labels_ru --stop-after-init
+docker compose restart odoo
+```
+
 ## Правила безопасности
 
 - Кастомные addon не меняют Odoo core.

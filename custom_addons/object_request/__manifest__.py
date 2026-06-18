@@ -1,6 +1,6 @@
 {
     "name": "Object Request — Требование на комплектацию объекта",
-    "version": "19.0.1.7.1",
+    "version": "19.0.1.7.2",
     "category": "Inventory/Inventory",
     "summary": "Управление требованиями на комплектацию строительных объектов",
     "description": """
@@ -56,6 +56,7 @@
     "assets": {
         "web.assets_backend": [
             "object_request/static/src/scss/object_request.scss",
+            "object_request/static/src/components/purchase_file_uploader/purchase_file_uploader.xml",
         ],
     },
     "installable": True,

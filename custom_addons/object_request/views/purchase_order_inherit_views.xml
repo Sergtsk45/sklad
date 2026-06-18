@@ -6,6 +6,17 @@
         <field name="model">purchase.order</field>
         <field name="inherit_id" ref="purchase.purchase_order_form"/>
         <field name="arch" type="xml">
+            <!-- Локализация кнопок закупок (upstream: purchase/views/purchase_views.xml).
+                 При обновлении Odoo проверить xpath и string атрибуты кнопок. -->
+            <xpath expr="//button[@name='action_rfq_send'][@string='Send RFQ']" position="attributes">
+                <attribute name="string">Отправить запрос</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_rfq_send'][@string='Send PO']" position="attributes">
+                <attribute name="string">Отправить заказ</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_acknowledge']" position="attributes">
+                <attribute name="string">Подтвердить получение</attribute>
+            </xpath>
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button
                     class="oe_stat_button"
