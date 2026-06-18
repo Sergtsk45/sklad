@@ -180,8 +180,11 @@ _BUYER_RE = re.compile(
     r"(.*?)(?=\n(?:грузополучатель|основание)\b|\n№\s*(?:товар|наименование)|\n\s*\n)",
     re.I | re.S,
 )
-# «Поставщик:» на отдельной строке (ЦБ-675 / счёт 234).
+# «Поставщик:» как метка после строки реквизитов (ЦБ-675 / счёт 234 / УТ-1431).
+_SUPPLIER_LABEL_RE = re.compile(r"\n\s*поставщик\s*:", re.I)
+# «Поставщик:» на отдельной строке.
 _SUPPLIER_LABEL_LINE_RE = re.compile(r"\n\s*поставщик\s*:\s*\n", re.I)
+_BUYER_LABEL_RE = re.compile(r"\n\s*покупатель\s*:", re.I)
 # «Поставщик: <цифра>» — название на предыдущей строке, ИНН — сразу после метки.
 _SUPPLIER_LABEL_INLINE_RE = re.compile(r"\n\s*поставщик\s*:\s*(\d)", re.I)
 # Голый ИНН в начале строки (без слова «ИНН»).
@@ -202,13 +205,22 @@ def _first(pattern: re.Pattern, text: str, group: int = 1) -> str:
     return m.group(group).strip() if m else ""
 
 
+def _has_party_identity(line: str) -> bool:
+    """Строка содержит ИНН и распознаваемое имя до или после ИНН-блока."""
+    return bool(
+        _INN_RE.search(line) and (
+            extract_party_name(line) or _ORG_NAME_AFTER_INN_RE.search(line)
+        )
+    )
+
+
 def _supplier_pre_label_line(text: str) -> str:
     """
-    Строка с ИНН непосредственно перед «Поставщик:» на отдельной строке.
+    Строка с реквизитами непосредственно перед «Поставщик:».
 
     Формат 1С/Т-Банк: реквизиты на строке выше метки, продолжение адреса — ниже.
     """
-    label_match = _SUPPLIER_LABEL_LINE_RE.search(text)
+    label_match = _SUPPLIER_LABEL_RE.search(text)
     if not label_match:
         return ''
     before = label_match.start()
@@ -217,9 +229,25 @@ def _supplier_pre_label_line(text: str) -> str:
         for line in text[:before].splitlines()
         if line.strip()
     ]
-    for line in reversed(lines[-8:]):
-        if _INN_RE.search(line):
+    for line in reversed(lines[-3:]):
+        if _has_party_identity(line):
             return line
+    return ''
+
+
+def _buyer_pre_label_line(text: str) -> str:
+    """Строка с реквизитами покупателя непосредственно перед «Покупатель:»."""
+    label_match = _BUYER_LABEL_RE.search(text)
+    if not label_match:
+        return ''
+    before = label_match.start()
+    lines = [
+        line.strip()
+        for line in text[:before].splitlines()
+        if line.strip()
+    ]
+    if lines and _has_party_identity(lines[-1]):
+        return lines[-1]
     return ''
 
 
@@ -280,6 +308,13 @@ def _compose_supplier_address(pre_line: str, post_block: str) -> str:
         ).strip().rstrip(',')
         # Дополнительно обрезаем строку следующего контрагента (начинается с ИНН).
         tail = re.split(r'\n\s*инн\b', tail, maxsplit=1, flags=re.I)[0].strip().rstrip(',')
+        # Или со следующей строки начинается название следующего контрагента с ИНН.
+        tail = re.split(
+            r'\n\s*(?=(?:ООО|АО|ОАО|ЗАО|ПАО|ИП|МУП|ГУП|Общество\b).*?\bИНН\b)',
+            tail,
+            maxsplit=1,
+            flags=re.I,
+        )[0].strip().rstrip(',')
         if tail:
             parts.append(tail)
     return ', '.join(p for p in parts if p)
@@ -333,7 +368,13 @@ def _parse_header(text: str, result: dict) -> None:
         result["supplier"]["address"] = _extract_address(sup_post)
 
     buy_block = _first(_BUYER_RE, text)
-    if buy_block:
+    buy_pre = _buyer_pre_label_line(text)
+    if buy_pre and _first(_INN_RE, buy_pre):
+        result["buyer"]["name"] = extract_party_name(buy_pre)
+        result["buyer"]["inn"] = _first(_INN_RE, buy_pre)
+        result["buyer"]["kpp"] = _first(_KPP_RE, buy_pre)
+        result["buyer"]["address"] = _compose_supplier_address(buy_pre, buy_block)
+    elif buy_block:
         result["buyer"]["name"] = extract_party_name(buy_block)
         result["buyer"]["inn"] = _first(_INN_RE, buy_block)
         result["buyer"]["kpp"] = _first(_KPP_RE, buy_block)

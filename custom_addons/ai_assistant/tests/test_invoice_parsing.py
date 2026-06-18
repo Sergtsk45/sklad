@@ -67,6 +67,21 @@ _INV1214_HEADER_TEXT = """
 Покупатель: 675000, Амурская обл, Благовещенск г
 """
 
+_UT1431_HEADER_TEXT = """
+Внимание! Счет действителен до 17.06.2026.
+Банк получателя
+ИНН 2801158272 КПП 280101001 Сч. № 40702810003000037250
+Общество с ограниченной ответственностью "Электро Вид оп. 01 Срок плат.
+Центр" Наз. пл. Очер. плат. 5
+Счет на оплату № УТ-1431 от 17 июня 2026 г.
+Общество с ограниченной ответственностью "Электро Центр", ИНН 2801158272, КПП 280101001, 675005,
+Поставщик: Амурская область, г.о. город Благовещенск, г Благовещенск, ул Октябрьская, д. 111, офис 3, тел.: (4162) 21-07-10,
+89248410710, 89248410714, 89248411710; e-mail: ec_amur@mail.ru; сайт:elektrocentrdv.ru
+ООО "Теплосервис-Комплект", ИНН 2801131520, КПП 280101001, 675000, Амурская область, г. Благовещенск, ул.
+Покупатель:
+Зейская, д. 319/1, тел.: (4162) 558-510, 54-91-54
+"""
+
 _NF504_ITEMS_ROWS = [
     # строка-заголовок
     ["№", "Наименование товара", "Ед.", "Кол-во", "Цена",
@@ -293,6 +308,27 @@ class TestParseHeader(TransactionCase):
         self.assertEqual(result["supplier"]["kpp"], "583501001")
         self.assertIn("Пензенская обл", result["supplier"]["address"])
         self.assertNotIn("ДВ Партнёр", result["supplier"]["name"])
+
+    def test_supplier_identity_before_label_address_after_ut1431(self):
+        """pdfplumber может поставить реквизиты до «Поставщик:», а адрес после."""
+        result = {
+            "invoice_number": "",
+            "invoice_date": "",
+            "supplier": {
+                "name": "", "inn": "", "kpp": "", "address": "",
+                "bank": {"name": "", "bik": "", "account": "", "corr_account": ""},
+            },
+            "buyer": {"name": "", "inn": "", "kpp": "", "address": ""},
+        }
+        _parse_header(_UT1431_HEADER_TEXT, result)
+        self.assertEqual(result["invoice_number"], "УТ-1431")
+        self.assertEqual(result["invoice_date"], "2026-06-17")
+        self.assertEqual(result["supplier"]["name"], "Общество с ограниченной ответственностью Электро Центр")
+        self.assertEqual(result["supplier"]["inn"], "2801158272")
+        self.assertEqual(result["supplier"]["kpp"], "280101001")
+        self.assertIn("Октябрьская", result["supplier"]["address"])
+        self.assertNotIn("Теплосервис", result["supplier"]["address"])
+        self.assertEqual(result["buyer"]["inn"], "2801131520")
 
 
 @tagged('post_install', '-at_install')
