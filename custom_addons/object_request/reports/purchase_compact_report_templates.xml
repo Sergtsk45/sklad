@@ -56,6 +56,7 @@
                     .o_object_request_compact_purchase_report .o_object_request_compact_lines th,
                     .o_object_request_compact_purchase_report .o_object_request_compact_lines td {
                         border: 1px solid #777 !important;
+                        line-height: 1.265;
                     }
                     .o_object_request_compact_purchase_report .o_object_request_compact_lines thead th {
                         border-bottom: 1.5px solid #333 !important;
@@ -216,6 +217,7 @@
                     .o_object_request_compact_purchase_report .o_object_request_compact_lines th,
                     .o_object_request_compact_purchase_report .o_object_request_compact_lines td {
                         border: 1px solid #777 !important;
+                        line-height: 1.265;
                     }
                     .o_object_request_compact_purchase_report .o_object_request_compact_lines thead th {
                         border-bottom: 1.5px solid #333 !important;

@@ -201,9 +201,12 @@ class TestOBR021Purchase(TransactionCase):
             [po.id],
         )
         html = html.decode() if isinstance(html, bytes) else html
+        report = self.env.ref("purchase.action_report_purchase_order")
+        self.assertEqual(report.paperformat_id.margin_top, 0)
         self.assertIn("o_object_request_compact_purchase_report", html)
         self.assertIn("o_object_request_compact_meta", html)
         self.assertIn("o_object_request_compact_lines", html)
+        self.assertIn("line-height: 1.265", html)
         self.assertIn("сдал:", html)
         self.assertIn("принял:", html)
 
