@@ -35,6 +35,7 @@
         "reports/object_request_report.xml",
         "reports/issue_picking_report.xml",
         "reports/purchase_order_report.xml",
+        "reports/purchase_compact_report_templates.xml",
         "wizards/import_excel_wizard_views.xml",
         "wizards/assign_lines_wizard_views.xml",
         "wizards/issue_wizard_views.xml",

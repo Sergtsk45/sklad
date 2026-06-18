@@ -174,6 +174,37 @@ class TestOBR021Purchase(TransactionCase):
         )
         self.assertEqual(po._get_transfer_report_filename(), expected)
 
+    def test_purchase_report_renders_compact_template(self):
+        """Кнопка печати закупки использует компактный шаблон."""
+        po = self.env["purchase.order"].create(
+            {
+                "partner_id": self.vendor1.id,
+                "picking_type_id": self.project.warehouse_id.in_type_id.id,
+                "order_line": [
+                    (
+                        0,
+                        0,
+                        {
+                            "product_id": self.product1.id,
+                            "name": "Компактная строка отчёта",
+                            "product_qty": 2.0,
+                            "product_uom_id": self.product1.uom_id.id,
+                            "price_unit": 10.0,
+                        },
+                    )
+                ],
+            }
+        )
+
+        html, _ = self.env["ir.actions.report"]._render_qweb_html(
+            "purchase.action_report_purchase_order",
+            [po.id],
+        )
+        html = html.decode() if isinstance(html, bytes) else html
+        self.assertIn("o_object_request_compact_purchase_report", html)
+        self.assertIn("сдал:", html)
+        self.assertIn("принял:", html)
+
     def test_create_po_grouped_by_vendor(self):
         """Строки группируются по поставщику — создаётся PO на каждого."""
         request = self._create_request()
