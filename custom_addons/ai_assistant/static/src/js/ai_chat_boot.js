@@ -24,15 +24,16 @@ export class AiChatWidget extends Component {
 
     setup() {
         this.chatService = useService("ai_chat");
+        const savedSession = this.chatService.loadSession();
         this.state = useState({
             isOpen: false,
-            messages: this.chatService.loadHistory(),
+            messages: savedSession.messages,
             inputText: "",
             isLoading: false,
             isCapturing: false,   // идёт захват скриншота
             isUploading: false,   // AIA-056: идёт загрузка счёта
-            extractionToken: null, // AIA-057: токен распознанного счёта
-            awaitingPoWarehouse: false,
+            extractionToken: savedSession.extractionToken,
+            awaitingPoWarehouse: savedSession.awaitingPoWarehouse,
             status: "online",
             hasAccess: false,
             hasSupply: false,     // AIA-056: группа снабжение
@@ -173,6 +174,8 @@ export class AiChatWidget extends Component {
             const result = await this.chatService.uploadInvoice(file);
             if (result && result.success) {
                 this.state.extractionToken = result.extraction_token || null;
+                this.state.awaitingPoWarehouse = false;
+                this._saveSessionState();
                 this._addMessage(
                     "assistant",
                     this._invoiceUploadContent(result),
@@ -213,6 +216,7 @@ export class AiChatWidget extends Component {
         this.state.isCapturing = false;
         this.state.extractionToken = null;
         this.state.awaitingPoWarehouse = false;
+        this._saveSessionState();
     }
 
     _doSend() {
@@ -245,6 +249,7 @@ export class AiChatWidget extends Component {
         } else if (extra.meta && extra.meta.awaiting_po_warehouse === false) {
             this.state.awaitingPoWarehouse = false;
         }
+        this._saveSessionState();
         setTimeout(() => this._scrollToBottom(), 20);
     }
 
@@ -456,6 +461,14 @@ export class AiChatWidget extends Component {
         if (meta.warehouse_id !== undefined) {
             this.state.awaitingPoWarehouse = false;
         }
+        this._saveSessionState();
+    }
+
+    _saveSessionState() {
+        this.chatService.saveSessionState({
+            extractionToken: this.state.extractionToken,
+            awaitingPoWarehouse: this.state.awaitingPoWarehouse,
+        });
     }
 
     async _runInvoiceWorkflowAction(action) {

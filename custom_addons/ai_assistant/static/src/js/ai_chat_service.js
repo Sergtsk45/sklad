@@ -4,37 +4,47 @@ import { registry } from "@web/core/registry";
 import { needsScreenshot } from "./screenshot_trigger";
 
 const SESSION_KEY = "odoo_ai_assistant_session_v1";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const MAX_MESSAGES = 50;
 const MAX_BYTES = 100 * 1024; // 100 KB (без скриншотов — они не сохраняются)
 const MAX_SCREENSHOT_BYTES = 500 * 1024; // 500 KB base64
 
 export const aiChatService = {
     start(env) {
-        function loadHistory() {
+        function _readSession() {
             try {
                 const raw = sessionStorage.getItem(SESSION_KEY);
                 if (!raw) {
-                    return [];
+                    return {};
                 }
                 const data = JSON.parse(raw);
-                if (
-                    !data ||
-                    data.version !== SCHEMA_VERSION ||
-                    !Array.isArray(data.messages)
-                ) {
+                if (!data || !Array.isArray(data.messages)) {
                     sessionStorage.removeItem(SESSION_KEY);
-                    return [];
+                    return {};
                 }
-                return data.messages;
+                return data;
             } catch {
                 sessionStorage.removeItem(SESSION_KEY);
-                return [];
+                return {};
             }
         }
 
-        function saveHistory(messages) {
+        function loadSession() {
+            const data = _readSession();
+            return {
+                messages: data.messages || [],
+                extractionToken: data.extraction_token || null,
+                awaitingPoWarehouse: data.awaiting_po_warehouse === true,
+            };
+        }
+
+        function loadHistory() {
+            return loadSession().messages;
+        }
+
+        function saveHistory(messages, state = {}) {
             try {
+                const previous = loadSession();
                 // Никогда не сохраняем скриншоты в историю
                 const clean = messages.map((m) => {
                     const msg = {
@@ -62,6 +72,14 @@ export const aiChatService = {
                 let serialized = JSON.stringify({
                     version: SCHEMA_VERSION,
                     messages: trimmed,
+                    extraction_token:
+                        state.extractionToken !== undefined
+                            ? state.extractionToken
+                            : previous.extractionToken,
+                    awaiting_po_warehouse:
+                        state.awaitingPoWarehouse !== undefined
+                            ? state.awaitingPoWarehouse
+                            : previous.awaitingPoWarehouse,
                 });
 
                 while (trimmed.length > 1 && serialized.length > MAX_BYTES) {
@@ -69,6 +87,14 @@ export const aiChatService = {
                     serialized = JSON.stringify({
                         version: SCHEMA_VERSION,
                         messages: trimmed,
+                        extraction_token:
+                            state.extractionToken !== undefined
+                                ? state.extractionToken
+                                : previous.extractionToken,
+                        awaiting_po_warehouse:
+                            state.awaitingPoWarehouse !== undefined
+                                ? state.awaitingPoWarehouse
+                                : previous.awaitingPoWarehouse,
                     });
                 }
 
@@ -78,6 +104,10 @@ export const aiChatService = {
                 // QuotaExceededError или другие — silent fail
                 return messages;
             }
+        }
+
+        function saveSessionState(state = {}) {
+            return saveHistory(loadHistory(), state);
         }
 
         function addMessage(messages, role, content, extra = {}) {
@@ -304,8 +334,10 @@ export const aiChatService = {
         }
 
         return {
+            loadSession,
             loadHistory,
             saveHistory,
+            saveSessionState,
             addMessage,
             clearHistory,
             collectContext,
