@@ -210,8 +210,8 @@ OWL-наследование перестали применяться.
 | Подпись в UI | Модуль | Файл проекта | Upstream (Odoo 19) |
 |--------------|--------|--------------|---------------------|
 | На складе / Доступно | `stock_qty_labels_ru` | `views/product_qty_labels_views.xml` | `stock/views/*`, kanban, forecast |
-| Отправить запрос | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `Send RFQ` |
-| Отправить заказ | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `Send PO` |
+| Отправить запрос | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_rfq_send`, `invisible="state != 'draft'"` / `state != 'sent'` |
+| Отправить заказ | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_rfq_send`, `invisible="state != 'purchase'"` |
 | Подтвердить получение | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `Acknowledge` |
 | Загрузить счёт | `object_request` | `static/src/components/purchase_file_uploader/purchase_file_uploader.xml` | `purchase/static/src/components/purchase_file_uploader/` — `Upload Bill` |
 
