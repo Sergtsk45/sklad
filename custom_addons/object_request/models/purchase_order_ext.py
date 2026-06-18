@@ -31,6 +31,18 @@ class PurchaseOrderExt(models.Model):
         for rec in self:
             rec.object_request_count = len(rec.object_request_ids)
 
+    def _get_transfer_report_filename(self):
+        self.ensure_one()
+        warehouse = (
+            self.object_request_project_id.warehouse_id
+            or self.picking_type_id.warehouse_id
+        )
+        suffix = warehouse.display_name or self.object_request_project_id.display_name
+        return "Передаточная ведомость №%s%s" % (
+            self.name or "",
+            " %s" % suffix if suffix else "",
+        )
+
     def action_open_object_requests(self):
         self.ensure_one()
         if len(self.object_request_ids) == 1:

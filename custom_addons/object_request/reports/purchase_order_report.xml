@@ -2,11 +2,11 @@
 <odoo>
 
     <record id="purchase.action_report_purchase_order" model="ir.actions.report">
-        <field name="print_report_name">object.is_object_request_purchase and 'Передаточная ведомость №%s %s' % (object.name or '', object.object_request_project_id.warehouse_id.display_name or object.picking_type_id.warehouse_id.display_name or object.object_request_project_id.display_name or '') or (object.state in ('draft', 'sent') and 'Request for Quotation - %s' % (object.name) or 'Purchase Order - %s' % (object.name))</field>
+        <field name="print_report_name">object._get_transfer_report_filename()</field>
     </record>
 
     <record id="purchase.report_purchase_quotation" model="ir.actions.report">
-        <field name="print_report_name">object.is_object_request_purchase and 'Передаточная ведомость №%s %s' % (object.name or '', object.object_request_project_id.warehouse_id.display_name or object.picking_type_id.warehouse_id.display_name or object.object_request_project_id.display_name or '') or 'Request for Quotation - %s' % (object.name)</field>
+        <field name="print_report_name">object._get_transfer_report_filename()</field>
     </record>
 
 </odoo>

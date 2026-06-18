@@ -132,6 +132,27 @@ class TestOBR021Purchase(TransactionCase):
             )
             self.assertEqual(filename, expected)
 
+    def test_regular_po_report_filename_uses_receipt_warehouse(self):
+        """PDF обычной закупки тоже получает склад из типа поступления."""
+        po = self.env["purchase.order"].create(
+            {
+                "partner_id": self.vendor1.id,
+                "picking_type_id": self.project.warehouse_id.in_type_id.id,
+            }
+        )
+
+        expected = (
+            f"Передаточная ведомость №{po.name} "
+            f"{self.project.warehouse_id.display_name}"
+        )
+        report = self.env.ref("purchase.action_report_purchase_order")
+        filename = safe_eval(
+            report.print_report_name,
+            {"object": po},
+        )
+        self.assertFalse(po.is_object_request_purchase)
+        self.assertEqual(filename, expected)
+
     def test_create_po_grouped_by_vendor(self):
         """Строки группируются по поставщику — создаётся PO на каждого."""
         request = self._create_request()
