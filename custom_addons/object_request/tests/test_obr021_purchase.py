@@ -1,6 +1,7 @@
 from odoo.tests.common import TransactionCase
 from odoo.tests import tagged
 from odoo.exceptions import UserError
+from odoo.tools.safe_eval import safe_eval
 
 
 @tagged("post_install", "-at_install")
@@ -105,6 +106,31 @@ class TestOBR021Purchase(TransactionCase):
         self.assertEqual(
             po.picking_type_id, self.project.warehouse_id.in_type_id
         )
+
+    def test_object_request_po_report_filename(self):
+        """PDF закупки по требованию получает имя передаточной ведомости."""
+        request = self._create_request()
+        self._add_line(request, self.product1, 5.0, self.vendor1)
+        request.write({"state": "in_progress"})
+
+        wizard = self._open_wizard(request)
+        result = wizard.action_create_purchase()
+        po = self.env["purchase.order"].browse(result["res_id"])
+
+        expected = (
+            f"Передаточная ведомость №{po.name} "
+            f"{self.project.warehouse_id.display_name}"
+        )
+        for report_xmlid in (
+            "purchase.action_report_purchase_order",
+            "purchase.report_purchase_quotation",
+        ):
+            report = self.env.ref(report_xmlid)
+            filename = safe_eval(
+                report.print_report_name,
+                {"object": po},
+            )
+            self.assertEqual(filename, expected)
 
     def test_create_po_grouped_by_vendor(self):
         """Строки группируются по поставщику — создаётся PO на каждого."""
