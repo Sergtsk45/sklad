@@ -125,12 +125,17 @@ class TestOBR021Purchase(TransactionCase):
             "purchase.action_report_purchase_order",
             "purchase.report_purchase_quotation",
         ):
-            report = self.env.ref(report_xmlid)
-            filename = safe_eval(
-                report.print_report_name,
-                {"object": po},
-            )
-            self.assertEqual(filename, expected)
+            for lang in (False, "ru_RU"):
+                report = (
+                    self.env.ref(report_xmlid).with_context(lang=lang)
+                    if lang
+                    else self.env.ref(report_xmlid)
+                )
+                filename = safe_eval(
+                    report.print_report_name,
+                    {"object": po},
+                )
+                self.assertEqual(filename, expected)
 
     def test_regular_po_report_filename_uses_receipt_warehouse(self):
         """PDF обычной закупки тоже получает склад из типа поступления."""
@@ -145,11 +150,10 @@ class TestOBR021Purchase(TransactionCase):
             f"Передаточная ведомость №{po.name} "
             f"{self.project.warehouse_id.display_name}"
         )
-        report = self.env.ref("purchase.action_report_purchase_order")
-        filename = safe_eval(
-            report.print_report_name,
-            {"object": po},
+        report = self.env.ref("purchase.action_report_purchase_order").with_context(
+            lang="ru_RU"
         )
+        filename = safe_eval(report.print_report_name, {"object": po})
         self.assertFalse(po.is_object_request_purchase)
         self.assertEqual(filename, expected)
 

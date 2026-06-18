@@ -9,4 +9,9 @@
         <field name="print_report_name">object._get_transfer_report_filename()</field>
     </record>
 
+    <function
+        model="ir.actions.report"
+        name="_object_request_set_purchase_report_names"
+    />
+
 </odoo>
