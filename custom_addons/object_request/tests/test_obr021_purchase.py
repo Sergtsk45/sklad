@@ -202,6 +202,8 @@ class TestOBR021Purchase(TransactionCase):
         )
         html = html.decode() if isinstance(html, bytes) else html
         self.assertIn("o_object_request_compact_purchase_report", html)
+        self.assertIn("o_object_request_compact_meta", html)
+        self.assertIn("o_object_request_compact_lines", html)
         self.assertIn("сдал:", html)
         self.assertIn("принял:", html)
 

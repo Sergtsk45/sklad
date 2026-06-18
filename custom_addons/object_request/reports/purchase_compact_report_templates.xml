@@ -2,7 +2,7 @@
 <odoo>
 
     <template id="purchase.report_purchasequotation_document">
-        <t t-call="web.external_layout">
+        <t t-call="web.basic_layout">
             <t t-set="o" t-value="o.with_context(lang=o.partner_id.lang)"/>
             <t t-set="forced_vat" t-value="o.fiscal_position_id.foreign_vat"/>
             <t t-set="address">
@@ -28,37 +28,78 @@
             <div class="page o_object_request_compact_purchase_report">
                 <style>
                     .o_object_request_compact_purchase_report {
-                        font-size: 10px;
-                        line-height: 1.15;
+                        font-size: 9px;
+                        line-height: 1.1;
+                        margin-top: 0;
+                        padding-top: 0;
                     }
                     .o_object_request_compact_purchase_report h2,
                     .o_object_request_compact_purchase_report h3 {
-                        margin: 0 0 5px 0;
-                        font-size: 15px;
-                        line-height: 1.15;
+                        margin: 0 0 3px 0;
+                        font-size: 12px;
+                        line-height: 1.1;
+                    }
+                    .o_object_request_compact_purchase_report .o_object_request_compact_meta {
+                        font-size: 9px;
+                        line-height: 1.05;
+                        margin: 0 0 3px 0;
                     }
                     .o_object_request_compact_purchase_report table {
-                        margin-bottom: 4px;
+                        margin-bottom: 3px;
+                        border-collapse: collapse;
                     }
                     .o_object_request_compact_purchase_report th,
                     .o_object_request_compact_purchase_report td {
-                        padding: 2px 3px !important;
+                        padding: 1px 3px !important;
                         vertical-align: top;
                     }
+                    .o_object_request_compact_purchase_report .o_object_request_compact_lines th,
+                    .o_object_request_compact_purchase_report .o_object_request_compact_lines td {
+                        border: 1px solid #777 !important;
+                    }
+                    .o_object_request_compact_purchase_report .o_object_request_compact_lines thead th {
+                        border-bottom: 1.5px solid #333 !important;
+                    }
                     .o_object_request_compact_purchase_report p {
-                        margin: 3px 0;
+                        margin: 2px 0;
                     }
                     .o_object_request_compact_purchase_report .small-muted {
                         color: #555;
-                        font-size: 9px;
+                        font-size: 8px;
                     }
                 </style>
-                <div class="oe_structure"/>
                 <t t-set="layout_document_title">
                     <span>Request for Quotation <span t-field="o.name"/></span>
                 </t>
+                <div class="o_object_request_compact_meta">
+                    <h3>Request for Quotation <span t-field="o.name"/></h3>
+                    <div class="row g-0">
+                        <div class="col-3">
+                            <strong>№ заказа:</strong> <span t-field="o.name"/>
+                            <t t-if="o.partner_ref">
+                                <br/><strong>№ счёта:</strong> <span t-field="o.partner_ref"/>
+                            </t>
+                        </div>
+                        <div class="col-4">
+                            <strong>Поставщик:</strong>
+                            <div
+                                t-field="o.partner_id"
+                                t-options='{"widget": "contact", "fields": ["address", "name", "phone", "vat"], "no_marker": True, "phone_icons": False}'
+                            />
+                        </div>
+                        <div class="col-5">
+                            <strong>Адрес доставки:</strong>
+                            <div
+                                t-if="o.dest_address_id"
+                                t-field="o.dest_address_id"
+                                t-options='{"widget": "contact", "fields": ["address", "name", "phone"], "no_marker": True, "phone_icons": False}'
+                            />
+                            <span t-else="">-</span>
+                        </div>
+                    </div>
+                </div>
 
-                <table class="table table-sm table-borderless">
+                <table class="table table-sm o_object_request_compact_lines">
                     <thead style="display: table-row-group">
                         <tr>
                             <th name="th_description"><strong>Description</strong></th>
@@ -121,7 +162,7 @@
     </template>
 
     <template id="purchase.report_purchaseorder_document">
-        <t t-call="web.external_layout">
+        <t t-call="web.basic_layout">
             <t t-set="o" t-value="o.with_context(lang=o.partner_id.lang)"/>
             <t t-set="address">
                 <div
@@ -144,42 +185,84 @@
             <div class="page o_object_request_compact_purchase_report">
                 <style>
                     .o_object_request_compact_purchase_report {
-                        font-size: 10px;
-                        line-height: 1.15;
+                        font-size: 9px;
+                        line-height: 1.1;
+                        margin-top: 0;
+                        padding-top: 0;
                     }
                     .o_object_request_compact_purchase_report h2,
                     .o_object_request_compact_purchase_report h3 {
-                        margin: 0 0 5px 0;
-                        font-size: 15px;
-                        line-height: 1.15;
+                        margin: 0 0 3px 0;
+                        font-size: 12px;
+                        line-height: 1.1;
+                    }
+                    .o_object_request_compact_purchase_report .o_object_request_compact_meta {
+                        font-size: 9px;
+                        line-height: 1.05;
+                        margin: 0 0 3px 0;
                     }
                     .o_object_request_compact_purchase_report #informations {
-                        margin-bottom: 5px !important;
+                        margin-bottom: 3px !important;
                     }
                     .o_object_request_compact_purchase_report table {
-                        margin-bottom: 4px;
+                        margin-bottom: 3px;
+                        border-collapse: collapse;
                     }
                     .o_object_request_compact_purchase_report th,
                     .o_object_request_compact_purchase_report td {
-                        padding: 2px 3px !important;
+                        padding: 1px 3px !important;
                         vertical-align: top;
                     }
+                    .o_object_request_compact_purchase_report .o_object_request_compact_lines th,
+                    .o_object_request_compact_purchase_report .o_object_request_compact_lines td {
+                        border: 1px solid #777 !important;
+                    }
+                    .o_object_request_compact_purchase_report .o_object_request_compact_lines thead th {
+                        border-bottom: 1.5px solid #333 !important;
+                    }
                     .o_object_request_compact_purchase_report p {
-                        margin: 3px 0;
+                        margin: 2px 0;
                     }
                     .o_object_request_compact_purchase_report .small-muted {
                         color: #555;
-                        font-size: 9px;
+                        font-size: 8px;
                     }
                 </style>
-                <div class="oe_structure"/>
-
-                <div>
-                    <t t-set="layout_document_title">
+                <t t-set="layout_document_title">
+                    <t t-if="o.state in ['draft', 'sent', 'to approve']">Request for Quotation #<span t-field="o.name"/></t>
+                    <t t-if="o.state == 'purchase'">Purchase Order #<span t-field="o.name"/></t>
+                    <t t-if="o.state == 'cancel'">Cancelled Purchase Order #<span t-field="o.name"/></t>
+                </t>
+                <div class="o_object_request_compact_meta">
+                    <h3>
                         <t t-if="o.state in ['draft', 'sent', 'to approve']">Request for Quotation #<span t-field="o.name"/></t>
                         <t t-if="o.state == 'purchase'">Purchase Order #<span t-field="o.name"/></t>
                         <t t-if="o.state == 'cancel'">Cancelled Purchase Order #<span t-field="o.name"/></t>
-                    </t>
+                    </h3>
+                    <div class="row g-0">
+                        <div class="col-3">
+                            <strong>№ заказа:</strong> <span t-field="o.name"/>
+                            <t t-if="o.partner_ref">
+                                <br/><strong>№ счёта:</strong> <span t-field="o.partner_ref"/>
+                            </t>
+                        </div>
+                        <div class="col-4">
+                            <strong>Поставщик:</strong>
+                            <div
+                                t-field="o.partner_id"
+                                t-options='{"widget": "contact", "fields": ["address", "name", "phone", "vat"], "no_marker": True, "phone_icons": False}'
+                            />
+                        </div>
+                        <div class="col-5">
+                            <strong>Адрес доставки:</strong>
+                            <div
+                                t-if="o.dest_address_id"
+                                t-field="o.dest_address_id"
+                                t-options='{"widget": "contact", "fields": ["address", "name", "phone"], "no_marker": True, "phone_icons": False}'
+                            />
+                            <span t-else="">-</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="informations" class="row mb-1">
@@ -205,7 +288,7 @@
                     </div>
                 </div>
 
-                <table class="o_has_total_table table o_main_table table-sm table-borderless">
+                <table class="o_has_total_table table o_main_table table-sm o_object_request_compact_lines">
                     <thead style="display: table-row-group">
                         <tr>
                             <th name="th_description" class="text-start"><strong>Description</strong></th>
