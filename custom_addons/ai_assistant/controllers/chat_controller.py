@@ -1167,6 +1167,14 @@ class AiAssistantController(http.Controller):
                     token,
                     warehouse_query,
                 )
+                if payload.get('status') == 'pending':
+                    return self._pending_write_response(
+                        'create_purchase_order_draft',
+                        payload['po_args'],
+                        metadata={'extraction_token': token},
+                        answer=payload['answer'],
+                        meta={'warehouse_id': payload.get('warehouse_id')},
+                    )
                 return {
                     'answer': payload.get('answer', ''),
                     'suggestions': payload.get('suggestions') or [],
@@ -1230,6 +1238,7 @@ class AiAssistantController(http.Controller):
         args,
         metadata=None,
         answer='Проверьте план и подтвердите действие.',
+        meta=None,
     ):
         pending_key = _pending_actions.put(
             request.env.uid,
@@ -1243,7 +1252,7 @@ class AiAssistantController(http.Controller):
             'answer': answer,
             'suggestions': [],
             'cards': [self._confirmation_card(write_call, pending_key)],
-            'meta': {'status': 'pending'},
+            'meta': dict({'status': 'pending'}, **(meta or {})),
         }
 
     _PO_INTENT_KEYWORDS = (

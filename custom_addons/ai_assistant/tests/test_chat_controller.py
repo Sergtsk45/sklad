@@ -625,6 +625,67 @@ class TestChatController(HttpCase):
             'create_partner_draft',
         )
 
+    def test_invoice_po_intent_pending_returns_confirmation_card(self):
+        from odoo.addons.ai_assistant.controllers import chat_controller
+
+        invoice_data = {
+            'invoice_number': 'НФ-READY-PO',
+            'invoice_date': '2026-06-16',
+            'supplier': {'name': 'ООО Ready PO', 'inn': '7727123499'},
+            'items': [],
+            'totals': {'total_w_vat': 100.0},
+        }
+        token = chat_controller._invoice_store.put(
+            self.env.ref('base.user_admin').id,
+            invoice_data,
+        )
+        po_args = {
+            'partner_id': 12,
+            'picking_type_id': 17,
+            'origin': 'НФ-READY-PO/AIA',
+            'partner_ref': 'НФ-READY-PO',
+            'lines': [{
+                'product_id': 1,
+                'product_qty': 1.0,
+                'product_uom': 1,
+                'price_unit': 100.0,
+            }],
+        }
+
+        with patch(
+            'odoo.addons.ai_assistant.services.invoice_workflow.'
+            'InvoiceWorkflow.partner_ready',
+            return_value=True,
+        ), patch(
+            'odoo.addons.ai_assistant.services.invoice_workflow.'
+            'InvoiceWorkflow.all_products_ready',
+            return_value=True,
+        ), patch(
+            'odoo.addons.ai_assistant.services.invoice_workflow.'
+            'InvoiceWorkflow.prepare_po_draft',
+            return_value={
+                'status': 'pending',
+                'answer': 'Черновик закупки готов.',
+                'po_args': po_args,
+                'warehouse_id': 5,
+            },
+        ):
+            result = self._post_chat({
+                'message': 'создай закупку на склад Ос.ск',
+                'extraction_token': token,
+            })
+
+        data = result.get('result', {})
+        cards = data.get('cards', [])
+        self.assertTrue(cards, 'Ожидали confirmation card для PO')
+        self.assertEqual(cards[0]['type'], 'confirmation')
+        self.assertEqual(
+            cards[0]['plan']['tool_name'],
+            'create_purchase_order_draft',
+        )
+        self.assertEqual(data.get('meta', {}).get('status'), 'pending')
+        self.assertEqual(data.get('meta', {}).get('warehouse_id'), 5)
+
     def test_result_card_po_has_confirm_validate_steps(self):
         """AIA-059: ResultCard для PO содержит шаги Confirm и Validate."""
         supplier = self.env['res.partner'].create({
