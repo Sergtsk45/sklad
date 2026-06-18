@@ -38,8 +38,9 @@ class PurchaseOrderExt(models.Model):
             or self.picking_type_id.warehouse_id
         )
         suffix = warehouse.display_name or self.object_request_project_id.display_name
+        invoice_ref = self.partner_ref or self.name
         return "Передаточная ведомость №%s%s" % (
-            self.name or "",
+            invoice_ref or "",
             " %s" % suffix if suffix else "",
         )
 

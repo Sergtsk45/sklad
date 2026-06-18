@@ -116,9 +116,10 @@ class TestOBR021Purchase(TransactionCase):
         wizard = self._open_wizard(request)
         result = wizard.action_create_purchase()
         po = self.env["purchase.order"].browse(result["res_id"])
+        po.partner_ref = "INV-OBR021-001"
 
         expected = (
-            f"Передаточная ведомость №{po.name} "
+            f"Передаточная ведомость №{po.partner_ref} "
             f"{self.project.warehouse_id.display_name}"
         )
         for report_xmlid in (
@@ -143,11 +144,12 @@ class TestOBR021Purchase(TransactionCase):
             {
                 "partner_id": self.vendor1.id,
                 "picking_type_id": self.project.warehouse_id.in_type_id.id,
+                "partner_ref": "680",
             }
         )
 
         expected = (
-            f"Передаточная ведомость №{po.name} "
+            f"Передаточная ведомость №{po.partner_ref} "
             f"{self.project.warehouse_id.display_name}"
         )
         report = self.env.ref("purchase.action_report_purchase_order").with_context(
@@ -156,6 +158,21 @@ class TestOBR021Purchase(TransactionCase):
         filename = safe_eval(report.print_report_name, {"object": po})
         self.assertFalse(po.is_object_request_purchase)
         self.assertEqual(filename, expected)
+
+    def test_po_report_filename_falls_back_to_order_number(self):
+        """Если номер счёта поставщика пустой, используется номер заказа."""
+        po = self.env["purchase.order"].create(
+            {
+                "partner_id": self.vendor1.id,
+                "picking_type_id": self.project.warehouse_id.in_type_id.id,
+            }
+        )
+
+        expected = (
+            f"Передаточная ведомость №{po.name} "
+            f"{self.project.warehouse_id.display_name}"
+        )
+        self.assertEqual(po._get_transfer_report_filename(), expected)
 
     def test_create_po_grouped_by_vendor(self):
         """Строки группируются по поставщику — создаётся PO на каждого."""
