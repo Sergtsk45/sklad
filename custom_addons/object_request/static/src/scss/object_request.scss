@@ -16,45 +16,56 @@
 .modal-dialog:has(.o_object_request_import_wizard) {
     width: 96vw;
     max-width: 96vw;
+
+    .modal-content,
+    .modal-body,
+    .o_form_view,
+    .o_form_sheet_bg {
+        width: 100%;
+        max-width: none;
+    }
 }
 
 .o_object_request_import_wizard {
-    width: 100%;
+    width: 100% !important;
+    max-width: none !important;
 
     .o_form_sheet {
-        width: 100%;
-        max-width: none;
+        width: 100% !important;
+        max-width: none !important;
     }
 
     .o_notebook,
     .tab-content,
     .tab-pane {
-        width: 100%;
-        max-width: none;
+        width: 100% !important;
+        max-width: none !important;
     }
 
     .o_object_request_import_preview_lines {
-        width: 100%;
-        max-width: 100%;
+        display: block;
+        width: 100% !important;
+        max-width: none !important;
 
         &.o_field_widget,
         .o_field_x2many,
         .o_x2m_control_panel {
-            width: 100%;
-            max-width: none;
+            width: 100% !important;
+            max-width: none !important;
         }
 
         .o_list_renderer {
-            width: 100%;
-            max-width: 100%;
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: none !important;
             max-height: calc(100vh - 360px);
             overflow: auto;
             scrollbar-gutter: stable both-edges;
         }
 
         .o_list_table {
-            width: 100%;
-            min-width: 100%;
+            width: 100% !important;
+            min-width: 100% !important;
             table-layout: fixed;
         }
     }
