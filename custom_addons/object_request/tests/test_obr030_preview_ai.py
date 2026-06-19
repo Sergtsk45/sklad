@@ -153,6 +153,7 @@ class TestObr030PreviewAI(TransactionCase):
         self.assertAlmostEqual(line_vals["ai_match_confidence"], 0.80)
         self.assertEqual(line_vals["ai_match_reason"], "Тест")
         self.assertEqual(line_vals["technical_designation"], "L=0.13")
+        self.assertEqual(line_vals["matching_source"], "unknown")
 
     def test_import_auto_mode_applies_confident_matches(self):
         """В режиме auto уверенные кандидаты применяются автоматически."""

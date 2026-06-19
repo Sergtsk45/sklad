@@ -595,7 +595,7 @@ class ObjectRequestImportWizard(models.TransientModel):
         if product:
             source = ai_source or "import_auto"
         else:
-            source = ai_source or "unknown"
+            source = "unknown"
         return product, source, preview.matching_required
 
     # --- Публичные методы ---
