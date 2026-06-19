@@ -63,49 +63,56 @@
                                     decoration-danger="has_error == True"
                                     string="Строки из файла"
                                 >
-                                    <field name="sequence" string="№"/>
-                                    <field name="source_row_no" string="Стр. Excel"/>
+                                    <field name="sequence" string="№" width="56px"/>
+                                    <field name="source_row_no" string="Стр. Excel" width="82px"/>
                                     <field
                                         name="supplier_article"
                                         string="Артикул"
                                         optional="show"
+                                        width="120px"
                                     />
                                     <field
                                         name="technical_designation"
                                         string="Обозначение"
                                         optional="show"
+                                        width="260px"
                                     />
-                                    <field name="name_raw" string="Наименование"/>
-                                    <field name="uom_raw" string="Ед. изм."/>
-                                    <field name="qty" string="Кол-во"/>
-                                    <field name="price" string="Цена"/>
-                                    <field name="supplier_raw" string="Поставщик"/>
+                                    <field name="name_raw" string="Наименование" width="360px"/>
+                                    <field name="uom_raw" string="Ед. изм." width="76px"/>
+                                    <field name="qty" string="Кол-во" width="84px"/>
+                                    <field name="price" string="Цена" width="92px"/>
+                                    <field name="supplier_raw" string="Поставщик" width="130px"/>
                                     <field
                                         name="candidate_product_ids"
                                         string="Кандидаты"
                                         widget="many2many_tags"
                                         optional="show"
+                                        width="380px"
                                     />
                                     <field
                                         name="ai_suggested_product_id"
                                         string="AI-предложение"
                                         optional="show"
+                                        width="340px"
                                     />
                                     <field
                                         name="ai_match_confidence"
                                         string="Уверенность"
                                         optional="show"
                                         digits="[4, 2]"
+                                        width="96px"
                                     />
                                     <field
                                         name="matching_source"
                                         string="Источник"
                                         optional="show"
+                                        width="110px"
                                     />
                                     <field
                                         name="error_message"
                                         string="Ошибка"
                                         optional="show"
+                                        width="140px"
                                     />
                                     <field name="has_error" column_invisible="1"/>
                                 </list>

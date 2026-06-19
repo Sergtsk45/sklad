@@ -25,14 +25,20 @@
     }
 
     .o_object_request_import_preview_lines {
+        width: 100%;
+        max-width: 100%;
+
         .o_list_renderer {
+            width: 100%;
+            max-width: 100%;
             max-height: calc(100vh - 360px);
             overflow: auto;
             scrollbar-gutter: stable both-edges;
         }
 
         .o_list_table {
-            min-width: max-content;
+            width: 100%;
+            min-width: 1800px;
         }
     }
 }
