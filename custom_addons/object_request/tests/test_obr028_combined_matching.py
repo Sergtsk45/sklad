@@ -46,6 +46,16 @@ class TestObr028CombinedMatching(TransactionCase):
             "кран муфтовый латунный ду15 в-в 11б27п1",
         )
 
+    def test_diameter_extraction_keeps_du15_distinct_from_du150(self):
+        self.assertEqual(
+            self.parser._extract_diameter_values("Кран Ду15 Ду-20 DN25"),
+            {15, 20, 25},
+        )
+        self.assertEqual(
+            self.parser._extract_diameter_values("Кран Ду150"),
+            {150},
+        )
+
     def test_combined_match_query_ignores_length_article(self):
         query = self.parser._combined_match_query(
             "Труба стальная",
@@ -120,6 +130,35 @@ class TestObr028CombinedMatching(TransactionCase):
         self.assertIn("local_score", candidate)
         self.assertIn("matched_tokens", candidate)
         self.assertIn("missing_tokens", candidate)
+
+    def test_candidate_service_filters_wrong_diameter_and_keeps_likely_valves(self):
+        lever = self._create_product(
+            "Кран латунный Ду15 В-В рычаг OBR028-DU"
+        )
+        butterfly = self._create_product(
+            "Кран латунный Ду15 В-В бабочка OBR028-DU"
+        )
+        wrong_diameter = self._create_product(
+            "Кран латунный Ду20 В-В рычаг OBR028-DU"
+        )
+        wrong_large_diameter = self._create_product(
+            "Кран латунный Ду150 В-В рычаг OBR028-DU"
+        )
+        same_diameter_muftovy = self._create_product(
+            "Кран стальной муфтовый Ду15 OBR028-DU"
+        )
+
+        result = self.service.build_candidates(
+            "Кран муфтовый латунный Ду15 В-В OBR028-DU",
+            "",
+        )
+
+        candidate_ids = [item["product_id"] for item in result["candidates"]]
+        self.assertIn(lever.id, candidate_ids)
+        self.assertIn(butterfly.id, candidate_ids)
+        self.assertIn(same_diameter_muftovy.id, candidate_ids)
+        self.assertNotIn(wrong_diameter.id, candidate_ids)
+        self.assertNotIn(wrong_large_diameter.id, candidate_ids)
 
     def test_candidate_service_limits_llm_and_preview_candidates(self):
         for index in range(10):

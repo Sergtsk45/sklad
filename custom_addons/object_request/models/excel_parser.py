@@ -64,6 +64,7 @@ _NAME_MIN_MARGIN = 0.15
 _ARTICLE_TOKEN_WEIGHT = 0.5
 _LINE_LENGTH_RE = re.compile(r"^l\s*=\s*\d+(?:[.,]\d+)?$", re.IGNORECASE)
 _LINE_SINGLE_SIZE_RE = re.compile(r"^\d+(?:[.,]\d+)?$")
+_DIAMETER_TOKEN_RE = re.compile(r"\b(?:ду|dn)(\d{1,4})\b", re.IGNORECASE)
 
 
 class ExcelParser(models.AbstractModel):
@@ -109,6 +110,31 @@ class ExcelParser(models.AbstractModel):
             for token in tokens
             if len(token) > 1 and token not in _MATCH_STOP_TOKENS
         ]
+
+    @api.model
+    def _extract_diameter_values(self, s):
+        """Return normalized Ду/DN diameters found in text."""
+        normalized = self._normalize_for_match(s)
+        return {
+            int(match.group(1))
+            for match in _DIAMETER_TOKEN_RE.finditer(normalized)
+        }
+
+    @api.model
+    def _has_diameter_conflict(self, query, product):
+        """Reject products that explicitly mention another Ду/DN."""
+        query_diameters = self._extract_diameter_values(query)
+        if not query_diameters:
+            return False
+        product_text = " ".join(
+            value
+            for value in [product.display_name, product.default_code or ""]
+            if value
+        )
+        product_diameters = self._extract_diameter_values(product_text)
+        return bool(product_diameters and query_diameters.isdisjoint(
+            product_diameters
+        ))
 
     @api.model
     def _significant_match_chars(self, s):

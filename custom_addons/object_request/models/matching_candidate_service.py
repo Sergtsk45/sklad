@@ -5,6 +5,7 @@ INTERNAL_CANDIDATE_LIMIT = 15
 LLM_CANDIDATE_LIMIT = 8
 PREVIEW_CANDIDATE_LIMIT = 3
 AUTO_MATCH_MIN_SCORE = 0.9
+NAME_TOKEN_SEARCH_LIMIT = 200
 
 
 class ObjectRequestMatchingCandidateService(models.AbstractModel):
@@ -120,6 +121,9 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
     def _add_candidate(self, result, product, source, score, reason=""):
         if not product:
             return
+        parser = self.env["object.request.excel.parser"]
+        if parser._has_diameter_conflict(result["combined_query"], product):
+            return
         if any(
             item["product_id"] == product.id
             for item in result["candidates"]
@@ -205,12 +209,10 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
         Product = self.env["product.product"]
         products = Product.browse()
         for key_token in sorted(name_tokens, key=len, reverse=True):
-            products = Product.search(
+            products |= Product.search(
                 [("name", "ilike", key_token), ("active", "=", True)],
-                limit=INTERNAL_CANDIDATE_LIMIT,
+                limit=NAME_TOKEN_SEARCH_LIMIT,
             )
-            if products:
-                break
         weighted_tokens = parser._weighted_query_tokens(
             name_raw,
             supplier_article=supplier_article,
