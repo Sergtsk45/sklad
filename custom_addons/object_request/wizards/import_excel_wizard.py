@@ -38,6 +38,10 @@ class ObjectRequestImportPreview(models.TransientModel):
         string="Поставщик (сопоставлен)",
         readonly=True,
     )
+    selected_product_id = fields.Many2one(
+        "product.product",
+        string="Товар для импорта",
+    )
     candidate_product_ids = fields.Many2many(
         "product.product",
         string="Кандидаты",
@@ -500,6 +504,7 @@ class ObjectRequestImportWizard(models.TransientModel):
                     "supplier_raw": supplier_raw,
                     "matched_product_id": product.id if product else False,
                     "matched_vendor_id": vendor.id if vendor else False,
+                    "selected_product_id": product.id if product else False,
                     "candidate_product_ids": [
                         (6, 0, candidates.ids)
                     ] if candidates else False,
@@ -582,6 +587,14 @@ class ObjectRequestImportWizard(models.TransientModel):
         self, preview, ai_suggested, ai_confidence, ai_source
     ):
         """Определяет товар, источник и флаг matching_required для строки."""
+        selected = preview.selected_product_id
+        if selected:
+            if preview.matched_product_id == selected:
+                return selected, "import_auto", False
+            if ai_suggested == selected:
+                return selected, "llm_confirmed", False
+            return selected, "manual", False
+
         auto_apply = (
             self.ai_mode == "auto"
             and ai_suggested

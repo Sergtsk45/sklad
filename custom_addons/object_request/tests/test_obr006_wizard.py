@@ -314,6 +314,8 @@ class TestOBR006ImportWizard(TransactionCase):
         self.assertIn('string="Создать требование"', view.arch_db)
         self.assertIn('name="action_import"', view.arch_db)
         self.assertIn('class="btn-primary"', view.arch_db)
+        self.assertIn('editable="bottom"', view.arch_db)
+        self.assertIn('name="selected_product_id"', view.arch_db)
 
     # ------------------------------------------------------------------
     # Тест source_row_no

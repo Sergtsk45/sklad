@@ -216,6 +216,8 @@ class TestImportWizardOBR007(TransactionCase):
         )
 
         wizard.action_validate()
+        preview = wizard.preview_line_ids
+        self.assertEqual(preview.selected_product_id, product)
         result = wizard.action_import()
 
         request = self.env["object.request"].browse(result["res_id"])

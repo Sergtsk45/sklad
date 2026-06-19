@@ -183,6 +183,63 @@ class TestObr030PreviewAI(TransactionCase):
         self.assertEqual(line_vals["matching_source"], "llm_auto")
         self.assertFalse(line_vals["matching_required"])
 
+    def test_import_uses_selected_ai_candidate_as_confirmed_match(self):
+        """Выбранная в preview AI-подсказка импортируется как подтверждённая."""
+        line = self._make_preview_line(self.wizard, "Кабель КВВГ")
+        line.write(
+            {
+                "ai_suggested_product_id": self.product.id,
+                "selected_product_id": self.product.id,
+                "ai_match_confidence": 0.80,
+                "ai_match_reason": "Тест",
+                "matching_source": "ai",
+                "matching_required": True,
+            }
+        )
+
+        request = self.env["object.request"].create(
+            {
+                "project_id": self.project.id,
+                "foreman_user_id": self.env.uid,
+                "need_date": "2026-12-31",
+                "priority": "1",
+            }
+        )
+        line_vals = self.wizard._build_line_vals(request, line)
+
+        self.assertEqual(line_vals["product_id"], self.product.id)
+        self.assertEqual(line_vals["matching_source"], "llm_confirmed")
+        self.assertFalse(line_vals["matching_required"])
+
+    def test_import_uses_selected_manual_product(self):
+        """Выбранный вручную товар импортируется как ручное сопоставление."""
+        manual_product = self.env["product.product"].create(
+            {"name": "Кабель ручной выбор PRV"}
+        )
+        line = self._make_preview_line(self.wizard, "Кабель КВВГ")
+        line.write(
+            {
+                "ai_suggested_product_id": self.product.id,
+                "selected_product_id": manual_product.id,
+                "matching_source": "ai",
+                "matching_required": True,
+            }
+        )
+
+        request = self.env["object.request"].create(
+            {
+                "project_id": self.project.id,
+                "foreman_user_id": self.env.uid,
+                "need_date": "2026-12-31",
+                "priority": "1",
+            }
+        )
+        line_vals = self.wizard._build_line_vals(request, line)
+
+        self.assertEqual(line_vals["product_id"], manual_product.id)
+        self.assertEqual(line_vals["matching_source"], "manual")
+        self.assertFalse(line_vals["matching_required"])
+
     # ------------------------------------------------------------------ #
     # PRV-005
 
