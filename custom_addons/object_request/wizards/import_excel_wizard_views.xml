@@ -8,7 +8,7 @@
         <field name="name">object.request.import.wizard.form</field>
         <field name="model">object.request.import.wizard</field>
         <field name="arch" type="xml">
-            <form string="Импорт Excel — Требование на комплектацию">
+            <form string="Импорт Excel — Требование на комплектацию" class="o_object_request_import_wizard">
                 <sheet>
 
                     <!-- Файл -->
@@ -58,7 +58,7 @@
                     <!-- Предпросмотр строк -->
                     <notebook invisible="validation_state == 'not_checked'">
                         <page string="Предпросмотр строк" name="page_preview">
-                            <field name="preview_line_ids" readonly="1">
+                            <field name="preview_line_ids" readonly="1" class="o_object_request_import_preview_lines">
                                 <list
                                     decoration-danger="has_error == True"
                                     string="Строки из файла"

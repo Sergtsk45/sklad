@@ -12,3 +12,27 @@
         overflow: auto;
     }
 }
+
+.modal-dialog:has(.o_object_request_import_wizard) {
+    width: 96vw;
+    max-width: 96vw;
+}
+
+.o_object_request_import_wizard {
+    .o_form_sheet {
+        width: 100%;
+        max-width: none;
+    }
+
+    .o_object_request_import_preview_lines {
+        .o_list_renderer {
+            max-height: calc(100vh - 360px);
+            overflow: auto;
+            scrollbar-gutter: stable both-edges;
+        }
+
+        .o_list_table {
+            min-width: max-content;
+        }
+    }
+}
