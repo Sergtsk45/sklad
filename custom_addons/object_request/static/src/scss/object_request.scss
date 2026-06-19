@@ -19,7 +19,16 @@
 }
 
 .o_object_request_import_wizard {
+    width: 100%;
+
     .o_form_sheet {
+        width: 100%;
+        max-width: none;
+    }
+
+    .o_notebook,
+    .tab-content,
+    .tab-pane {
         width: 100%;
         max-width: none;
     }
@@ -27,6 +36,13 @@
     .o_object_request_import_preview_lines {
         width: 100%;
         max-width: 100%;
+
+        &.o_field_widget,
+        .o_field_x2many,
+        .o_x2m_control_panel {
+            width: 100%;
+            max-width: none;
+        }
 
         .o_list_renderer {
             width: 100%;
@@ -38,7 +54,8 @@
 
         .o_list_table {
             width: 100%;
-            min-width: 1800px;
+            min-width: 100%;
+            table-layout: fixed;
         }
     }
 }
