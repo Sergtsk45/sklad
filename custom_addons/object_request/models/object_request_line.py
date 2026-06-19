@@ -270,6 +270,36 @@ class ObjectRequestLine(models.Model):
     )
 
     @api.depends(
+        "sequence",
+        "name_raw",
+        "product_id",
+        "supplier_article",
+        "technical_designation",
+    )
+    def _compute_display_name(self):
+        """Человекочитаемое имя строки для Many2one и списков."""
+        for line in self:
+            parts = []
+            if line.sequence:
+                parts.append(f"#{line.sequence}")
+            article = (
+                (line.supplier_article or line.technical_designation or "")
+                .strip()
+            )
+            if article:
+                parts.append(f"[{article}]")
+            label = (line.name_raw or "").strip()
+            if not label and line.product_id:
+                label = line.product_id.display_name
+            if label:
+                parts.append(label)
+            line.display_name = (
+                " ".join(parts)
+                if parts
+                else f"Строка требования #{line.id}"
+            )
+
+    @api.depends(
         "product_id",
         "matching_required",
         "qty_issued",

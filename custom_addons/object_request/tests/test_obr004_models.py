@@ -173,6 +173,27 @@ class TestObjectRequestLine(TransactionCase):
         vals.update(kwargs)
         return self.env["object.request.line"].create(vals)
 
+    def test_display_name_uses_sequence_and_name_raw(self):
+        """display_name читаемый: номер и наименование из файла."""
+        line = self._make_line(
+            sequence=20,
+            name_raw="Кран муфтовый DN20",
+            supplier_article="KR-20",
+        )
+        self.assertEqual(
+            line.display_name,
+            "#20 [KR-20] Кран муфтовый DN20",
+        )
+
+    def test_display_name_falls_back_to_product(self):
+        """Без name_raw display_name берёт название товара."""
+        line = self._make_line(
+            sequence=30,
+            name_raw=" ",
+            product_id=self.product.id,
+        )
+        self.assertEqual(line.display_name, "#30 Товар для теста")
+
     def test_line_state_requires_mapping_no_product(self):
         line = self._make_line()
         self.assertEqual(line.line_state, "requires_mapping")

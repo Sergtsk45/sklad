@@ -630,7 +630,7 @@
                                 groups="object_request.group_supply_manager"
                             >
                                 <list editable="bottom">
-                                    <field name="line_id" readonly="1"/>
+                                    <field name="line_id" string="Строка" readonly="1"/>
                                     <field name="warehouse_id" readonly="1"/>
                                     <field name="qty_on_hand" readonly="1"/>
                                     <field name="qty_to_issue"/>
@@ -645,7 +645,7 @@
                                 groups="object_request.group_storekeeper"
                             >
                                 <list>
-                                    <field name="line_id" readonly="1"/>
+                                    <field name="line_id" string="Строка" readonly="1"/>
                                     <field name="warehouse_id" readonly="1"/>
                                     <field name="qty_on_hand" readonly="1"/>
                                     <field name="qty_to_issue" readonly="1"/>
