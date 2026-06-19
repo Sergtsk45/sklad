@@ -128,12 +128,13 @@
                         name="action_validate"
                         type="object"
                         class="btn-primary"
+                        invisible="validation_state == 'valid'"
                     />
                     <button
-                        string="Импортировать"
+                        string="Создать требование"
                         name="action_import"
                         type="object"
-                        class="btn-secondary"
+                        class="btn-primary"
                         invisible="validation_state != 'valid'"
                     />
                     <button

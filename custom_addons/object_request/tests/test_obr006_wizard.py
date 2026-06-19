@@ -299,6 +299,22 @@ class TestOBR006ImportWizard(TransactionCase):
         with self.assertRaises(UserError):
             wizard.action_import()
 
+    def test_import_wizard_footer_guides_next_action_after_validation(self):
+        """После проверки основной кнопкой становится создание требования."""
+        view = self.env.ref(
+            "object_request.view_object_request_import_wizard_form"
+        )
+
+        self.assertIn('string="Загрузить и проверить"', view.arch_db)
+        self.assertIn('name="action_validate"', view.arch_db)
+        self.assertIn(
+            'invisible="validation_state == \'valid\'"',
+            view.arch_db,
+        )
+        self.assertIn('string="Создать требование"', view.arch_db)
+        self.assertIn('name="action_import"', view.arch_db)
+        self.assertIn('class="btn-primary"', view.arch_db)
+
     # ------------------------------------------------------------------
     # Тест source_row_no
     # ------------------------------------------------------------------
