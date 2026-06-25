@@ -34,6 +34,7 @@ export class AiChatWidget extends Component {
             isUploading: false,   // AIA-056: идёт загрузка счёта
             extractionToken: savedSession.extractionToken,
             awaitingPoWarehouse: savedSession.awaitingPoWarehouse,
+            purchaseFlow: savedSession.purchaseFlow,
             status: "online",
             hasAccess: false,
             hasSupply: false,     // AIA-056: группа снабжение
@@ -120,7 +121,10 @@ export class AiChatWidget extends Component {
             return;
         }
         if (suggestion.action) {
-            this._runInvoiceWorkflowAction(suggestion.action);
+            this._runInvoiceWorkflowAction(
+                suggestion.action,
+                suggestion.payload || {}
+            );
             return;
         }
         if (suggestion.label) {
@@ -175,6 +179,7 @@ export class AiChatWidget extends Component {
             if (result && result.success) {
                 this.state.extractionToken = result.extraction_token || null;
                 this.state.awaitingPoWarehouse = false;
+                this.state.purchaseFlow = null;
                 this._saveSessionState();
                 this._addMessage(
                     "assistant",
@@ -216,6 +221,7 @@ export class AiChatWidget extends Component {
         this.state.isCapturing = false;
         this.state.extractionToken = null;
         this.state.awaitingPoWarehouse = false;
+        this.state.purchaseFlow = null;
         this._saveSessionState();
     }
 
@@ -458,8 +464,14 @@ export class AiChatWidget extends Component {
         if (meta.awaiting_po_warehouse) {
             this.state.awaitingPoWarehouse = true;
         }
-        if (meta.warehouse_id !== undefined) {
+        if (
+            meta.awaiting_po_warehouse === false ||
+            meta.warehouse_id !== undefined
+        ) {
             this.state.awaitingPoWarehouse = false;
+        }
+        if (meta.purchase_flow !== undefined) {
+            this.state.purchaseFlow = meta.purchase_flow;
         }
         this._saveSessionState();
     }
@@ -468,10 +480,11 @@ export class AiChatWidget extends Component {
         this.chatService.saveSessionState({
             extractionToken: this.state.extractionToken,
             awaitingPoWarehouse: this.state.awaitingPoWarehouse,
+            purchaseFlow: this.state.purchaseFlow,
         });
     }
 
-    async _runInvoiceWorkflowAction(action) {
+    async _runInvoiceWorkflowAction(action, payload = {}) {
         if (this.state.isLoading || !this.state.extractionToken) {
             return;
         }
@@ -480,7 +493,8 @@ export class AiChatWidget extends Component {
         try {
             const result = await this.chatService.workflowAction(
                 this.state.extractionToken,
-                action
+                action,
+                payload
             );
             await this._cancelActiveConfirmations(this._extractCards(result));
             this._applyResponseMeta(result);

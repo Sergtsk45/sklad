@@ -3,8 +3,13 @@
 # @dependencies: invoice_context_helper, invoice_extraction_store
 # @created: 2026-05-31
 
+import base64
+
 from odoo.exceptions import ValidationError
 
+from odoo.addons.ai_assistant.services.action_tools.write_tools import (
+    CreatePurchaseOrderDraftTool,
+)
 from odoo.addons.ai_assistant.services.action_tools.read_tools import (
     FindWarehouseTool,
 )
@@ -32,6 +37,22 @@ class InvoiceWorkflow:
     ACTION_CREATE_PARTNER = 'invoice_create_partner'
     ACTION_NEXT_PRODUCT = 'invoice_next_product'
     ACTION_PREPARE_PO = 'invoice_prepare_po'
+    ACTION_PO_START = 'invoice_po_start'
+    ACTION_PO_SELECT_WAREHOUSE = 'invoice_po_select_warehouse'
+    ACTION_PO_SET_ATTACH_INVOICE = 'invoice_po_set_attach_invoice'
+    ACTION_PO_SET_RECEIVE_PICKING = 'invoice_po_set_receive_picking'
+    ACTION_PO_EXECUTE_PLAN = 'invoice_po_execute_plan'
+    ACTION_PO_CANCEL = 'invoice_po_cancel'
+
+    FLOW_IDLE = 'idle'
+    FLOW_AWAITING_CREATE_PO = 'awaiting_create_po'
+    FLOW_AWAITING_WAREHOUSE = 'awaiting_warehouse'
+    FLOW_AWAITING_ATTACH = 'awaiting_attach_invoice'
+    FLOW_AWAITING_RECEIPT = 'awaiting_receive_picking'
+    FLOW_AWAITING_EXECUTE = 'awaiting_execute'
+    FLOW_DONE = 'done'
+    FLOW_CANCELLED = 'cancelled'
+    FLOW_EXECUTED = 'executed'
 
     def __init__(self, env, invoice_store):
         self.env = env
@@ -121,10 +142,7 @@ class InvoiceWorkflow:
                 'action': self.ACTION_NEXT_PRODUCT,
             }]
         if self.all_products_ready(uid, extraction_token):
-            return [{
-                'label': 'Создать закупку на склад',
-                'action': self.ACTION_PREPARE_PO,
-            }]
+            return self.purchase_start_suggestions(uid, extraction_token)
         return []
 
     def suggestions_after_partner_created(self, uid, extraction_token):
@@ -136,10 +154,7 @@ class InvoiceWorkflow:
                 'action': self.ACTION_NEXT_PRODUCT,
             }]
         if self.all_products_ready(uid, extraction_token):
-            return [{
-                'label': 'Создать закупку на склад',
-                'action': self.ACTION_PREPARE_PO,
-            }]
+            return self.purchase_start_suggestions(uid, extraction_token)
         return []
 
     def next_product_draft(self, uid, extraction_token=None):
@@ -167,14 +182,266 @@ class InvoiceWorkflow:
         return {
             'answer': (
                 'Все позиции счёта уже есть в номенклатуре. '
-                'Можно создать закупку на склад.'
+                'Можно перейти к закупке.'
             ),
-            'suggestions': [{
-                'label': 'Создать закупку на склад',
-                'action': self.ACTION_PREPARE_PO,
-            }],
+            'suggestions': self._po_start_yes_no_suggestions(),
             'cards': [],
             'meta': {'status': 'all_products_ready'},
+        }
+
+    def current_purchase_flow_state(self, uid, extraction_token):
+        session = self._store.ensure_session(uid, extraction_token) or {}
+        flow = session.get('purchase_flow') or {}
+        return dict(flow)
+
+    def purchase_start_suggestions(self, uid, extraction_token):
+        self._ensure_purchase_flow(uid, extraction_token)
+        return [{
+            'label': 'Создать закупку?',
+            'action': self.ACTION_PO_START,
+            'payload': {'create_po': True},
+        }, {
+            'label': 'Нет',
+            'action': self.ACTION_PO_START,
+            'payload': {'create_po': False},
+        }]
+
+    def begin_purchase_flow_prompt(self, uid, extraction_token):
+        if not self._ready_for_purchase(uid, extraction_token):
+            return self._not_ready_response(uid, extraction_token)
+        self._ensure_purchase_flow(uid, extraction_token)
+        return {
+            'status': self.FLOW_AWAITING_CREATE_PO,
+            'answer': 'Создать закупку?',
+            'suggestions': self._po_start_yes_no_suggestions(),
+            'cards': [],
+            'meta': self._flow_meta(uid, extraction_token),
+        }
+
+    def set_create_po_decision(self, uid, extraction_token, create_po):
+        flow = self._ensure_purchase_flow(uid, extraction_token)
+        if flow.get('executed') or flow.get('state') == self.FLOW_EXECUTED:
+            return self._already_finished_response(uid, extraction_token)
+        flow['create_po'] = bool(create_po)
+        if not create_po:
+            flow['state'] = self.FLOW_DONE
+            return {
+                'status': self.FLOW_DONE,
+                'answer': (
+                    'Решение сохранено: закупку не создавать. '
+                    'Сценарий завершён без изменений в Odoo.'
+                ),
+                'suggestions': [],
+                'cards': [],
+                'meta': self._flow_meta(uid, extraction_token),
+            }
+        flow['state'] = self.FLOW_AWAITING_WAREHOUSE
+        return self.ask_warehouse(uid, extraction_token)
+
+    def ask_warehouse(self, uid, extraction_token, error=None):
+        flow = self._ensure_purchase_flow(uid, extraction_token)
+        flow['state'] = self.FLOW_AWAITING_WAREHOUSE
+        suggestions = []
+        warehouses = self.env['stock.warehouse'].search_read(
+            [],
+            ['id', 'name', 'code', 'in_type_id'],
+            limit=5,
+        )
+        for wh in warehouses:
+            label = '%s (%s)' % (wh.get('name'), wh.get('code'))
+            suggestions.append({
+                'label': self._short_name(label),
+                'action': self.ACTION_PO_SELECT_WAREHOUSE,
+                'payload': {'warehouse_id': wh['id']},
+            })
+        answer = error or 'Какой склад? Укажите код или название склада.'
+        return {
+            'status': self.FLOW_AWAITING_WAREHOUSE,
+            'answer': answer,
+            'suggestions': suggestions,
+            'cards': [],
+            'meta': self._flow_meta(uid, extraction_token, {
+                'awaiting_po_warehouse': True,
+            }),
+        }
+
+    def select_warehouse(self, uid, extraction_token, payload=None,
+                         warehouse_query=None):
+        flow = self._ensure_purchase_flow(uid, extraction_token)
+        if flow.get('create_po') is not True:
+            return self.begin_purchase_flow_prompt(uid, extraction_token)
+        payload = payload or {}
+        warehouse = None
+        if payload.get('warehouse_id'):
+            record = self.env['stock.warehouse'].browse(
+                payload['warehouse_id']
+            )
+            if record.exists():
+                warehouse = self._warehouse_payload(record)
+        query = (
+            payload.get('warehouse_query')
+            or payload.get('warehouse_name')
+            or warehouse_query
+            or ''
+        ).strip()
+        if not warehouse:
+            if not query:
+                return self.ask_warehouse(uid, extraction_token)
+            warehouses = self._find_warehouse.execute(
+                self.env,
+                {'query': query},
+            ).get('warehouses') or []
+            if not warehouses:
+                return self.ask_warehouse(
+                    uid,
+                    extraction_token,
+                    'Склад «%s» не найден. Уточните код или название.' % query,
+                )
+            if len(warehouses) > 1:
+                return self._warehouse_ambiguous_response(
+                    uid, extraction_token, warehouses
+                )
+            warehouse = warehouses[0]
+        picking_type_id = self._warehouse_picking_type_id(warehouse)
+        if not picking_type_id:
+            return self.ask_warehouse(
+                uid,
+                extraction_token,
+                'У склада «%s» не найден тип операции поступления.'
+                % (warehouse.get('name') or warehouse.get('code')),
+            )
+        flow.update({
+            'state': self.FLOW_AWAITING_ATTACH,
+            'warehouse_id': warehouse['id'],
+            'warehouse_name': warehouse.get('name') or warehouse.get('code'),
+            'picking_type_id': picking_type_id,
+        })
+        return {
+            'status': self.FLOW_AWAITING_ATTACH,
+            'answer': (
+                'Создать закупку на склад «%s». Привязать счёт?'
+            ) % flow['warehouse_name'],
+            'suggestions': self._yes_no_suggestions(
+                self.ACTION_PO_SET_ATTACH_INVOICE,
+                'attach_invoice',
+            ),
+            'cards': [],
+            'meta': self._flow_meta(uid, extraction_token, {
+                'awaiting_po_warehouse': False,
+                'warehouse_id': flow['warehouse_id'],
+            }),
+        }
+
+    def set_attach_invoice_decision(self, uid, extraction_token, value):
+        flow = self._ensure_purchase_flow(uid, extraction_token)
+        if flow.get('state') != self.FLOW_AWAITING_ATTACH:
+            return self._unexpected_flow_response(uid, extraction_token)
+        flow['attach_invoice'] = bool(value)
+        flow['state'] = self.FLOW_AWAITING_RECEIPT
+        return {
+            'status': self.FLOW_AWAITING_RECEIPT,
+            'answer': 'Решение сохранено. Провести приёмку на склад?',
+            'suggestions': self._yes_no_suggestions(
+                self.ACTION_PO_SET_RECEIVE_PICKING,
+                'receive_picking',
+            ),
+            'cards': [],
+            'meta': self._flow_meta(uid, extraction_token),
+        }
+
+    def set_receive_picking_decision(self, uid, extraction_token, value):
+        flow = self._ensure_purchase_flow(uid, extraction_token)
+        if flow.get('state') != self.FLOW_AWAITING_RECEIPT:
+            return self._unexpected_flow_response(uid, extraction_token)
+        flow['receive_picking'] = bool(value)
+        flow['state'] = self.FLOW_AWAITING_EXECUTE
+        return self.purchase_plan_response(uid, extraction_token)
+
+    def purchase_plan_response(self, uid, extraction_token):
+        flow = self._ensure_purchase_flow(uid, extraction_token)
+        answer = self._summary_text(uid, extraction_token, flow)
+        return {
+            'status': self.FLOW_AWAITING_EXECUTE,
+            'answer': answer,
+            'suggestions': [{
+                'label': 'Выполнить',
+                'action': self.ACTION_PO_EXECUTE_PLAN,
+                'payload': {},
+            }, {
+                'label': 'Отмена',
+                'action': self.ACTION_PO_CANCEL,
+                'payload': {},
+            }],
+            'cards': [],
+            'meta': self._flow_meta(uid, extraction_token),
+        }
+
+    def cancel_purchase_flow(self, uid, extraction_token):
+        flow = self._ensure_purchase_flow(uid, extraction_token)
+        if flow.get('executed'):
+            return self._already_finished_response(uid, extraction_token)
+        flow['state'] = self.FLOW_CANCELLED
+        return {
+            'status': self.FLOW_CANCELLED,
+            'answer': 'Итоговый план отменён. Изменений в Odoo нет.',
+            'suggestions': [],
+            'cards': [],
+            'meta': self._flow_meta(uid, extraction_token),
+        }
+
+    def execute_purchase_plan(self, uid, extraction_token):
+        flow = self._ensure_purchase_flow(uid, extraction_token)
+        if flow.get('executed'):
+            return self._executed_response(flow)
+        self._validate_plan_ready(flow)
+        context = self._context_helper.fetch_context(uid, extraction_token)
+        warehouse = {
+            'id': flow['warehouse_id'],
+            'name': flow['warehouse_name'],
+            'in_type_id': flow['picking_type_id'],
+        }
+        po_args = self._build_po_args(
+            context, uid, extraction_token, warehouse
+        )
+        if flow.get('po_id'):
+            po = self.env['purchase.order'].browse(flow['po_id'])
+        else:
+            tool = CreatePurchaseOrderDraftTool()
+            result = tool.execute(self.env, po_args)
+            po = self.env['purchase.order'].browse(result['po_id'])
+            flow['po_id'] = po.id
+        if po.state in ('draft', 'sent'):
+            po.button_confirm()
+        attachment = None
+        if flow.get('attach_invoice'):
+            attachment = self._attach_invoice(uid, extraction_token, po)
+            flow['attachment_id'] = attachment.id if attachment else None
+        picking = None
+        if flow.get('receive_picking'):
+            picking = self._receive_po_picking(po)
+            flow['picking_id'] = picking.id if picking else None
+        steps = ['Закупка создана и подтверждена: %s' % po.name]
+        if attachment:
+            steps.append('Счёт прикреплён к закупке.')
+        if picking:
+            steps.append('Приёмка проведена: %s' % picking.name)
+        po.message_post(
+            body='AI-ассистент выполнил план по счёту:<br/>%s'
+            % '<br/>'.join(steps),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+        )
+        flow['state'] = self.FLOW_EXECUTED
+        flow['executed'] = True
+        return {
+            'status': self.FLOW_EXECUTED,
+            'answer': (
+                'План выполнен.\n'
+                + '\n'.join('• %s' % s for s in steps)
+            ),
+            'suggestions': [],
+            'cards': [self._execution_result_card(po, attachment, picking)],
+            'meta': self._flow_meta(uid, extraction_token),
         }
 
     def prepare_po_draft(self, uid, extraction_token, warehouse_query=None):
@@ -405,3 +672,269 @@ class InvoiceWorkflow:
         if len(text) <= limit:
             return text
         return text[: limit - 1] + '…'
+
+    def _ensure_purchase_flow(self, uid, extraction_token):
+        session = self._store.ensure_session(uid, extraction_token) or {}
+        flow = session.get('purchase_flow')
+        if not flow:
+            flow = self._store.reset_purchase_flow(uid, extraction_token)
+        if flow.get('state') == self.FLOW_IDLE and self._ready_for_purchase(
+            uid, extraction_token
+        ):
+            flow['state'] = self.FLOW_AWAITING_CREATE_PO
+        return flow
+
+    def _ready_for_purchase(self, uid, extraction_token):
+        return (
+            self.partner_ready(uid, extraction_token)
+            and self.all_products_ready(uid, extraction_token)
+        )
+
+    def _not_ready_response(self, uid, extraction_token):
+        if not self.partner_ready(uid, extraction_token):
+            return {
+                'status': 'partner_incomplete',
+                'answer': 'Сначала нужно создать поставщика из счёта.',
+                'suggestions': [{
+                    'label': 'Создать поставщика из счёта',
+                    'action': self.ACTION_CREATE_PARTNER,
+                }],
+                'cards': [],
+                'meta': {'status': 'partner_incomplete'},
+            }
+        return {
+            'status': 'products_incomplete',
+            'answer': 'Сначала создайте номенклатуру по всем позициям счёта.',
+            'suggestions': self.suggestions_after_product_created(
+                uid, extraction_token
+            ),
+            'cards': [],
+            'meta': {'status': 'products_incomplete'},
+        }
+
+    def _flow_meta(self, uid, extraction_token, extra=None):
+        meta = {
+            'status': self.current_purchase_flow_state(
+                uid, extraction_token
+            ).get('state'),
+            'purchase_flow': self.current_purchase_flow_state(
+                uid, extraction_token
+            ),
+        }
+        if extra:
+            meta.update(extra)
+        return meta
+
+    def _po_start_yes_no_suggestions(self):
+        return self._yes_no_suggestions(self.ACTION_PO_START, 'create_po')
+
+    def _yes_no_suggestions(self, action, payload_key):
+        return [{
+            'label': 'Да',
+            'action': action,
+            'payload': {payload_key: True},
+        }, {
+            'label': 'Нет',
+            'action': action,
+            'payload': {payload_key: False},
+        }]
+
+    def _warehouse_payload(self, warehouse):
+        return {
+            'id': warehouse.id,
+            'name': warehouse.name,
+            'code': warehouse.code,
+            'in_type_id': warehouse.in_type_id.id,
+        }
+
+    def _warehouse_picking_type_id(self, warehouse):
+        in_type = warehouse.get('in_type_id')
+        if isinstance(in_type, (list, tuple)):
+            return in_type[0] if in_type else None
+        return in_type
+
+    def _warehouse_ambiguous_response(self, uid, extraction_token, warehouses):
+        suggestions = []
+        for wh in warehouses[:5]:
+            label = '%s (%s)' % (wh.get('name'), wh.get('code'))
+            suggestions.append({
+                'label': self._short_name(label),
+                'action': self.ACTION_PO_SELECT_WAREHOUSE,
+                'payload': {'warehouse_id': wh['id']},
+            })
+        names = ', '.join(
+            '%s (%s)' % (wh.get('name'), wh.get('code'))
+            for wh in warehouses[:5]
+        )
+        return {
+            'status': 'warehouse_ambiguous',
+            'answer': (
+                'Найдено несколько складов: %s. Выберите нужный.'
+            ) % names,
+            'suggestions': suggestions,
+            'cards': [],
+            'meta': self._flow_meta(uid, extraction_token, {
+                'awaiting_po_warehouse': True,
+            }),
+        }
+
+    def _unexpected_flow_response(self, uid, extraction_token):
+        flow = self.current_purchase_flow_state(uid, extraction_token)
+        return {
+            'status': flow.get('state') or 'unexpected_state',
+            'answer': (
+                'Это действие уже неактуально для текущего сценария. '
+                'Текущее состояние: %s.'
+            ) % (flow.get('state') or 'неизвестно'),
+            'suggestions': [],
+            'cards': [],
+            'meta': self._flow_meta(uid, extraction_token),
+        }
+
+    def _already_finished_response(self, uid, extraction_token):
+        return {
+            'status': 'already_finished',
+            'answer': 'Сценарий уже завершён / действие уже выполнено.',
+            'suggestions': [],
+            'cards': [],
+            'meta': self._flow_meta(uid, extraction_token),
+        }
+
+    def _executed_response(self, flow):
+        po = self.env['purchase.order'].browse(flow.get('po_id'))
+        attachment = self.env['ir.attachment'].browse(
+            flow.get('attachment_id')
+        )
+        picking = self.env['stock.picking'].browse(flow.get('picking_id'))
+        return {
+            'status': self.FLOW_EXECUTED,
+            'answer': 'Сценарий уже выполнен. Дубликаты не созданы.',
+            'suggestions': [],
+            'cards': [self._execution_result_card(po, attachment, picking)],
+            'meta': {'status': self.FLOW_EXECUTED, 'purchase_flow': flow},
+        }
+
+    def _validate_plan_ready(self, flow):
+        if flow.get('state') != self.FLOW_AWAITING_EXECUTE:
+            raise ValidationError(
+                'План ещё не готов: ответьте на все вопросы сценария.'
+            )
+        if flow.get('create_po') is not True:
+            raise ValidationError('Создание закупки не подтверждено.')
+        if not flow.get('warehouse_id') or not flow.get('picking_type_id'):
+            raise ValidationError('Склад закупки не выбран.')
+        if flow.get('attach_invoice') is None:
+            raise ValidationError('Не выбран ответ по привязке счёта.')
+        if flow.get('receive_picking') is None:
+            raise ValidationError('Не выбран ответ по приёмке.')
+
+    def _summary_text(self, uid, extraction_token, flow):
+        context = self._context_helper.fetch_context(uid, extraction_token)
+        partner = (context.get('partner') or {}).get('name') or (
+            (context.get('supplier') or {}).get('name')
+        ) or 'поставщик из счёта'
+        total = ((context.get('totals') or {}).get('total_w_vat') or '')
+        lines = len(context.get('items') or [])
+        invoice_number = context.get('invoice_number') or 'без номера'
+        actions = ['создать и подтвердить закупку']
+        if flow.get('attach_invoice'):
+            actions.append('прикрепить PDF счёта')
+        if flow.get('receive_picking'):
+            actions.append('провести приёмку')
+        return (
+            'Итоговый план:\n'
+            '• Поставщик: %s\n'
+            '• Склад: %s\n'
+            '• Счёт: %s\n'
+            '• Строк: %s%s\n'
+            '• Действия: %s'
+        ) % (
+            partner,
+            flow.get('warehouse_name') or '',
+            invoice_number,
+            lines,
+            (', сумма %s' % total) if total else '',
+            '; '.join(actions),
+        )
+
+    def _attach_invoice(self, uid, extraction_token, po):
+        source = self._store.get_file(uid, extraction_token) or {}
+        file_bytes = source.get('bytes')
+        filename = source.get('name') or '%s.pdf' % (po.partner_ref or po.name)
+        if not file_bytes:
+            po.message_post(
+                body='AI-ассистент: PDF счёта не найден в текущей сессии.',
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+            return None
+        attachment = self.env['ir.attachment'].search([
+            ('res_model', '=', 'purchase.order'),
+            ('res_id', '=', po.id),
+            ('name', '=', filename),
+        ], limit=1)
+        if attachment:
+            return attachment
+        return self.env['ir.attachment'].create({
+            'name': filename,
+            'res_model': 'purchase.order',
+            'res_id': po.id,
+            'type': 'binary',
+            'datas': base64.b64encode(file_bytes),
+            'mimetype': source.get('mimetype') or 'application/pdf',
+        })
+
+    def _receive_po_picking(self, po):
+        if po.state not in ('purchase', 'done'):
+            raise ValidationError(
+                'Приёмка невозможна без подтверждённой закупки.'
+            )
+        picking = po.picking_ids.filtered(
+            lambda item: item.picking_type_id.code == 'incoming'
+            and item.state != 'cancel'
+        )[:1]
+        if not picking:
+            raise ValidationError('Входящая приёмка по закупке не найдена.')
+        if picking.state == 'done':
+            return picking
+        for move in picking.move_ids:
+            if move.state in ('done', 'cancel'):
+                continue
+            move.quantity = move.product_uom_qty
+        result = picking.with_context(skip_backorder=True).button_validate()
+        if isinstance(result, dict):
+            model = result.get('res_model')
+            res_id = result.get('res_id')
+            if model == 'stock.immediate.transfer' and res_id:
+                self.env[model].browse(res_id).process()
+            elif model == 'stock.backorder.confirmation' and res_id:
+                self.env[model].browse(res_id).process_cancel_backorder()
+            else:
+                raise ValidationError(
+                    'Приёмка требует дополнительного действия Odoo: %s.'
+                    % (model or 'wizard')
+                )
+        if picking.state != 'done':
+            picking.invalidate_recordset()
+        return picking
+
+    def _execution_result_card(self, po, attachment=None, picking=None):
+        details = []
+        if attachment and attachment.exists():
+            details.append({'label': 'Вложение', 'value': attachment.name})
+        if picking and picking.exists():
+            details.append({'label': 'Приёмка', 'value': picking.name})
+        return {
+            'type': 'result',
+            'status': 'success',
+            'record': {
+                'model': 'purchase.order',
+                'id': po.id if po and po.exists() else None,
+                'name': po.name if po and po.exists() else '',
+                'url': '/odoo/purchase/%s' % po.id
+                if po and po.exists() else '',
+            },
+            'details': details,
+            'next_hint': 'Откройте закупку и проверьте результат.',
+            'steps': [],
+        }

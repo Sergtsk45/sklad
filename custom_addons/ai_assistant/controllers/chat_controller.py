@@ -3,6 +3,7 @@ import logging
 import time
 
 from odoo import http
+from odoo.exceptions import ValidationError
 from odoo.http import request
 from odoo.addons.ai_assistant.services.openrouter_client import (
     OpenRouterClient,
@@ -165,12 +166,24 @@ class AiAssistantController(http.Controller):
 
         warnings = validate_invoice_data(invoice_data)
         uid = request.env.uid
-        extraction_token = _invoice_store.put(uid, invoice_data)
+        extraction_token = _invoice_store.put(
+            uid,
+            invoice_data,
+            filename=filename,
+            file_bytes=file_bytes,
+            mimetype='application/pdf' if ext == 'pdf' else '',
+        )
         invoice_context = InvoiceContextHelper(
             request.env,
             _invoice_store,
         ).fetch_context(uid, extraction_token)
-        suggestions = self._invoice_upload_suggestions(invoice_context)
+        workflow = InvoiceWorkflow(request.env, _invoice_store)
+        suggestions = self._invoice_upload_suggestions(
+            workflow,
+            uid,
+            extraction_token,
+            invoice_context,
+        )
 
         totals = invoice_data.get('totals', {})
         total_w_vat = totals.get('total_w_vat', '')
@@ -241,7 +254,9 @@ class AiAssistantController(http.Controller):
             },
         })
 
-    def _invoice_upload_suggestions(self, invoice_context):
+    def _invoice_upload_suggestions(
+        self, workflow, uid, extraction_token, invoice_context
+    ):
         partner = (invoice_context or {}).get('partner') or {}
         if partner.get('needs_create_partner_draft'):
             name = (
@@ -253,6 +268,17 @@ class AiAssistantController(http.Controller):
                 'label': 'Создать поставщика: %s' % self._short_label(name),
                 'action': InvoiceWorkflow.ACTION_CREATE_PARTNER,
             }]
+        draft = workflow.next_product_draft(uid, extraction_token)
+        if draft:
+            return [{
+                'label': 'Создать товар: %s'
+                % self._short_label(draft.get('line_name') or ''),
+                'action': InvoiceWorkflow.ACTION_NEXT_PRODUCT,
+            }]
+        partner_ready = workflow.partner_ready(uid, extraction_token)
+        products_ready = workflow.all_products_ready(uid, extraction_token)
+        if partner_ready and products_ready:
+            return workflow.purchase_start_suggestions(uid, extraction_token)
         return []
 
     @http.route('/ai_assistant/chat', type='jsonrpc', auth='user',
@@ -260,7 +286,8 @@ class AiAssistantController(http.Controller):
     def chat(self, message=None, context=None, history=None,
              screenshot=None, extraction_token=None,
              invoice_workflow_action=None, invoice_po_warehouse=None,
-             awaiting_po_warehouse=None, **kwargs):
+             awaiting_po_warehouse=None, invoice_workflow_payload=None,
+             **kwargs):
         try:
             if not request.env.user.has_group(_GROUP_USER):
                 return {'error': 'Доступ запрещён'}
@@ -270,6 +297,7 @@ class AiAssistantController(http.Controller):
                 invoice_workflow_action=invoice_workflow_action,
                 invoice_po_warehouse=invoice_po_warehouse,
                 awaiting_po_warehouse=awaiting_po_warehouse,
+                invoice_workflow_payload=invoice_workflow_payload,
                 message=message,
             )
             if workflow_result is not None:
@@ -1061,6 +1089,7 @@ class AiAssistantController(http.Controller):
         invoice_workflow_action=None,
         invoice_po_warehouse=None,
         awaiting_po_warehouse=None,
+        invoice_workflow_payload=None,
         message=None,
     ):
         if not request.env.user.has_group(_GROUP_SUPPLY):
@@ -1070,9 +1099,64 @@ class AiAssistantController(http.Controller):
             return None
         workflow = InvoiceWorkflow(request.env, _invoice_store)
         uid = request.env.uid
+        payload = invoice_workflow_payload or {}
+        if not isinstance(payload, dict):
+            payload = {}
 
         if invoice_workflow_action == InvoiceWorkflow.ACTION_CREATE_PARTNER:
             return self._partner_pending_response(workflow, uid, token)
+
+        if invoice_workflow_action == InvoiceWorkflow.ACTION_PO_START:
+            return workflow.set_create_po_decision(
+                uid,
+                token,
+                payload.get('create_po') is True,
+            )
+
+        if (
+            invoice_workflow_action
+            == InvoiceWorkflow.ACTION_PO_SELECT_WAREHOUSE
+        ):
+            return workflow.select_warehouse(
+                uid,
+                token,
+                payload=payload,
+                warehouse_query=invoice_po_warehouse,
+            )
+
+        if (
+            invoice_workflow_action
+            == InvoiceWorkflow.ACTION_PO_SET_ATTACH_INVOICE
+        ):
+            return workflow.set_attach_invoice_decision(
+                uid,
+                token,
+                payload.get('attach_invoice') is True,
+            )
+
+        if (
+            invoice_workflow_action
+            == InvoiceWorkflow.ACTION_PO_SET_RECEIVE_PICKING
+        ):
+            return workflow.set_receive_picking_decision(
+                uid,
+                token,
+                payload.get('receive_picking') is True,
+            )
+
+        if invoice_workflow_action == InvoiceWorkflow.ACTION_PO_CANCEL:
+            return workflow.cancel_purchase_flow(uid, token)
+
+        if invoice_workflow_action == InvoiceWorkflow.ACTION_PO_EXECUTE_PLAN:
+            try:
+                return workflow.execute_purchase_plan(uid, token)
+            except ValidationError as err:
+                return {
+                    'answer': str(err),
+                    'suggestions': [],
+                    'cards': [],
+                    'meta': {'status': 'error'},
+                }
 
         if message and self._message_intends_partner(message):
             partner_response = self._partner_pending_response(
@@ -1159,56 +1243,20 @@ class AiAssistantController(http.Controller):
                         ),
                     )
             else:
-                # Все карточки готовы — используем переданный склад или
-                # запрашиваем его, если склад еще не выбран.
-                warehouse_query = (invoice_po_warehouse or '').strip()
-                payload = workflow.prepare_po_draft(
-                    uid,
-                    token,
-                    warehouse_query,
-                )
-                if payload.get('status') == 'pending':
-                    return self._pending_write_response(
-                        'create_purchase_order_draft',
-                        payload['po_args'],
-                        metadata={'extraction_token': token},
-                        answer=payload['answer'],
-                        meta={'warehouse_id': payload.get('warehouse_id')},
-                    )
-                return {
-                    'answer': payload.get('answer', ''),
-                    'suggestions': payload.get('suggestions') or [],
-                    'cards': [],
-                    'meta': payload.get('meta') or {
-                        'awaiting_po_warehouse': True,
-                    },
-                }
+                return workflow.begin_purchase_flow_prompt(uid, token)
 
         warehouse_query = (invoice_po_warehouse or '').strip()
         if awaiting_po_warehouse and not warehouse_query and message:
             warehouse_query = (message or '').strip()
-        if (
-            invoice_workflow_action == InvoiceWorkflow.ACTION_PREPARE_PO or
-            (awaiting_po_warehouse and warehouse_query)
-        ):
-            payload = workflow.prepare_po_draft(uid, token, warehouse_query)
-            status = payload.get('status')
-            if status == 'pending':
-                return self._pending_write_response(
-                    'create_purchase_order_draft',
-                    payload['po_args'],
-                    metadata={'extraction_token': token},
-                    answer=payload['answer'],
-                )
-            response = {
-                'answer': payload.get('answer', ''),
-                'suggestions': payload.get('suggestions') or [],
-                'cards': [],
-                'meta': payload.get('meta') or {'status': status},
-            }
-            if status == 'products_incomplete':
-                response['suggestions'] = payload.get('suggestions') or []
-            return response
+        if invoice_workflow_action == InvoiceWorkflow.ACTION_PREPARE_PO:
+            return workflow.begin_purchase_flow_prompt(uid, token)
+        if awaiting_po_warehouse and warehouse_query:
+            return workflow.select_warehouse(
+                uid,
+                token,
+                payload={},
+                warehouse_query=warehouse_query,
+            )
 
         return None
 

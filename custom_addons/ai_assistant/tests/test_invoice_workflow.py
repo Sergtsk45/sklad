@@ -93,8 +93,40 @@ class TestInvoiceWorkflow(TransactionCase):
         )
         self.assertEqual(
             suggestions[0]['action'],
-            InvoiceWorkflow.ACTION_PREPARE_PO,
+            InvoiceWorkflow.ACTION_PO_START,
         )
+        self.assertEqual(suggestions[0]['payload']['create_po'], True)
+
+    def test_purchase_flow_no_stops_without_writes(self):
+        token = self._put_token()
+        self.workflow.record_product_created(self.env.uid, token, '1', 101)
+        self.workflow.record_product_created(self.env.uid, token, '2', 102)
+
+        payload = self.workflow.set_create_po_decision(
+            self.env.uid, token, False,
+        )
+
+        self.assertEqual(payload['status'], InvoiceWorkflow.FLOW_DONE)
+        flow = self.workflow.current_purchase_flow_state(
+            self.env.uid, token,
+        )
+        self.assertFalse(flow['create_po'])
+        self.assertFalse(flow['po_id'])
+
+    def test_purchase_flow_yes_asks_warehouse(self):
+        token = self._put_token()
+        self.workflow.record_product_created(self.env.uid, token, '1', 101)
+        self.workflow.record_product_created(self.env.uid, token, '2', 102)
+
+        payload = self.workflow.set_create_po_decision(
+            self.env.uid, token, True,
+        )
+
+        self.assertEqual(
+            payload['status'],
+            InvoiceWorkflow.FLOW_AWAITING_WAREHOUSE,
+        )
+        self.assertTrue(payload['meta']['awaiting_po_warehouse'])
 
     def test_prepare_po_draft_builds_lines(self):
         token = self._put_token()
@@ -110,6 +142,94 @@ class TestInvoiceWorkflow(TransactionCase):
         self.assertEqual(len(po_args['lines']), 2)
         self.assertEqual(po_args['lines'][0]['product_qty'], 2.0)
         self.assertEqual(po_args['lines'][0]['price_unit'], 1500.0)
+
+    def test_execute_purchase_plan_creates_confirmed_po_and_attachment(self):
+        product_1 = self.env['product.product'].create({
+            'name': 'AIA execute product 1',
+            'is_storable': True,
+            'purchase_ok': True,
+        })
+        product_2 = self.env['product.product'].create({
+            'name': 'AIA execute product 2',
+            'is_storable': True,
+            'purchase_ok': True,
+        })
+        token = self.store.put(
+            self.env.uid,
+            self.invoice_data,
+            filename='invoice-aia.pdf',
+            file_bytes=b'%PDF-test',
+            mimetype='application/pdf',
+        )
+        self.workflow.record_product_created(
+            self.env.uid, token, '1', product_1.id,
+        )
+        self.workflow.record_product_created(
+            self.env.uid, token, '2', product_2.id,
+        )
+        self.workflow.set_create_po_decision(self.env.uid, token, True)
+        self.workflow.select_warehouse(
+            self.env.uid,
+            token,
+            payload={'warehouse_query': 'Ос.ск'},
+        )
+        self.workflow.set_attach_invoice_decision(self.env.uid, token, True)
+        self.workflow.set_receive_picking_decision(self.env.uid, token, False)
+
+        result = self.workflow.execute_purchase_plan(self.env.uid, token)
+        flow = self.workflow.current_purchase_flow_state(self.env.uid, token)
+        po = self.env['purchase.order'].browse(flow['po_id'])
+        attachment = self.env['ir.attachment'].browse(flow['attachment_id'])
+
+        self.assertEqual(result['status'], InvoiceWorkflow.FLOW_EXECUTED)
+        self.assertEqual(po.state, 'purchase')
+        self.assertEqual(po.partner_ref, '3315')
+        self.assertTrue(attachment.exists())
+        self.assertEqual(attachment.res_id, po.id)
+
+        second = self.workflow.execute_purchase_plan(self.env.uid, token)
+        self.assertEqual(second['status'], InvoiceWorkflow.FLOW_EXECUTED)
+        self.assertEqual(
+            self.env['purchase.order'].search_count([
+                ('origin', '=', '3315/AIA'),
+            ]),
+            1,
+        )
+
+    def test_execute_purchase_plan_can_validate_receipt(self):
+        product = self.env['product.product'].create({
+            'name': 'AIA receive product',
+            'is_storable': True,
+            'purchase_ok': True,
+        })
+        invoice = dict(self.invoice_data)
+        invoice['invoice_number'] = 'AIA-RCV-1'
+        invoice['items'] = [{
+            'line_no': 1,
+            'name': product.name,
+            'unit': 'шт',
+            'qty': 3,
+            'price': 10.0,
+        }]
+        token = self.store.put(self.env.uid, invoice)
+        self.workflow.record_product_created(
+            self.env.uid, token, '1', product.id,
+        )
+        self.workflow.set_create_po_decision(self.env.uid, token, True)
+        self.workflow.select_warehouse(
+            self.env.uid,
+            token,
+            payload={'warehouse_query': 'Ос.ск'},
+        )
+        self.workflow.set_attach_invoice_decision(self.env.uid, token, False)
+        self.workflow.set_receive_picking_decision(self.env.uid, token, True)
+
+        self.workflow.execute_purchase_plan(self.env.uid, token)
+        flow = self.workflow.current_purchase_flow_state(self.env.uid, token)
+        picking = self.env['stock.picking'].browse(flow['picking_id'])
+
+        self.assertTrue(picking.exists())
+        self.assertEqual(picking.state, 'done')
 
     def test_next_partner_draft_for_unknown_supplier(self):
         invoice = dict(self.invoice_data)

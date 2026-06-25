@@ -35,6 +35,7 @@ export const aiChatService = {
                 messages: data.messages || [],
                 extractionToken: data.extraction_token || null,
                 awaitingPoWarehouse: data.awaiting_po_warehouse === true,
+                purchaseFlow: data.purchase_flow || null,
             };
         }
 
@@ -80,6 +81,10 @@ export const aiChatService = {
                         state.awaitingPoWarehouse !== undefined
                             ? state.awaitingPoWarehouse
                             : previous.awaitingPoWarehouse,
+                    purchase_flow:
+                        state.purchaseFlow !== undefined
+                            ? state.purchaseFlow
+                            : previous.purchaseFlow,
                 });
 
                 while (trimmed.length > 1 && serialized.length > MAX_BYTES) {
@@ -95,6 +100,10 @@ export const aiChatService = {
                             state.awaitingPoWarehouse !== undefined
                                 ? state.awaitingPoWarehouse
                                 : previous.awaitingPoWarehouse,
+                        purchase_flow:
+                            state.purchaseFlow !== undefined
+                                ? state.purchaseFlow
+                                : previous.purchaseFlow,
                     });
                 }
 
@@ -279,7 +288,18 @@ export const aiChatService = {
             return response.json();
         }
 
-        async function workflowAction(extractionToken, action) {
+        async function workflowAction(extractionToken, action, payload = {}) {
+            const params = {
+                message: "",
+                history: [],
+                extraction_token: extractionToken,
+                invoice_workflow_action: action,
+                invoice_workflow_payload: payload || {},
+            };
+            if (payload && (payload.warehouse_query || payload.warehouse_name)) {
+                params.invoice_po_warehouse =
+                    payload.warehouse_query || payload.warehouse_name;
+            }
             const response = await fetch("/ai_assistant/chat", {
                 method: "POST",
                 headers: {
@@ -289,12 +309,7 @@ export const aiChatService = {
                 body: JSON.stringify({
                     jsonrpc: "2.0",
                     method: "call",
-                    params: {
-                        message: "",
-                        history: [],
-                        extraction_token: extractionToken,
-                        invoice_workflow_action: action,
-                    },
+                    params,
                 }),
             });
             if (!response.ok) {

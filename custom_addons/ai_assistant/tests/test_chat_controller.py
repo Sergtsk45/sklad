@@ -625,7 +625,7 @@ class TestChatController(HttpCase):
             'create_partner_draft',
         )
 
-    def test_invoice_po_intent_pending_returns_confirmation_card(self):
+    def test_invoice_po_intent_returns_start_question_without_write_card(self):
         from odoo.addons.ai_assistant.controllers import chat_controller
 
         invoice_data = {
@@ -639,18 +639,6 @@ class TestChatController(HttpCase):
             self.env.ref('base.user_admin').id,
             invoice_data,
         )
-        po_args = {
-            'partner_id': 12,
-            'picking_type_id': 17,
-            'origin': 'НФ-READY-PO/AIA',
-            'partner_ref': 'НФ-READY-PO',
-            'lines': [{
-                'product_id': 1,
-                'product_qty': 1.0,
-                'product_uom': 1,
-                'price_unit': 100.0,
-            }],
-        }
 
         with patch(
             'odoo.addons.ai_assistant.services.invoice_workflow.'
@@ -660,15 +648,6 @@ class TestChatController(HttpCase):
             'odoo.addons.ai_assistant.services.invoice_workflow.'
             'InvoiceWorkflow.all_products_ready',
             return_value=True,
-        ), patch(
-            'odoo.addons.ai_assistant.services.invoice_workflow.'
-            'InvoiceWorkflow.prepare_po_draft',
-            return_value={
-                'status': 'pending',
-                'answer': 'Черновик закупки готов.',
-                'po_args': po_args,
-                'warehouse_id': 5,
-            },
         ):
             result = self._post_chat({
                 'message': 'создай закупку на склад Ос.ск',
@@ -676,15 +655,14 @@ class TestChatController(HttpCase):
             })
 
         data = result.get('result', {})
-        cards = data.get('cards', [])
-        self.assertTrue(cards, 'Ожидали confirmation card для PO')
-        self.assertEqual(cards[0]['type'], 'confirmation')
+        self.assertEqual(data.get('cards'), [])
+        self.assertIn('Создать закупку', data.get('answer', ''))
+        suggestions = data.get('suggestions') or []
         self.assertEqual(
-            cards[0]['plan']['tool_name'],
-            'create_purchase_order_draft',
+            suggestions[0]['action'],
+            'invoice_po_start',
         )
-        self.assertEqual(data.get('meta', {}).get('status'), 'pending')
-        self.assertEqual(data.get('meta', {}).get('warehouse_id'), 5)
+        self.assertTrue(suggestions[0]['payload']['create_po'])
 
     def test_result_card_po_has_confirm_validate_steps(self):
         """AIA-059: ResultCard для PO содержит шаги Confirm и Validate."""

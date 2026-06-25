@@ -244,6 +244,52 @@ AI Assistant v3 добавляет ограниченный tool layer для с
 rate limits и audit. AI создаёт только черновики и заметки; Confirm/Validate
 остаются ручными действиями пользователя в Odoo UI.
 
+### Закупка по загруженному счёту
+
+После загрузки PDF-счёта чат ведёт отдельную детерминированную state machine в
+`InvoiceWorkflow`, а не свободный LLM-диалог. Состояние хранится в
+`InvoiceExtractionStore.session.purchase_flow`, поэтому после перезагрузки
+страницы frontend восстанавливает `extraction_token` и состояние сценария из
+session storage, а источником истины остаётся backend session.
+
+Сценарий запускается только когда поставщик найден или создан, и каждая строка
+счёта сопоставлена с карточкой товара. Далее пользователь отвечает кнопками:
+
+1. `invoice_po_start` — создать закупку или завершить сценарий без изменений.
+2. `invoice_po_select_warehouse` — выбрать склад кнопкой или текстом через
+   `FindWarehouseTool`; неоднозначный поиск возвращает варианты.
+3. `invoice_po_set_attach_invoice` — сохранить решение по PDF-вложению.
+4. `invoice_po_set_receive_picking` — сохранить решение по приёмке.
+5. `invoice_po_execute_plan` — выполнить итоговый план.
+
+До финального `Выполнить` не создаются `purchase.order`, `ir.attachment` и не
+проводится `stock.picking`. Финальный запуск выполняет выбранные действия в
+порядке: создать PO из `_build_po_args()` через валидированный
+`CreatePurchaseOrderDraftTool`, вызвать `purchase.order.button_confirm()`,
+прикрепить исходный PDF к PO при `attach_invoice=True`, затем провести входящую
+приёмку через `stock.picking.button_validate()` при `receive_picking=True`.
+Повторный запуск использует сохранённый `po_id` и поиск attachment по
+`res_model/res_id/name`, поэтому не создаёт дубликаты.
+
+```mermaid
+flowchart TD
+    Ready[Поставщик и товары готовы] --> AskPO[Создать закупку?]
+    AskPO -->|Нет| Stop[Завершить без изменений]
+    AskPO -->|Да| Warehouse[Выбор склада]
+    Warehouse --> Attach[Привязать счёт?]
+    Attach --> Receipt[Провести приёмку?]
+    Receipt --> Plan[Итоговый план]
+    Plan -->|Отмена| Stop
+    Plan -->|Выполнить| PO[purchase.order create + button_confirm]
+    PO --> MaybeAttach{attach_invoice?}
+    MaybeAttach -->|Да| PDF[ir.attachment на PO]
+    MaybeAttach -->|Нет| MaybeReceipt
+    PDF --> MaybeReceipt{receive_picking?}
+    MaybeReceipt -->|Да| Picking[stock.picking button_validate]
+    MaybeReceipt -->|Нет| Done[Готово]
+    Picking --> Done
+```
+
 Сценарий контрагентов расширяет тот же tool layer:
 
 - `create_partner_draft` создаёт нового `res.partner` только после поиска

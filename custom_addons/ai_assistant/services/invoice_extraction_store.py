@@ -17,15 +17,22 @@ class InvoiceExtractionStore:
         self._items = {}
         self._ttl_seconds = ttl_seconds
 
-    def put(self, uid, invoice_data):
+    def put(self, uid, invoice_data, filename=None, file_bytes=None,
+            mimetype=None):
         """Сохраняет данные счёта, возвращает extraction_token."""
         self._purge_expired()
         token = secrets.token_urlsafe(18)
         self._items[(uid, token)] = {
             'data': invoice_data,
+            'file': {
+                'name': filename or '',
+                'bytes': file_bytes,
+                'mimetype': mimetype or '',
+            },
             'session': {
                 'created_by_line': {},
                 'created_partner_id': None,
+                'purchase_flow': self._default_purchase_flow(),
             },
             'expires_at': time.time() + self._ttl_seconds,
         }
@@ -45,11 +52,14 @@ class InvoiceExtractionStore:
             item['session'] = {
                 'created_by_line': {},
                 'created_partner_id': None,
+                'purchase_flow': self._default_purchase_flow(),
             }
         if 'created_by_line' not in item['session']:
             item['session']['created_by_line'] = {}
         if 'created_partner_id' not in item['session']:
             item['session']['created_partner_id'] = None
+        if 'purchase_flow' not in item['session']:
+            item['session']['purchase_flow'] = self._default_purchase_flow()
         return item['session']
 
     def find_latest_token(self, uid):
@@ -81,6 +91,34 @@ class InvoiceExtractionStore:
         if not item:
             return None
         return item['data']
+
+    def get_file(self, uid, token):
+        """Возвращает исходный файл счёта из in-memory store."""
+        item = self._get_item(uid, token)
+        if not item:
+            return None
+        return item.get('file') or {}
+
+    def reset_purchase_flow(self, uid, token):
+        session = self.ensure_session(uid, token)
+        if session is not None:
+            session['purchase_flow'] = self._default_purchase_flow()
+        return session.get('purchase_flow') if session else None
+
+    def _default_purchase_flow(self):
+        return {
+            'state': 'idle',
+            'create_po': None,
+            'warehouse_id': None,
+            'warehouse_name': '',
+            'picking_type_id': None,
+            'attach_invoice': None,
+            'receive_picking': None,
+            'po_id': None,
+            'attachment_id': None,
+            'picking_id': None,
+            'executed': False,
+        }
 
     def pop(self, uid, token):
         """Извлекает данные счёта (удаляет из store)."""

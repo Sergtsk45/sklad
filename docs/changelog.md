@@ -1,3 +1,31 @@
+## [2026-06-25] — feat(ai_assistant): state machine закупки по счёту
+
+### Добавлено
+- Кнопочный purchase flow после загрузки счёта: `Создать закупку?` → выбор
+  склада → `Привязать счёт?` → `Провести приёмку?` → итоговый план →
+  `Выполнить`.
+- `purchase_flow` в invoice session с состоянием, выбранным складом,
+  решениями пользователя, `po_id`, `attachment_id`, `picking_id` и защитой от
+  повторного выполнения.
+- Финальный action `invoice_po_execute_plan`: создаёт и подтверждает PO,
+  idempotent прикрепляет PDF счёта и при необходимости проводит incoming
+  picking через `button_validate`.
+- Frontend transport `suggestions[].payload` и сохранение `purchase_flow` в
+  session storage.
+
+### Изменено
+- Старый shortcut `invoice_prepare_po` больше не создаёт pending write card для
+  PO; он переводит пользователя в безопасный сценарий сбора решений.
+- PDF исходного счёта сохраняется в in-memory invoice store и создаётся как
+  `ir.attachment` только после финальной кнопки `Выполнить`.
+
+### Проверено
+- `python3 -m flake8` по изменённым Python-файлам.
+- `docker exec odoo19-local odoo --test-enable -u ai_assistant --test-tags /ai_assistant -d odoo19_local --stop-after-init --http-port=8071`
+  — 383 post-tests, 0 failed, 0 errors.
+
+---
+
 ## [2026-06-20] — fix(object_request): читаемые имена строк на вкладке «Размещение по складам»
 
 ### Исправлено
