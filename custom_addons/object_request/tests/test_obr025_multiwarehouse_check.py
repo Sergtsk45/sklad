@@ -1,10 +1,18 @@
 """
-OBR-025: Проверка наличия по всем активным складам компании.
+OBR-025: Проверка наличия по складам выдачи.
 """
 import datetime
 
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
+
+
+DEFAULT_ISSUE_WAREHOUSE_DATA = (
+    ("Офис", "Офис. Стеллаж"),
+    ("Ос.ск", "Основной склад"),
+    ("метал", "Склад металла"),
+    ("Расх", "Расходники"),
+)
 
 
 @tagged("post_install", "-at_install")
@@ -33,32 +41,37 @@ class TestObr025MultiwarehouseCheck(TransactionCase):
                 "is_storable": True,
             }
         )
-        warehouses = self.env["stock.warehouse"].search(
-            [
-                ("company_id", "=", self.env.company.id),
-                ("active", "=", True),
-            ],
-            limit=2,
-        )
-        self.warehouse1 = warehouses[0]
-        self.warehouse2 = (
-            warehouses[1] if len(warehouses) > 1 else self._create_warehouse2()
-        )
+        self.default_issue_warehouses = self._ensure_default_issue_warehouses()
+        self.warehouse1 = self.default_issue_warehouses[0]
+        self.warehouse2 = self.default_issue_warehouses[1]
         self.request = self._create_request()
         self.line = self._add_line(self.request)
 
-    def _create_warehouse2(self):
-        return (
-            self.env["stock.warehouse"]
-            .sudo()
-            .create(
-                {
-                    "name": "Склад OBR025-2",
-                    "code": "O25B",
-                    "company_id": self.env.company.id,
-                }
-            )
+    def _ensure_default_issue_warehouses(self):
+        Warehouse = (
+            self.env["stock.warehouse"].with_context(active_test=False).sudo()
         )
+        warehouses = self.env["stock.warehouse"]
+        for code, name in DEFAULT_ISSUE_WAREHOUSE_DATA:
+            warehouse = Warehouse.search(
+                [
+                    ("company_id", "=", self.env.company.id),
+                    ("code", "=", code),
+                ],
+                limit=1,
+            )
+            if warehouse:
+                warehouse.write({"name": name, "active": True})
+            else:
+                warehouse = Warehouse.create(
+                    {
+                        "name": name,
+                        "code": code,
+                        "company_id": self.env.company.id,
+                    }
+                )
+            warehouses |= warehouse
+        return warehouses
 
     def _create_request(self):
         return self.env["object.request"].create(
@@ -87,17 +100,14 @@ class TestObr025MultiwarehouseCheck(TransactionCase):
             qty,
         )
 
-    def test_check_stock_creates_row_for_each_active_warehouse(self):
+    def test_check_stock_creates_row_for_each_default_issue_warehouse(self):
         self.request.action_check_stock()
-        active_warehouses = self.env["stock.warehouse"].search(
-            [
-                ("company_id", "=", self.env.company.id),
-                ("active", "=", True),
-            ]
+        expected_warehouses = (
+            self.default_issue_warehouses | self.project.warehouse_id
         )
         self.assertEqual(
             set(self.line.stock_ids.mapped("warehouse_id").ids),
-            set(active_warehouses.ids),
+            set(expected_warehouses.ids),
         )
 
     def test_check_stock_sums_multiple_warehouses(self):

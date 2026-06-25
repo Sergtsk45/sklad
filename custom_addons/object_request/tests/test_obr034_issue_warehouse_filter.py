@@ -7,6 +7,14 @@ from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
 
+DEFAULT_ISSUE_WAREHOUSE_DATA = (
+    ("Офис", "Офис. Стеллаж"),
+    ("Ос.ск", "Основной склад"),
+    ("метал", "Склад металла"),
+    ("Расх", "Расходники"),
+)
+
+
 @tagged("post_install", "-at_install", "obr034")
 class TestObr034IssueWarehouseFilter(TransactionCase):
     """Склады выдачи и скрытие нулевых остатков в распределении."""
@@ -31,32 +39,37 @@ class TestObr034IssueWarehouseFilter(TransactionCase):
                 "is_storable": True,
             }
         )
-        warehouses = self.env["stock.warehouse"].search(
-            [
-                ("company_id", "=", self.env.company.id),
-                ("active", "=", True),
-            ],
-            limit=2,
-        )
-        self.warehouse1 = warehouses[0]
-        self.warehouse2 = (
-            warehouses[1] if len(warehouses) > 1 else self._create_warehouse2()
-        )
+        self.default_issue_warehouses = self._ensure_default_issue_warehouses()
+        self.warehouse1 = self.default_issue_warehouses[0]
+        self.warehouse2 = self.default_issue_warehouses[1]
         self.request = self._create_request()
         self.line = self._add_line(self.request)
 
-    def _create_warehouse2(self):
-        return (
-            self.env["stock.warehouse"]
-            .sudo()
-            .create(
-                {
-                    "name": "Склад OBR034-2",
-                    "code": "O34B",
-                    "company_id": self.env.company.id,
-                }
-            )
+    def _ensure_default_issue_warehouses(self):
+        Warehouse = (
+            self.env["stock.warehouse"].with_context(active_test=False).sudo()
         )
+        warehouses = self.env["stock.warehouse"]
+        for code, name in DEFAULT_ISSUE_WAREHOUSE_DATA:
+            warehouse = Warehouse.search(
+                [
+                    ("company_id", "=", self.env.company.id),
+                    ("code", "=", code),
+                ],
+                limit=1,
+            )
+            if warehouse:
+                warehouse.write({"name": name, "active": True})
+            else:
+                warehouse = Warehouse.create(
+                    {
+                        "name": name,
+                        "code": code,
+                        "company_id": self.env.company.id,
+                    }
+                )
+            warehouses |= warehouse
+        return warehouses
 
     def _create_request(self):
         return self.env["object.request"].create(
@@ -85,16 +98,47 @@ class TestObr034IssueWarehouseFilter(TransactionCase):
             qty,
         )
 
-    def test_new_request_gets_all_company_warehouses_by_default(self):
-        """Новое требование получает все активные склады компании."""
+    def test_new_request_gets_default_issue_warehouses(self):
+        """Новое требование получает базовые склады и склад объекта."""
         allowed = self.request._get_issue_warehouses()
-        company_warehouses = self.env["stock.warehouse"].search(
-            [
-                ("company_id", "=", self.env.company.id),
-                ("active", "=", True),
-            ]
+        expected = (
+            self.default_issue_warehouses | self.project.warehouse_id
         )
-        self.assertEqual(set(allowed.ids), set(company_warehouses.ids))
+        expected_names = {
+            "Офис. Стеллаж",
+            "Основной склад",
+            "Склад металла",
+            "Расходники",
+            self.project.warehouse_id.name,
+        }
+        self.assertEqual(set(allowed.ids), set(expected.ids))
+        self.assertTrue(expected_names <= set(allowed.mapped("name")))
+
+    def test_project_change_updates_defaults_until_manual_selection(self):
+        """Смена объекта обновляет дефолт, но не ручной выбор складов."""
+        other_project = self.env["object.request.project"].create(
+            {"name": "Другой объект OBR-034"}
+        )
+
+        self.request.write({"project_id": other_project.id})
+        expected = (
+            self.default_issue_warehouses | other_project.warehouse_id
+        )
+        self.assertFalse(self.request.issue_warehouse_selection_manual)
+        self.assertEqual(
+            set(self.request.issue_warehouse_ids.ids),
+            set(expected.ids),
+        )
+
+        self.request.write(
+            {"issue_warehouse_ids": [(6, 0, [self.warehouse2.id])]}
+        )
+        self.assertTrue(self.request.issue_warehouse_selection_manual)
+        self.request.write({"project_id": self.project.id})
+        self.assertEqual(
+            set(self.request.issue_warehouse_ids.ids),
+            {self.warehouse2.id},
+        )
 
     def test_line_stock_ids_hide_zero_rows_by_default(self):
         """По умолчанию в таблице видны только строки с остатком/планом."""

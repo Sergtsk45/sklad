@@ -5,6 +5,8 @@ from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
+DEFAULT_ISSUE_WAREHOUSE_CODES = ("Офис", "Ос.ск", "метал", "Расх")
+
 
 class ObjectRequest(models.Model):
     _name = "object.request"
@@ -257,7 +259,7 @@ class ObjectRequest(models.Model):
                 rec.with_context(auto_issue_warehouse_selection=True).sudo().write(
                     {
                         "issue_warehouse_ids": [
-                            (6, 0, rec._get_all_company_warehouses().ids)
+                            (6, 0, rec._get_default_issue_warehouses().ids)
                         ]
                     }
                 )
@@ -300,6 +302,7 @@ class ObjectRequest(models.Model):
                 rec._clear_invalid_stock_distribution_filter()
         if project_changed:
             self._clear_line_locations_after_project_change()
+            self._update_default_issue_warehouses_after_project_change()
         if distribution_changed:
             self.invalidate_recordset(["line_stock_ids"])
         return res
@@ -378,11 +381,35 @@ class ObjectRequest(models.Model):
             ]
         )
 
+    def _get_default_issue_warehouses(self):
+        self.ensure_one()
+        warehouses = self.env["stock.warehouse"].sudo().search(
+            [
+                ("company_id", "=", self.company_id.id),
+                ("active", "=", True),
+                ("code", "in", DEFAULT_ISSUE_WAREHOUSE_CODES),
+            ]
+        )
+        project_warehouse = self.project_id.warehouse_id
+        if project_warehouse and project_warehouse.active:
+            warehouses |= project_warehouse
+        return warehouses
+
     def _get_issue_warehouses(self):
         self.ensure_one()
         if self.issue_warehouse_ids:
             return self.issue_warehouse_ids
-        return self._get_all_company_warehouses()
+        return self._get_default_issue_warehouses()
+
+    def _update_default_issue_warehouses_after_project_change(self):
+        for rec in self.filtered(lambda item: not item.issue_warehouse_selection_manual):
+            rec.with_context(auto_issue_warehouse_selection=True).sudo().write(
+                {
+                    "issue_warehouse_ids": [
+                        (6, 0, rec._get_default_issue_warehouses().ids)
+                    ]
+                }
+            )
 
     def _sync_after_issue_warehouses_change(self, previous_warehouses):
         """Сбросить план выдачи со складов, исключённых из списка."""
@@ -1115,7 +1142,7 @@ class ObjectRequest(models.Model):
             )
 
     def action_check_stock(self):
-        """Проверить остатки по всем активным складам компании."""
+        """Проверить остатки по складам выдачи."""
         self.ensure_one()
         self._check_supply_manager_processing_action()
         if self.state not in ("draft", "in_progress"):
@@ -1123,10 +1150,10 @@ class ObjectRequest(models.Model):
                 "Рассчитать наличие можно только в черновике или в работе."
             )
         if not self.issue_warehouse_selection_manual:
-            all_warehouses = self._get_all_company_warehouses()
-            if set(self.issue_warehouse_ids.ids) != set(all_warehouses.ids):
+            default_warehouses = self._get_default_issue_warehouses()
+            if set(self.issue_warehouse_ids.ids) != set(default_warehouses.ids):
                 self.with_context(auto_issue_warehouse_selection=True).sudo().write(
-                    {"issue_warehouse_ids": [(6, 0, all_warehouses.ids)]}
+                    {"issue_warehouse_ids": [(6, 0, default_warehouses.ids)]}
                 )
         warehouses = self._get_issue_warehouses()
         if not warehouses:
