@@ -152,9 +152,9 @@ class TestOBR021Purchase(TransactionCase):
             f"Передаточная ведомость №{po.partner_ref} "
             f"{self.project.warehouse_id.display_name}"
         )
-        report = self.env.ref("purchase.action_report_purchase_order").with_context(
-            lang="ru_RU"
-        )
+        report = self.env.ref(
+            "purchase.action_report_purchase_order"
+        ).with_context(lang="ru_RU")
         filename = safe_eval(report.print_report_name, {"object": po})
         self.assertFalse(po.is_object_request_purchase)
         self.assertEqual(filename, expected)
@@ -419,3 +419,76 @@ class TestOBR021Purchase(TransactionCase):
 
         self.assertEqual(len(po_vendor1.order_line), 2)
         self.assertEqual(len(po_vendor2.order_line), 1)
+
+    def test_purchase_guard_blocks_similar_product_with_issue_stock(self):
+        """PO не создаётся молча, если похожий товар есть на складе выдачи."""
+        request = self._create_request()
+        wrong_product = self.env["product.product"].create(
+            {
+                "name": "Фланец ст. Ду65 1.0МПа кованый OBR021-GUARD",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        stock_product = self.env["product.product"].create(
+            {
+                "name": "Фланец DN65 PN16 OBR021-GUARD",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        warehouse = self.project.warehouse_id
+        request.write({"issue_warehouse_ids": [(6, 0, [warehouse.id])]})
+        self.env["stock.quant"]._update_available_quantity(
+            stock_product,
+            warehouse.lot_stock_id,
+            201.0,
+        )
+        line = self._add_line(request, wrong_product, 5.0, self.vendor1)
+        line.write({"name_raw": "Фланец ст. Ду 65мм 1,0МПа OBR021-GUARD"})
+        request.write({"state": "in_progress"})
+
+        wizard = self._open_wizard(request)
+        with self.assertRaises(UserError) as err:
+            wizard.action_create_purchase()
+
+        self.assertIn("Закупка остановлена", str(err.exception))
+        self.assertIn(stock_product.display_name, str(err.exception))
+
+    def test_purchase_guard_override_creates_po_and_logs_note(self):
+        """Явное подтверждение создаёт PO и пишет решение в chatter."""
+        request = self._create_request()
+        wrong_product = self.env["product.product"].create(
+            {
+                "name": "Фланец ст. Ду65 1.0МПа кованый OBR021-OVERRIDE",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        stock_product = self.env["product.product"].create(
+            {
+                "name": "Фланец DN65 PN16 OBR021-OVERRIDE",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        warehouse = self.project.warehouse_id
+        request.write({"issue_warehouse_ids": [(6, 0, [warehouse.id])]})
+        self.env["stock.quant"]._update_available_quantity(
+            stock_product,
+            warehouse.lot_stock_id,
+            201.0,
+        )
+        line = self._add_line(request, wrong_product, 5.0, self.vendor1)
+        line.write({"name_raw": "Фланец ст. Ду 65мм 1,0МПа OBR021-OVERRIDE"})
+        request.write({"state": "in_progress"})
+
+        wizard = self._open_wizard(request)
+        wizard.confirm_stock_guard_override = True
+        result = wizard.action_create_purchase()
+
+        self.assertEqual(result["res_model"], "purchase.order")
+        messages = request.message_ids.mapped("body")
+        self.assertTrue(
+            any(stock_product.display_name in body for body in messages)
+        )

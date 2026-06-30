@@ -44,6 +44,13 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
         string="Только черновики",
         default=True,
     )
+    confirm_stock_guard_override = fields.Boolean(
+        string="Закупить несмотря на похожий остаток",
+        help=(
+            "Разрешает создать закупку, если система нашла похожий товар "
+            "с остатком на складах выдачи."
+        ),
+    )
     comment = fields.Text(string="Комментарий")
     line_count = fields.Integer(
         compute="_compute_counts",
@@ -113,6 +120,13 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                 "По части строк уже создана закупка. "
                 "Повторное создание PO по тем же строкам запрещено."
             )
+        stock_warnings = self._find_similar_stock_purchase_warnings(
+            lines_with_vendor
+        )
+        if stock_warnings and not self.confirm_stock_guard_override:
+            raise UserError(self._format_stock_guard_warning(stock_warnings))
+        if stock_warnings:
+            self._log_stock_guard_override(stock_warnings)
 
         created_orders = self._create_orders_by_vendor(lines_with_vendor)
 
@@ -162,6 +176,117 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             }
         )
         return created
+
+    def _find_similar_stock_purchase_warnings(self, lines):
+        self.ensure_one()
+        request = self.request_id
+        warehouses = request._get_issue_warehouses()
+        if not warehouses:
+            return []
+        products = lines.mapped("product_id")
+        stock_by_key = request._get_stock_qty_by_product_warehouse(
+            products,
+            warehouses,
+        )
+        service = self.env["object.request.matching.candidate.service"]
+        warnings = []
+        for line in lines:
+            selected_qty = sum(
+                stock_by_key.get((line.product_id.id, warehouse.id), 0.0)
+                for warehouse in warehouses
+            )
+            if selected_qty > 0:
+                continue
+            candidate_result = service.build_candidates(
+                line.name_raw,
+                line.supplier_article,
+                vendor=line.preferred_vendor_id,
+                technical_designation=line.technical_designation,
+                request=request,
+                issue_warehouses=warehouses,
+            )
+            candidate = self._best_stock_guard_candidate(
+                line,
+                candidate_result,
+            )
+            if candidate:
+                warnings.append(
+                    {
+                        "line": line,
+                        "selected_product": line.product_id.display_name,
+                        "candidate": candidate,
+                    }
+                )
+        return warnings
+
+    def _best_stock_guard_candidate(self, line, candidate_result):
+        for candidate in candidate_result.get("candidates", []):
+            if candidate.get("product_id") == line.product_id.id:
+                continue
+            if not candidate.get("has_issue_stock"):
+                continue
+            if candidate.get("local_score", 0.0) < 0.25:
+                continue
+            return candidate
+        return None
+
+    def _format_stock_guard_warning(self, warnings):
+        lines = [
+            "Закупка остановлена: найдены похожие товары с остатком "
+            "на складах выдачи.",
+            "",
+        ]
+        for item in warnings[:10]:
+            line = item["line"]
+            candidate = item["candidate"]
+            lines.append(
+                "- %s: выбран «%s», но есть «%s» (%g; %s)."
+                % (
+                    line.name_raw,
+                    item["selected_product"],
+                    candidate["display_name"],
+                    candidate.get("stock_qty_on_issue_warehouses", 0.0),
+                    candidate.get("stock_warehouse_names")
+                    or "склад не указан",
+                )
+            )
+        if len(warnings) > 10:
+            lines.append("- ...и ещё %s строк." % (len(warnings) - 10))
+        lines.extend(
+            [
+                "",
+                "Выберите складской товар в строке требования или установите "
+                "флаг «Закупить несмотря на похожий остаток», если кандидат "
+                "не подходит.",
+            ]
+        )
+        return "\n".join(lines)
+
+    def _log_stock_guard_override(self, warnings):
+        self.ensure_one()
+        body_lines = [
+            "Снабженец подтвердил закупку несмотря на похожие товары "
+            "с остатком на складах выдачи:"
+        ]
+        for item in warnings:
+            line = item["line"]
+            candidate = item["candidate"]
+            body_lines.append(
+                "- %s: выбран «%s», отклонён кандидат «%s» (%g; %s)."
+                % (
+                    line.name_raw,
+                    item["selected_product"],
+                    candidate["display_name"],
+                    candidate.get("stock_qty_on_issue_warehouses", 0.0),
+                    candidate.get("stock_warehouse_names")
+                    or "склад не указан",
+                )
+            )
+        self.request_id.message_post(
+            body="<br/>".join(body_lines),
+            message_type="notification",
+            subtype_xmlid="mail.mt_note",
+        )
 
     def _create_single_po(self, vendor, req_lines):
         """Создать один draft purchase.order для поставщика."""

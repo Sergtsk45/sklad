@@ -22,6 +22,7 @@ class TestObr028CombinedMatching(TransactionCase):
                 "name": name,
                 "default_code": default_code,
                 "type": "consu",
+                "is_storable": True,
             }
         )
 
@@ -33,6 +34,13 @@ class TestObr028CombinedMatching(TransactionCase):
                 "product_id": product.id,
                 "product_code": article,
             }
+        )
+
+    def _put_stock(self, product, warehouse, qty):
+        self.env["stock.quant"]._update_available_quantity(
+            product,
+            warehouse.lot_stock_id,
+            qty,
         )
 
     def test_combined_match_query_keeps_name_first_and_deduplicates(self):
@@ -130,8 +138,56 @@ class TestObr028CombinedMatching(TransactionCase):
         self.assertIn("local_score", candidate)
         self.assertIn("matched_tokens", candidate)
         self.assertIn("missing_tokens", candidate)
+        self.assertIn("stock_qty_on_issue_warehouses", candidate)
+        self.assertIn("has_issue_stock", candidate)
 
-    def test_candidate_service_filters_wrong_diameter_and_keeps_likely_valves(self):
+    def test_candidate_service_ranks_issue_stock_candidate_higher(self):
+        project = self.env["object.request.project"].create(
+            {"name": "Объект OBR028 stock rank"}
+        )
+        request = self.env["object.request"].create(
+            {
+                "project_id": project.id,
+                "foreman_user_id": self.env.uid,
+                "need_date": "2026-07-01",
+                "issue_warehouse_ids": [(6, 0, [project.warehouse_id.id])],
+            }
+        )
+        no_stock = self._create_product(
+            "Фланец ст. Ду65 1.0МПа кованый OBR028-STOCK"
+        )
+        with_stock = self._create_product(
+            "Фланец DN65 PN16 OBR028-STOCK"
+        )
+        self._put_stock(with_stock, project.warehouse_id, 201.0)
+
+        result = self.service.build_candidates(
+            "Фланец ст. Ду 65мм 1,0МПа OBR028-STOCK",
+            "",
+            request=request,
+        )
+
+        candidate_ids = [item["product_id"] for item in result["candidates"]]
+        self.assertIn(no_stock.id, candidate_ids)
+        self.assertIn(with_stock.id, candidate_ids)
+        self.assertLess(
+            candidate_ids.index(with_stock.id),
+            candidate_ids.index(no_stock.id),
+        )
+        candidate = next(
+            item
+            for item in result["candidates"]
+            if item["product_id"] == with_stock.id
+        )
+        self.assertTrue(candidate["has_issue_stock"])
+        self.assertAlmostEqual(
+            candidate["stock_qty_on_issue_warehouses"],
+            201.0,
+        )
+
+    def test_candidate_service_filters_wrong_diameter_and_keeps_likely_valves(
+        self,
+    ):
         lever = self._create_product(
             "Кран латунный Ду15 В-В рычаг OBR028-DU"
         )

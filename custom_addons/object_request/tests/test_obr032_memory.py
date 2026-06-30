@@ -62,6 +62,23 @@ class TestObr032Memory(TransactionCase):
         self.assertTrue(record)
         self.assertEqual(record.product_id, self.product)
 
+    def test_manual_remember_creates_memory_record(self):
+        """Ручная кнопка Запомнить пишет в память по имени строки."""
+        _, line = self._create_request_with_line()
+        line.write({
+            'product_id': self.product.id,
+            'matching_required': False,
+        })
+
+        line.with_user(self.supply_manager).action_remember_matching()
+
+        Memory = self.env['object.request.matching.memory']
+        parser = self.env['object.request.excel.parser']
+        name_norm = parser.normalize_str('Кран шаровой Ду15')
+        record = Memory.search([('name_normalized', '=', name_norm)])
+        self.assertTrue(record)
+        self.assertEqual(record.product_id, self.product)
+
     def test_memory_stores_technical_designation_first(self):
         """Память сохраняет technical_designation перед supplier_article."""
         _, line = self._create_request_with_line()

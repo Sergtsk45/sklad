@@ -19,6 +19,8 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
         supplier_article,
         vendor=None,
         technical_designation=None,
+        request=None,
+        issue_warehouses=None,
     ):
         parser = self.env["object.request.excel.parser"]
         designation_context = self._designation_context(
@@ -55,6 +57,11 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
                 memory_match.confidence,
                 "Из памяти сопоставлений.",
             )
+            self._enrich_candidates_with_issue_stock(
+                result,
+                request=request,
+                issue_warehouses=issue_warehouses,
+            )
             return result
         result = {
             "line_type": line_type,
@@ -76,6 +83,12 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
             name_raw,
             designation_context,
         )
+        self._enrich_candidates_with_issue_stock(
+            result,
+            request=request,
+            issue_warehouses=issue_warehouses,
+        )
+        self._sort_candidates(result)
         result["candidates"] = result["candidates"][:INTERNAL_CANDIDATE_LIMIT]
         result["can_call_llm"] = bool(result["candidates"])
         if not result["candidates"]:
@@ -145,8 +158,174 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
                 "matched_tokens": matched_tokens,
                 "missing_tokens": missing_tokens,
                 "reason": reason,
+                "stock_qty_on_issue_warehouses": 0.0,
+                "stock_warehouse_names": "",
+                "has_issue_stock": False,
+                "stock_rank_bonus": 0.0,
             }
         )
+
+    @api.model
+    def _sort_candidates(self, result):
+        source_rank = {
+            "memory": 4,
+            "supplierinfo": 3,
+            "default_code": 3,
+            "name_score": 2,
+            "combined_search": 1,
+        }
+        for index, candidate in enumerate(result["candidates"]):
+            candidate["_original_order"] = index
+        result["candidates"].sort(
+            key=lambda item: (
+                1 if item.get("source") == "memory" else 0,
+                item.get("local_score", 0.0)
+                + item.get("stock_rank_bonus", 0.0),
+                item.get("local_score", 0.0),
+                source_rank.get(item.get("source"), 0),
+                -item.get("_original_order", 0),
+            ),
+            reverse=True,
+        )
+        for candidate in result["candidates"]:
+            candidate.pop("_original_order", None)
+
+    @api.model
+    def _enrich_candidates_with_issue_stock(
+        self,
+        result,
+        request=None,
+        issue_warehouses=None,
+    ):
+        warehouses = issue_warehouses
+        if not warehouses and request:
+            warehouses = request._get_issue_warehouses()
+        candidates = result.get("candidates", [])
+        if not candidates or not warehouses:
+            return
+        products = self.env["product.product"].browse(
+            [
+                item["product_id"]
+                for item in candidates
+                if item.get("product_id")
+            ]
+        )
+        qty_by_key = self._get_stock_qty_by_product_warehouse(
+            products,
+            warehouses,
+            request=request,
+        )
+        for candidate in candidates:
+            product_id = candidate.get("product_id")
+            stock_items = []
+            total_qty = 0.0
+            for warehouse in warehouses:
+                qty = qty_by_key.get((product_id, warehouse.id), 0.0)
+                if qty <= 0:
+                    continue
+                total_qty += qty
+                stock_items.append("%s: %g" % (warehouse.display_name, qty))
+            if not total_qty:
+                continue
+            candidate["stock_qty_on_issue_warehouses"] = total_qty
+            candidate["stock_warehouse_names"] = ", ".join(stock_items)
+            candidate["has_issue_stock"] = True
+            candidate["stock_rank_bonus"] = self._stock_rank_bonus(candidate)
+            stock_note = "Есть остаток на складах выдачи: %s." % (
+                candidate["stock_warehouse_names"]
+            )
+            reason = candidate.get("reason") or ""
+            candidate["reason"] = (
+                "%s %s" % (reason, stock_note)
+            ).strip()
+        if any(item.get("has_issue_stock") for item in candidates):
+            note = result.get("note") or ""
+            stock_note = "Кандидаты с остатком подняты выше в shortlist."
+            result["note"] = ("%s %s" % (note, stock_note)).strip()
+
+    @api.model
+    def _stock_rank_bonus(self, candidate):
+        score = candidate.get("local_score", 0.0)
+        if score >= 0.9:
+            return 0.3
+        if score >= 0.55:
+            return 0.45
+        if score >= 0.25:
+            return 0.55
+        return 0.0
+
+    @api.model
+    def _get_stock_qty_by_product_warehouse(
+        self,
+        products,
+        warehouses,
+        request=None,
+    ):
+        if request:
+            return request._get_stock_qty_by_product_warehouse(
+                products,
+                warehouses,
+            )
+        locations_by_warehouse = self._get_stock_locations_by_warehouse(
+            warehouses
+        )
+        all_locations = self.env["stock.location"].browse()
+        for locations in locations_by_warehouse.values():
+            all_locations |= locations
+        if not products or not all_locations:
+            return {}
+
+        location_to_warehouse = {}
+        for warehouse_id, locations in locations_by_warehouse.items():
+            for location in locations:
+                location_to_warehouse[location.id] = warehouse_id
+
+        result = {}
+        groups = self.env["stock.quant"].read_group(
+            [
+                ("product_id", "in", products.ids),
+                ("location_id", "in", all_locations.ids),
+            ],
+            [
+                "product_id",
+                "location_id",
+                "quantity:sum",
+                "reserved_quantity:sum",
+            ],
+            ["product_id", "location_id"],
+            lazy=False,
+        )
+        for group in groups:
+            product_id = group["product_id"][0]
+            location_id = group["location_id"][0]
+            warehouse_id = location_to_warehouse.get(location_id)
+            if not warehouse_id:
+                continue
+            qty = group.get("quantity", 0.0) - group.get(
+                "reserved_quantity", 0.0
+            )
+            key = (product_id, warehouse_id)
+            result[key] = result.get(key, 0.0) + max(qty, 0.0)
+        return result
+
+    @api.model
+    def _get_stock_locations_by_warehouse(self, warehouses):
+        locations_by_warehouse = {}
+        location_model = self.env["stock.location"].with_context(
+            active_test=False
+        )
+        for warehouse in warehouses:
+            root = warehouse.view_location_id or warehouse.lot_stock_id
+            if not root:
+                locations_by_warehouse[warehouse.id] = location_model.browse()
+                continue
+            locations_by_warehouse[warehouse.id] = location_model.search(
+                [
+                    ("id", "child_of", root.id),
+                    ("usage", "=", "internal"),
+                ]
+            )
+        return locations_by_warehouse
 
     @api.model
     def _add_supplierinfo_candidates(self, result, supplier_article, vendor):

@@ -465,28 +465,37 @@ class ObjectRequestLine(models.Model):
         """Принять AI-кандидата и сохранить в память сопоставлений."""
         self.ensure_one()
         self.write(self._apply_ai_suggestion_vals())
-        if not self._should_save_to_memory():
-            return
+        self._save_matching_memory_for_product(
+            confidence=self.ai_match_confidence or 1.0,
+        )
+
+    def _save_matching_memory_for_product(self, confidence=1.0):
+        self.ensure_one()
+        if not self.product_id:
+            return False
         parser = self.env['object.request.excel.parser']
         name_norm = parser.normalize_str(self.name_raw or '')
+        if not self._should_save_to_memory_str(name_norm):
+            return False
         designation_norm = parser.normalize_str(
             self.technical_designation or self.supplier_article or ''
         )
         Memory = self.env['object.request.matching.memory']
         existing = Memory.search([
             ('name_normalized', '=', name_norm),
-            ('product_id', '=', self.ai_suggested_product_id.id),
+            ('product_id', '=', self.product_id.id),
         ], limit=1)
         if existing:
-            return
+            return False
         Memory.create({
             'name_normalized': name_norm,
             'designation_normalized': designation_norm or False,
-            'product_id': self.ai_suggested_product_id.id,
+            'product_id': self.product_id.id,
             'confirmed_by': self.env.uid,
             'source_request_id': self.request_id.id,
-            'confidence': self.ai_match_confidence or 1.0,
+            'confidence': confidence or 1.0,
         })
+        return True
 
     @staticmethod
     def _should_save_to_memory_str(name_norm):
@@ -630,8 +639,24 @@ class ObjectRequestLine(models.Model):
         SupplierInfo = self.env["product.supplierinfo"].sudo()
         conflict_lines = self.env["object.request.line"].browse()
         prepared = []
+        memory_created = 0
         for line in self:
-            article, vendor = line._validate_remember_matching_values()
+            if not line.product_id:
+                raise UserError(
+                    "Выберите товар перед запоминанием сопоставления."
+                )
+            if line._save_matching_memory_for_product():
+                memory_created += 1
+            article = line._normalized_supplier_article()
+            vendor = line._supplierinfo_vendor()
+            if (
+                not article
+                or article.lower() in _SKIP_ARTICLES
+                or len(article) < 3
+                or not vendor
+            ):
+                prepared.append((line, article, vendor, "memory_only"))
+                continue
             identical = SupplierInfo.search(
                 line._supplierinfo_identical_domain(article, vendor),
                 limit=1,
@@ -652,24 +677,29 @@ class ObjectRequestLine(models.Model):
 
         created = 0
         skipped = 0
+        memory_only = 0
         for line, article, vendor, action in prepared:
             if action == "skipped":
                 skipped += 1
                 continue
+            if action == "memory_only":
+                memory_only += 1
+                continue
             vals = line._supplierinfo_create_vals(article, vendor)
             SupplierInfo.create(vals)
             created += 1
-
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
             "params": {
                 "title": "Сопоставление запомнено",
                 "message": (
-                    f"Создано записей: {created}. "
-                    f"Уже существовало: {skipped}."
+                    f"Память: создано {memory_created}. "
+                    f"Supplierinfo: создано {created}, "
+                    f"уже существовало {skipped}, "
+                    f"пропущено {memory_only}."
                 ),
-                "type": "success" if created else "info",
+                "type": "success" if created or memory_created else "info",
                 "sticky": False,
             },
         }
