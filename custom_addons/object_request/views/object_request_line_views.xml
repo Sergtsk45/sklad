@@ -25,11 +25,17 @@
                     domain="[('manual_vendor_required', '=', True)]"
                 />
                 <filter
+                    name="filter_stock_match_warning"
+                    string="Есть похожий товар на складе"
+                    domain="[('stock_match_warning', '=', True)]"
+                />
+                <filter
                     name="filter_problem"
                     string="Только проблемные"
-                    domain="['|',
+                    domain="['|', '|',
                         ('matching_required', '=', True),
-                        ('manual_vendor_required', '=', True)]"
+                        ('manual_vendor_required', '=', True),
+                        ('stock_match_warning', '=', True)]"
                 />
                 <separator/>
                 <filter
@@ -72,7 +78,7 @@
             <list
                 string="Строки требования"
                 decoration-danger="matching_required == True"
-                decoration-warning="(manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued'"
+                decoration-warning="stock_match_warning == True or (manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued'"
                 decoration-success="line_state == 'fully_supplied'"
                 create="0"
                 delete="0"
@@ -104,6 +110,21 @@
                 <field name="qty_issued" string="Выдано" optional="show"/>
                 <field name="qty_reserved" string="Зарезервировано" optional="show"/>
                 <field name="preferred_vendor_id" string="Поставщик" optional="show"/>
+                <field
+                    name="stock_match_candidate_id"
+                    string="Складской кандидат"
+                    optional="show"
+                />
+                <field
+                    name="stock_match_candidate_qty"
+                    string="Остаток кандидата"
+                    optional="show"
+                />
+                <field
+                    name="stock_match_warning_text"
+                    string="Предупреждение"
+                    optional="show"
+                />
                 <field name="matching_source" string="Источник" optional="hide"/>
                 <field
                     name="ai_suggested_product_id"
@@ -124,7 +145,7 @@
                     name="ai_candidate_product_ids"
                     string="AI shortlist"
                     widget="many2many_tags"
-                    optional="hide"
+                    optional="show"
                 />
                 <field
                     name="line_state"
@@ -136,6 +157,7 @@
                 />
                 <field name="matching_required" column_invisible="1"/>
                 <field name="manual_vendor_required" column_invisible="1"/>
+                <field name="stock_match_warning" column_invisible="1"/>
                 <button
                     name="action_accept_ai_candidate"
                     string="Принять AI"
@@ -163,6 +185,13 @@
                     type="object"
                     groups="object_request.group_supply_manager"
                     invisible="not product_id or not supplier_article"
+                />
+                <button
+                    name="action_refresh_stock_match_warning"
+                    string="Проверить склад"
+                    type="object"
+                    groups="object_request.group_supply_manager"
+                    invisible="not product_id"
                 />
             </list>
         </field>
@@ -275,6 +304,15 @@
         <field name="binding_view_types">list</field>
         <field name="state">code</field>
         <field name="code">records.action_remember_matching()</field>
+    </record>
+
+    <record id="server_action_object_request_line_refresh_stock_match" model="ir.actions.server">
+        <field name="name">Проверить складские аналоги</field>
+        <field name="model_id" ref="model_object_request_line"/>
+        <field name="binding_model_id" ref="model_object_request_line"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">records.action_refresh_stock_match_warning()</field>
     </record>
 
 </odoo>

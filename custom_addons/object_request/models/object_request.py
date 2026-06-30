@@ -488,6 +488,7 @@ class ObjectRequest(models.Model):
         "line_ids.line_state",
         "line_ids.matching_required",
         "line_ids.manual_vendor_required",
+        "line_ids.stock_match_warning",
         "line_ids.qty_to_issue",
         "line_ids.qty_to_buy",
     )
@@ -497,7 +498,11 @@ class ObjectRequest(models.Model):
             rec.line_problem_count = sum(
                 1
                 for ln in lns
-                if ln.matching_required or ln.manual_vendor_required
+                if (
+                    ln.matching_required
+                    or ln.manual_vendor_required
+                    or ln.stock_match_warning
+                )
             )
             rec.line_matched_count = sum(
                 1 for ln in lns if not ln.matching_required and ln.product_id
@@ -705,11 +710,101 @@ class ObjectRequest(models.Model):
             "domain": [
                 ("request_id", "=", self.id),
                 "|",
+                "|",
                 ("matching_required", "=", True),
                 ("manual_vendor_required", "=", True),
+                ("stock_match_warning", "=", True),
             ],
             "context": {"default_request_id": self.id},
         }
+
+    def action_refresh_stock_match_warnings(self):
+        self.ensure_one()
+        self._check_supply_manager_processing_action()
+        lines = self.line_ids.filtered(
+            lambda line: line.product_id and not line.is_cancelled
+        )
+        if not lines:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Проверка номенклатуры",
+                    "message": "Нет строк с выбранным товаром.",
+                    "type": "info",
+                    "sticky": False,
+                },
+            }
+        return lines.action_refresh_stock_match_warning()
+
+    def action_check_purchase_stock_matches(self):
+        self.ensure_one()
+        self._check_supply_manager_processing_action()
+        lines = self.line_ids.filtered(
+            lambda line: (
+                line.product_id
+                and line.qty_to_buy > 0
+                and (line.purchase_order_id or line.purchase_order_line_id)
+                and not line.is_cancelled
+            )
+        )
+        if not lines:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Проверка закупок",
+                    "message": "Нет связанных строк закупки для проверки.",
+                    "type": "info",
+                    "sticky": False,
+                },
+            }
+        lines.action_refresh_stock_match_warning()
+        warnings = lines.filtered("stock_match_warning")
+        if not warnings:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Проверка закупок",
+                    "message": "Похожих складских товаров не найдено.",
+                    "type": "success",
+                    "sticky": False,
+                },
+            }
+        self._post_purchase_stock_match_note(warnings)
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Закупки с похожими складскими товарами",
+            "res_model": "object.request.line",
+            "view_mode": "list",
+            "domain": [
+                ("id", "in", warnings.ids),
+            ],
+            "context": {"default_request_id": self.id},
+        }
+
+    def _post_purchase_stock_match_note(self, lines):
+        self.ensure_one()
+        body_lines = [
+            "Проверка закупок нашла строки, где есть похожий товар "
+            "с остатком на складах выдачи:"
+        ]
+        for line in lines:
+            po = line.purchase_order_id or line.purchase_order_line_id.order_id
+            body_lines.append(
+                "- %s%s: %s"
+                % (
+                    "%s, " % po.name if po else "",
+                    line.name_raw,
+                    line.stock_match_warning_text or "",
+                )
+            )
+        self.message_post(
+            body="<br/>".join(body_lines),
+            message_type="notification",
+            subtype_xmlid="mail.mt_note",
+        )
 
     def action_open_issue_pickings(self):
         self.ensure_one()

@@ -313,6 +313,21 @@
                             />
                         </button>
 
+                        <button
+                            class="oe_stat_button"
+                            icon="fa-search"
+                            type="object"
+                            name="action_check_purchase_stock_matches"
+                            invisible="purchase_order_count == 0"
+                            groups="object_request.group_supply_manager"
+                        >
+                            <field
+                                name="purchase_order_count"
+                                widget="statinfo"
+                                string="Проверить PO"
+                            />
+                        </button>
+
                     </div>
 
                     <!-- Заголовок: номер документа -->
@@ -402,6 +417,13 @@
                                         type="object"
                                         class="btn-secondary"
                                     />
+                                    <button
+                                        name="action_refresh_stock_match_warnings"
+                                        string="Проверить номенклатуру"
+                                        type="object"
+                                        class="btn-secondary ms-2"
+                                        groups="object_request.group_supply_manager"
+                                    />
                                 </div>
                             </group>
                             <field
@@ -456,7 +478,7 @@
                                 <list
                                     editable="bottom"
                                     decoration-danger="matching_required == True"
-                                    decoration-warning="(manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued'"
+                                    decoration-warning="stock_match_warning == True or (manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued'"
                                     decoration-success="line_state == 'fully_supplied'"
                                 >
                                     <field name="sequence" widget="handle"/>
@@ -512,6 +534,21 @@
                                     <!-- Оригинальные данные из файла → поле выбора (Поставщик) -->
                                     <field name="supplier_raw" string="Поставщик (файл)" optional="show"/>
                                     <field name="preferred_vendor_id" string="Поставщик" optional="show"/>
+                                    <field
+                                        name="stock_match_candidate_id"
+                                        string="Складской кандидат"
+                                        optional="show"
+                                    />
+                                    <field
+                                        name="stock_match_candidate_qty"
+                                        string="Остаток кандидата"
+                                        optional="show"
+                                    />
+                                    <field
+                                        name="stock_match_warning_text"
+                                        string="Предупреждение"
+                                        optional="show"
+                                    />
                                     <!-- Допустимые замены -->
                                     <field
                                         name="allowed_substitute_ids"
@@ -545,7 +582,7 @@
                                         name="ai_candidate_product_ids"
                                         string="AI shortlist"
                                         widget="many2many_tags"
-                                        optional="hide"
+                                        optional="show"
                                     />
                                     <field
                                         name="line_state"
@@ -558,6 +595,7 @@
                                     />
                                     <field name="matching_required" column_invisible="1"/>
                                     <field name="manual_vendor_required" column_invisible="1"/>
+                                    <field name="stock_match_warning" column_invisible="1"/>
                                     <field name="comment" string="Комментарий" optional="hide"/>
                                     <button
                                         name="action_accept_ai_candidate"
@@ -586,6 +624,13 @@
                                         type="object"
                                         groups="object_request.group_supply_manager"
                                         invisible="not product_id or not supplier_article"
+                                    />
+                                    <button
+                                        name="action_refresh_stock_match_warning"
+                                        string="Проверить склад"
+                                        type="object"
+                                        groups="object_request.group_supply_manager"
+                                        invisible="not product_id"
                                     />
                                 </list>
                             </field>

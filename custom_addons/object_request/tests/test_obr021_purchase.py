@@ -492,3 +492,84 @@ class TestOBR021Purchase(TransactionCase):
         self.assertTrue(
             any(stock_product.display_name in body for body in messages)
         )
+
+    def test_stock_match_warning_marks_problem_line(self):
+        """Проверка номенклатуры помечает строку проблемной."""
+        request = self._create_request()
+        wrong_product = self.env["product.product"].create(
+            {
+                "name": "Фланец ст. Ду65 1.0МПа кованый OBR021-MVP2",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        stock_product = self.env["product.product"].create(
+            {
+                "name": "Фланец DN65 PN16 OBR021-MVP2",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        warehouse = self.project.warehouse_id
+        request.write({"issue_warehouse_ids": [(6, 0, [warehouse.id])]})
+        self.env["stock.quant"]._update_available_quantity(
+            stock_product,
+            warehouse.lot_stock_id,
+            201.0,
+        )
+        line = self._add_line(request, wrong_product, 5.0, self.vendor1)
+        line.write({"name_raw": "Фланец ст. Ду 65мм 1,0МПа OBR021-MVP2"})
+
+        request.action_refresh_stock_match_warnings()
+
+        line.invalidate_recordset()
+        request.invalidate_recordset()
+        self.assertTrue(line.stock_match_warning)
+        self.assertEqual(line.stock_match_candidate_id, stock_product)
+        self.assertAlmostEqual(line.stock_match_candidate_qty, 201.0)
+        self.assertEqual(request.line_problem_count, 1)
+        action = request.action_open_problem_lines()
+        self.assertIn(("stock_match_warning", "=", True), action["domain"])
+
+    def test_existing_po_diagnostic_opens_stock_match_lines(self):
+        """Диагностика созданной PO находит похожий складской товар."""
+        request = self._create_request()
+        wrong_product = self.env["product.product"].create(
+            {
+                "name": "Фланец ст. Ду65 1.0МПа кованый OBR021-DIAG",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        stock_product = self.env["product.product"].create(
+            {
+                "name": "Фланец DN65 PN16 OBR021-DIAG",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        warehouse = self.project.warehouse_id
+        request.write({"issue_warehouse_ids": [(6, 0, [warehouse.id])]})
+        self.env["stock.quant"]._update_available_quantity(
+            stock_product,
+            warehouse.lot_stock_id,
+            201.0,
+        )
+        line = self._add_line(request, wrong_product, 5.0, self.vendor1)
+        line.write({"name_raw": "Фланец ст. Ду 65мм 1,0МПа OBR021-DIAG"})
+        request.write({"state": "in_progress"})
+
+        wizard = self._open_wizard(request)
+        wizard.confirm_stock_guard_override = True
+        wizard.action_create_purchase()
+
+        action = request.action_check_purchase_stock_matches()
+
+        line.invalidate_recordset()
+        self.assertTrue(line.stock_match_warning)
+        self.assertEqual(action["res_model"], "object.request.line")
+        self.assertEqual(action["domain"], [("id", "in", line.ids)])
+        messages = request.message_ids.mapped("body")
+        self.assertTrue(
+            any("Проверка закупок нашла строки" in body for body in messages)
+        )

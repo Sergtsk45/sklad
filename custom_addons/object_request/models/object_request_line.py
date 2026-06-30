@@ -133,6 +133,23 @@ class ObjectRequestLine(models.Model):
         digits=(16, 2),
     )
     ai_match_reason = fields.Text(string="AI пояснение")
+    stock_match_warning = fields.Boolean(
+        string="Есть похожий товар на складе",
+        default=False,
+        index=True,
+    )
+    stock_match_candidate_id = fields.Many2one(
+        "product.product",
+        string="Складской кандидат",
+        index=True,
+    )
+    stock_match_candidate_qty = fields.Float(
+        string="Остаток кандидата",
+        digits="Product Unit of Measure",
+    )
+    stock_match_warning_text = fields.Text(
+        string="Предупреждение по номенклатуре"
+    )
     manual_vendor_required = fields.Boolean(
         string="Требует выбора поставщика",
         default=False,
@@ -453,6 +470,105 @@ class ObjectRequestLine(models.Model):
         return {
             "type": "ir.actions.client",
             "tag": "reload",
+        }
+
+    def _stock_match_warning_clear_vals(self):
+        return {
+            "stock_match_warning": False,
+            "stock_match_candidate_id": False,
+            "stock_match_candidate_qty": 0.0,
+            "stock_match_warning_text": False,
+        }
+
+    def _stock_match_warning_vals(self, candidate):
+        return {
+            "stock_match_warning": True,
+            "stock_match_candidate_id": candidate["product_id"],
+            "stock_match_candidate_qty": candidate.get(
+                "stock_qty_on_issue_warehouses",
+                0.0,
+            ),
+            "stock_match_warning_text": (
+                "Выбранный товар без остатка. Есть похожий товар "
+                "на складах выдачи: %s (%g; %s)."
+            )
+            % (
+                candidate["display_name"],
+                candidate.get("stock_qty_on_issue_warehouses", 0.0),
+                candidate.get("stock_warehouse_names") or "склад не указан",
+            ),
+        }
+
+    def _find_stock_match_warning_candidate(self, warehouses=None):
+        self.ensure_one()
+        if not self.product_id or self.is_cancelled:
+            return None
+        request = self.request_id
+        warehouses = warehouses or request._get_issue_warehouses()
+        if not warehouses:
+            return None
+        selected_qty_by_key = request._get_stock_qty_by_product_warehouse(
+            self.product_id,
+            warehouses,
+        )
+        selected_qty = sum(
+            selected_qty_by_key.get((self.product_id.id, warehouse.id), 0.0)
+            for warehouse in warehouses
+        )
+        if selected_qty > 0:
+            return None
+        service = self.env["object.request.matching.candidate.service"]
+        candidate_result = service.build_candidates(
+            self.name_raw,
+            self.supplier_article,
+            vendor=self.preferred_vendor_id,
+            technical_designation=self.technical_designation,
+            request=request,
+            issue_warehouses=warehouses,
+        )
+        for candidate in candidate_result.get("candidates", []):
+            if candidate.get("product_id") == self.product_id.id:
+                continue
+            if not candidate.get("has_issue_stock"):
+                continue
+            if candidate.get("local_score", 0.0) < 0.25:
+                continue
+            return candidate
+        return None
+
+    def action_refresh_stock_match_warning(self):
+        self._check_supply_manager_matching_action()
+        updated = 0
+        warnings = 0
+        by_request = {}
+        for line in self:
+            by_request.setdefault(line.request_id, self.env[self._name])
+            by_request[line.request_id] |= line
+        for request, lines in by_request.items():
+            warehouses = request._get_issue_warehouses()
+            for line in lines:
+                candidate = line._find_stock_match_warning_candidate(
+                    warehouses=warehouses,
+                )
+                if candidate:
+                    line.write(line._stock_match_warning_vals(candidate))
+                    warnings += 1
+                else:
+                    line.write(line._stock_match_warning_clear_vals())
+                updated += 1
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Проверка номенклатуры выполнена",
+                "message": (
+                    f"Обработано строк: {updated}. "
+                    f"Предупреждений: {warnings}."
+                ),
+                "type": "warning" if warnings else "success",
+                "sticky": False,
+                "next": {"type": "ir.actions.client", "tag": "reload"},
+            },
         }
 
     def action_accept_and_remember_ai_candidate(self):

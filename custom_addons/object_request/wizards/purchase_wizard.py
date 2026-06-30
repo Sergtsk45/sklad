@@ -188,7 +188,6 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             products,
             warehouses,
         )
-        service = self.env["object.request.matching.candidate.service"]
         warnings = []
         for line in lines:
             selected_qty = sum(
@@ -196,20 +195,13 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                 for warehouse in warehouses
             )
             if selected_qty > 0:
+                line.write(line._stock_match_warning_clear_vals())
                 continue
-            candidate_result = service.build_candidates(
-                line.name_raw,
-                line.supplier_article,
-                vendor=line.preferred_vendor_id,
-                technical_designation=line.technical_designation,
-                request=request,
-                issue_warehouses=warehouses,
-            )
-            candidate = self._best_stock_guard_candidate(
-                line,
-                candidate_result,
+            candidate = line._find_stock_match_warning_candidate(
+                warehouses=warehouses,
             )
             if candidate:
+                line.write(line._stock_match_warning_vals(candidate))
                 warnings.append(
                     {
                         "line": line,
@@ -217,18 +209,9 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                         "candidate": candidate,
                     }
                 )
+            else:
+                line.write(line._stock_match_warning_clear_vals())
         return warnings
-
-    def _best_stock_guard_candidate(self, line, candidate_result):
-        for candidate in candidate_result.get("candidates", []):
-            if candidate.get("product_id") == line.product_id.id:
-                continue
-            if not candidate.get("has_issue_stock"):
-                continue
-            if candidate.get("local_score", 0.0) < 0.25:
-                continue
-            return candidate
-        return None
 
     def _format_stock_guard_warning(self, warnings):
         lines = [
