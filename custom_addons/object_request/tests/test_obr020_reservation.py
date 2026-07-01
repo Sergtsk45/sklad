@@ -1,3 +1,4 @@
+from odoo.exceptions import ValidationError
 from odoo.tests.common import TransactionCase
 from odoo.tests import tagged
 
@@ -26,10 +27,7 @@ class TestOBR020Reservation(TransactionCase):
                 "is_storable": True,
             }
         )
-        cls.warehouse = cls.env["stock.warehouse"].search(
-            [("company_id", "=", cls.env.company.id)],
-            limit=1,
-        )
+        cls.warehouse = cls.project.warehouse_id
         cls.location = cls.warehouse.lot_stock_id
 
         # Добавим остаток на склад
@@ -150,8 +148,8 @@ class TestOBR020Reservation(TransactionCase):
         request.action_cancel()
         self.assertEqual(request.state, "cancelled")
 
-    def test_issue_reserved_false_when_no_stock(self):
-        """Если стока нет — issue_reserved=False, qty_reserved=0."""
+    def test_issue_plan_without_stock_is_blocked(self):
+        """Нельзя создать выдачу, если план превышает доступный остаток."""
         # Продукт без остатка
         product_no_stock = self.env["product.product"].create(
             {
@@ -188,7 +186,8 @@ class TestOBR020Reservation(TransactionCase):
         )
         request.write({"state": "in_progress"})
 
-        self._create_issue(request)
+        with self.assertRaises(ValidationError):
+            self._create_issue(request)
         line.invalidate_recordset()
 
         self.assertEqual(line.qty_reserved, 0.0)

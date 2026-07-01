@@ -31,7 +31,6 @@ class TestObr011IssuePicking(TransactionCase):
             }
         )
         self.uom = self.product.uom_id
-        self.warehouse = self.env["stock.warehouse"].search([], limit=1)
         self.request = self.env["object.request"].create(
             {
                 "project_id": self.project.id,
@@ -39,6 +38,7 @@ class TestObr011IssuePicking(TransactionCase):
                 "need_date": datetime.date.today(),
             }
         )
+        self.warehouse = self.request._get_issue_warehouses()[:1]
         # Line with qty_to_issue
         self.line = self.env["object.request.line"].create(
             {
@@ -70,7 +70,7 @@ class TestObr011IssuePicking(TransactionCase):
         )
 
     def _create_warehouse(self, suffix):
-        return (
+        warehouse = (
             self.env["stock.warehouse"]
             .sudo()
             .create(
@@ -81,6 +81,8 @@ class TestObr011IssuePicking(TransactionCase):
                 }
             )
         )
+        self.request.write({"issue_warehouse_ids": [(4, warehouse.id)]})
+        return warehouse
 
     def _create_wizard(self):
         """Создать wizard предпросмотра с корректными данными."""

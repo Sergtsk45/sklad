@@ -31,9 +31,6 @@ class TestObr012ConfirmIssue(TransactionCase):
             }
         )
         self.uom = self.product.uom_id
-        self.warehouse = self.env["stock.warehouse"].search([], limit=1)
-        self.customer_loc = self.env.ref("stock.stock_location_customers")
-
         self.request = self.env["object.request"].create(
             {
                 "project_id": self.project.id,
@@ -41,6 +38,8 @@ class TestObr012ConfirmIssue(TransactionCase):
                 "need_date": datetime.date.today(),
             }
         )
+        self.warehouse = self.request._get_issue_warehouses()[:1]
+        self.customer_loc = self.env.ref("stock.stock_location_customers")
         self.env["object.request.line"].create(
             {
                 "request_id": self.request.id,
@@ -64,7 +63,7 @@ class TestObr012ConfirmIssue(TransactionCase):
         )
 
     def _create_warehouse(self, suffix):
-        return (
+        warehouse = (
             self.env["stock.warehouse"]
             .sudo()
             .create(
@@ -75,6 +74,8 @@ class TestObr012ConfirmIssue(TransactionCase):
                 }
             )
         )
+        self.request.write({"issue_warehouse_ids": [(4, warehouse.id)]})
+        return warehouse
 
     def _create_picking(self):
         """Создать picking через wizard предпросмотра."""

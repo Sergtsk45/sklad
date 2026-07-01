@@ -14,7 +14,10 @@ class IrActionsReport(models.Model):
                 "purchase.action_report_purchase_order",
                 raise_if_not_found=False,
             )
-            | self.env.ref("purchase.report_purchase_quotation", raise_if_not_found=False)
+            | self.env.ref(
+                "purchase.report_purchase_quotation",
+                raise_if_not_found=False,
+            )
         )
         reports = reports.exists()
         if not reports:

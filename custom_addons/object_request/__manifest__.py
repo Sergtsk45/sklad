@@ -59,7 +59,10 @@
     "assets": {
         "web.assets_backend": [
             "object_request/static/src/scss/object_request.scss",
-            "object_request/static/src/components/purchase_file_uploader/purchase_file_uploader.xml",
+            (
+                "object_request/static/src/components/"
+                "purchase_file_uploader/purchase_file_uploader.xml"
+            ),
         ],
     },
     "installable": True,

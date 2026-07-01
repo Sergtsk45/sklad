@@ -184,7 +184,7 @@ class TestObr030PreviewAI(TransactionCase):
         self.assertFalse(line_vals["matching_required"])
 
     def test_import_uses_selected_ai_candidate_as_confirmed_match(self):
-        """Выбранная в preview AI-подсказка импортируется как подтверждённая."""
+        """Выбранная AI-подсказка импортируется как подтверждённая."""
         line = self._make_preview_line(self.wizard, "Кабель КВВГ")
         line.write(
             {

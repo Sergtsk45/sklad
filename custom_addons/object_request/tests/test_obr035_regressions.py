@@ -36,7 +36,9 @@ class TestObr035Regressions(TransactionCase):
         )
         self.warehouse1 = warehouses[:1]
         self.warehouse2 = (
-            warehouses[1] if len(warehouses) > 1 else self._create_warehouse("B")
+            warehouses[1]
+            if len(warehouses) > 1
+            else self._create_warehouse("B")
         )
 
     def _create_warehouse(self, suffix):
@@ -54,6 +56,9 @@ class TestObr035Regressions(TransactionCase):
                 "project_id": self.project.id,
                 "foreman_user_id": self.foreman.id,
                 "need_date": datetime.date.today(),
+                "issue_warehouse_ids": [
+                    (6, 0, [self.warehouse1.id, self.warehouse2.id])
+                ],
             }
         )
         if state != "draft":
@@ -130,14 +135,18 @@ class TestObr035Regressions(TransactionCase):
         )
         request.action_check_stock()
         self.assertTrue(
-            line.stock_ids.filtered(lambda stock: stock.warehouse_id == self.warehouse1)
+            line.stock_ids.filtered(
+                lambda stock: stock.warehouse_id == self.warehouse1
+            )
         )
 
         request.write({"issue_warehouse_ids": [(6, 0, [self.warehouse2.id])]})
         request.action_check_stock()
 
         self.assertTrue(
-            line.stock_ids.filtered(lambda stock: stock.warehouse_id == self.warehouse1)
+            line.stock_ids.filtered(
+                lambda stock: stock.warehouse_id == self.warehouse1
+            )
         )
 
     def test_issue_cannot_be_created_twice_for_same_stock_lines(self):
@@ -212,7 +221,9 @@ class TestObr035Regressions(TransactionCase):
         self.env["object.request.import.wizard"].create(vals).action_import()
 
         with self.assertRaises(UserError):
-            self.env["object.request.import.wizard"].create(vals).action_import()
+            self.env["object.request.import.wizard"].create(
+                vals
+            ).action_import()
 
     def test_only_assigned_approver_can_approve(self):
         approver_group = self.env.ref("object_request.group_approver")

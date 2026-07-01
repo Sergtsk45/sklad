@@ -40,8 +40,6 @@ class TestObr019StockCheck(TransactionCase):
                 "is_storable": True,
             }
         )
-        self.warehouse = self.env["stock.warehouse"].search([], limit=1)
-        self.stock_loc = self.warehouse.lot_stock_id
         self.request = self.env["object.request"].create(
             {
                 "project_id": self.project.id,
@@ -49,6 +47,8 @@ class TestObr019StockCheck(TransactionCase):
                 "need_date": datetime.date.today(),
             }
         )
+        self.warehouse = self.request._get_issue_warehouses()[:1]
+        self.stock_loc = self.warehouse.lot_stock_id
         self.line_a = self.env["object.request.line"].create(
             {
                 "request_id": self.request.id,
@@ -75,7 +75,7 @@ class TestObr019StockCheck(TransactionCase):
         )
 
     def _create_warehouse(self, suffix):
-        return (
+        warehouse = (
             self.env["stock.warehouse"]
             .sudo()
             .create(
@@ -86,6 +86,8 @@ class TestObr019StockCheck(TransactionCase):
                 }
             )
         )
+        self.request.write({"issue_warehouse_ids": [(4, warehouse.id)]})
+        return warehouse
 
     def _put_stock(self, product, warehouse, qty):
         self.env["stock.quant"]._update_available_quantity(
@@ -94,10 +96,10 @@ class TestObr019StockCheck(TransactionCase):
             qty,
         )
 
-    # ── action_check_stock ──────────────────────────────────────────────────
+    # action_check_stock
 
     def test_check_stock_fills_stock_check_date(self):
-        """action_check_stock заполняет stock_check_date для строк с product_id."""  # noqa: E501
+        """action_check_stock заполняет дату проверки для строк с товаром."""
         self.request.action_check_stock()
         self.assertTrue(self.line_a.stock_check_date)
         self.assertTrue(self.line_b.stock_check_date)
@@ -161,7 +163,7 @@ class TestObr019StockCheck(TransactionCase):
             self.request.action_auto_split()
 
     def test_auto_split_full_stock_issues_all(self):
-        """Если остатка достаточно — qty_to_issue = qty_requested, qty_to_buy = 0."""  # noqa: E501
+        """Если остатка достаточно — всё выдаётся, закупка не нужна."""
         self._add_stock(self.product_a, 200.0)
         self._add_stock(self.product_b, 200.0)
         self.request.action_check_stock()

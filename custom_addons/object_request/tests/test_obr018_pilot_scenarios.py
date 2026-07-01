@@ -102,7 +102,7 @@ class TestPilotScenarios(TransactionCase):
             }
         )
 
-        self.warehouse = self.env["stock.warehouse"].search([], limit=1)
+        self.warehouse = self.project.warehouse_id
         self.customer_loc = self.env.ref("stock.stock_location_customers")
 
     def _add_stock_distribution(self, line, qty, warehouse=None):

@@ -1,3 +1,24 @@
+## [2026-07-02] — fix(object_request): стабилизация release suite
+
+### Исправлено
+- Генерация кода склада объекта стала устойчивой к уже существующим
+  `stock.warehouse.code`: при конфликте подбирается детерминированный
+  свободный suffix.
+- Проверка выдачи валидирует превышение `qty_to_issue` над доступным остатком
+  до открытия wizard-а, включая ручное распределение по строкам.
+- Тестовые сценарии выдачи и расчёта наличия приведены к контракту складов
+  выдачи: остатки и планы создаются на разрешённых складах требования.
+
+### Проверено
+- `docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request`
+  — 0 ошибок.
+- `docker exec odoo19-local odoo --test-enable -u object_request --test-tags /object_request -d odoo19_local --stop-after-init --http-port=8080`
+  — 395 post-tests, 0 failed, 0 errors.
+- `docker exec odoo19-local odoo --test-enable --test-tags /object_request:TestOBR021Purchase,/object_request:TestObr032Memory,/object_request:TestObr028CombinedMatching,/object_request:TestObr009MassActions -d odoo19_local --stop-after-init --http-port=8078`
+  — 80 post-tests, 0 failed, 0 errors.
+
+---
+
 ## [2026-07-02] — fix(object_request): память сопоставлений и диагностика PO
 
 ### Исправлено

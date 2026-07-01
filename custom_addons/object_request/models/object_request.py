@@ -112,7 +112,10 @@ class ObjectRequest(models.Model):
     stock_distribution_filter_warehouse_id = fields.Many2one(
         "stock.warehouse",
         string="Фильтр по складу",
-        help="Показать в таблице только выбранный склад. Пусто — все склады выдачи.",
+        help=(
+            "Показать в таблице только выбранный склад. "
+            "Пусто — все склады выдачи."
+        ),
         domain="[('company_id', '=', company_id), ('active', '=', True)]",
     )
     stock_distribution_refresh_key = fields.Integer(
@@ -256,7 +259,9 @@ class ObjectRequest(models.Model):
         records = super().create(vals_list)
         for rec in records:
             if not rec.issue_warehouse_ids:
-                rec.with_context(auto_issue_warehouse_selection=True).sudo().write(
+                rec.with_context(
+                    auto_issue_warehouse_selection=True
+                ).sudo().write(
                     {
                         "issue_warehouse_ids": [
                             (6, 0, rec._get_default_issue_warehouses().ids)
@@ -297,7 +302,10 @@ class ObjectRequest(models.Model):
         if warehouses_changed:
             for rec in self:
                 rec._sync_after_issue_warehouses_change(
-                    previous_warehouses.get(rec.id, self.env["stock.warehouse"])
+                    previous_warehouses.get(
+                        rec.id,
+                        self.env["stock.warehouse"],
+                    )
                 )
                 rec._clear_invalid_stock_distribution_filter()
         if project_changed:
@@ -402,7 +410,9 @@ class ObjectRequest(models.Model):
         return self._get_default_issue_warehouses()
 
     def _update_default_issue_warehouses_after_project_change(self):
-        for rec in self.filtered(lambda item: not item.issue_warehouse_selection_manual):
+        for rec in self.filtered(
+            lambda item: not item.issue_warehouse_selection_manual
+        ):
             rec.with_context(auto_issue_warehouse_selection=True).sudo().write(
                 {
                     "issue_warehouse_ids": [
@@ -457,8 +467,6 @@ class ObjectRequest(models.Model):
             for key, planned in planned_by_key.items():
                 available = max(available_by_key.get(key, 0.0), 0.0)
                 if planned > available + 0.00001:
-                    if available <= 0.00001:
-                        continue
                     product_name, warehouse_name = label_by_key[key]
                     raise ValidationError(
                         "План выдачи превышает доступный остаток: "
@@ -564,13 +572,17 @@ class ObjectRequest(models.Model):
         """Согласовать документ."""
         self.ensure_one()
         if self.approval_state != "pending" or self.state != "draft":
-            raise UserError("Согласовать можно только черновик на согласовании.")
+            raise UserError(
+                "Согласовать можно только черновик на согласовании."
+            )
         if (
             self.approver_user_id
             and self.approver_user_id != self.env.user
             and not self.env.user.has_group("base.group_system")
         ):
-            raise UserError("Согласовать может только назначенный согласующий.")
+            raise UserError(
+                "Согласовать может только назначенный согласующий."
+            )
         self.write({"approval_state": "approved"})
         foreman_partner = self.foreman_user_id.sudo().partner_id
         buyer_partner = self.buyer_user_id.sudo().partner_id
@@ -927,7 +939,9 @@ class ObjectRequest(models.Model):
     def _check_processing_state(self):
         self.ensure_one()
         if self.state != "in_progress":
-            raise UserError("Действие доступно только для требования в работе.")
+            raise UserError(
+                "Действие доступно только для требования в работе."
+            )
 
     def _check_purchase_preparation_state(self):
         self.ensure_one()
@@ -1279,9 +1293,18 @@ class ObjectRequest(models.Model):
             )
         if not self.issue_warehouse_selection_manual:
             default_warehouses = self._get_default_issue_warehouses()
-            if set(self.issue_warehouse_ids.ids) != set(default_warehouses.ids):
-                self.with_context(auto_issue_warehouse_selection=True).sudo().write(
-                    {"issue_warehouse_ids": [(6, 0, default_warehouses.ids)]}
+            if (
+                set(self.issue_warehouse_ids.ids)
+                != set(default_warehouses.ids)
+            ):
+                self.with_context(
+                    auto_issue_warehouse_selection=True
+                ).sudo().write(
+                    {
+                        "issue_warehouse_ids": [
+                            (6, 0, default_warehouses.ids)
+                        ]
+                    }
                 )
         warehouses = self._get_issue_warehouses()
         if not warehouses:
@@ -1483,8 +1506,10 @@ class ObjectRequest(models.Model):
         if already_linked:
             raise UserError(
                 "По части строк уже создана выдача. "
-                "Сбросьте или отмените существующую выдачу перед повторным созданием."
+                "Сбросьте или отмените существующую выдачу перед повторным "
+                "созданием."
             )
+        self._check_issue_plan_stock_limits()
         stock_to_issue = self.line_ids.mapped("stock_ids").filtered(
             lambda stock: (
                 stock.qty_to_issue > 0
@@ -1499,7 +1524,6 @@ class ObjectRequest(models.Model):
                 "Нет строк с заполненным количеством к выдаче. "
                 "Заполните распределение по складам."
             )
-        self._check_issue_plan_stock_limits()
         return {
             "type": "ir.actions.act_window",
             "name": "Создать выдачи",

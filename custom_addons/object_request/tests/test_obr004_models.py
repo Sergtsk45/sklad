@@ -37,6 +37,26 @@ class TestObjectRequestProject(TransactionCase):
                 }
             )
 
+    def test_project_warehouse_code_uses_free_suffix_on_conflict(self):
+        self.env["stock.warehouse"].sudo().create(
+            {
+                "name": "Existing project-like warehouse",
+                "code": "ODUP1",
+                "company_id": self.env.company.id,
+            }
+        )
+
+        project = self.env["object.request.project"].create(
+            {
+                "name": "Объект с занятым кодом склада",
+                "code": "ODUP1",
+            }
+        )
+
+        self.assertTrue(project.warehouse_id)
+        self.assertNotEqual(project.warehouse_id.code, "ODUP1")
+        self.assertTrue(project.warehouse_id.code.startswith("ODUP"))
+
 
 @tagged("post_install", "-at_install")
 class TestObjectRequest(TransactionCase):
