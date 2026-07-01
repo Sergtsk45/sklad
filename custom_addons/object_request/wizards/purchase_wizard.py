@@ -51,6 +51,14 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             "с остатком на складах выдачи."
         ),
     )
+    show_stock_guard_override = fields.Boolean(
+        string="Показать обход складской проверки",
+        readonly=True,
+    )
+    stock_guard_warning_text = fields.Text(
+        string="Предупреждение по складским кандидатам",
+        readonly=True,
+    )
     comment = fields.Text(string="Комментарий")
     line_count = fields.Integer(
         compute="_compute_counts",
@@ -124,9 +132,25 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             lines_with_vendor
         )
         if stock_warnings and not self.confirm_stock_guard_override:
-            raise UserError(self._format_stock_guard_warning(stock_warnings))
+            self.write(
+                {
+                    "show_stock_guard_override": True,
+                    "stock_guard_warning_text": (
+                        self._format_stock_guard_warning(stock_warnings)
+                    ),
+                }
+            )
+            return self._purchase_guard_warning_action()
         if stock_warnings:
             self._log_stock_guard_override(stock_warnings)
+        elif self.show_stock_guard_override or self.stock_guard_warning_text:
+            self.write(
+                {
+                    "show_stock_guard_override": False,
+                    "confirm_stock_guard_override": False,
+                    "stock_guard_warning_text": False,
+                }
+            )
 
         created_orders = self._create_orders_by_vendor(lines_with_vendor)
 
@@ -157,6 +181,17 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             "view_mode": "list,form",
             "domain": [("id", "in", created_orders.ids)],
             "target": "current",
+        }
+
+    def _purchase_guard_warning_action(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Проверка закупки",
+            "res_model": self._name,
+            "res_id": self.id,
+            "view_mode": "form",
+            "target": "new",
         }
 
     def _create_orders_by_vendor(self, lines):
@@ -239,8 +274,8 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             [
                 "",
                 "Выберите складской товар в строке требования или установите "
-                "флаг «Закупить несмотря на похожий остаток», если кандидат "
-                "не подходит.",
+                "флаг «Закупить несмотря на похожий остаток» ниже, если "
+                "кандидат не подходит.",
             ]
         )
         return "\n".join(lines)

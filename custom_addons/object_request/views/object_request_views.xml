@@ -188,44 +188,6 @@
                         confirm="Вы уверены, что хотите отменить документ? Это действие необратимо."
                     />
                     <button
-                        name="action_rematch_lines"
-                        string="Пересопоставить несопоставленные"
-                        type="object"
-                        class="btn-secondary"
-                        invisible="state in ('closed', 'cancelled')"
-                        groups="object_request.group_supply_manager"
-                        title="Повторно запустить автосопоставление по несопоставленным строкам"
-                    />
-                    <button
-                        name="action_rematch_all_lines"
-                        string="Пересопоставить все строки"
-                        type="object"
-                        class="btn-secondary"
-                        invisible="state in ('closed', 'cancelled')"
-                        groups="object_request.group_supply_manager"
-                        confirm="Пересмотреть все строки документа? Автоматические старые совпадения могут быть изменены или очищены."
-                        title="Повторно запустить автосопоставление по всем строкам документа"
-                    />
-                    <button
-                        name="action_prepare_ai_candidates"
-                        string="Подобрать AI-кандидатов"
-                        type="object"
-                        class="btn-secondary"
-                        invisible="state in ('closed', 'cancelled')"
-                        groups="object_request.group_supply_manager"
-                        title="Подобрать shortlist кандидатов без записи товара в строки"
-                    />
-                    <button
-                        name="action_apply_confident_ai_matches"
-                        string="Применить уверенные AI-сопоставления"
-                        type="object"
-                        class="btn-secondary"
-                        invisible="state in ('closed', 'cancelled')"
-                        groups="object_request.group_supply_manager"
-                        confirm="Применить только AI-кандидатов с уверенностью не ниже 0.90?"
-                        title="Записать товар только для строк с высокой уверенностью"
-                    />
-                    <button
                         name="action_open_issue_wizard"
                         string="Создать выдачу"
                         type="object"
@@ -324,7 +286,7 @@
                             <field
                                 name="purchase_order_count"
                                 widget="statinfo"
-                                string="Проверить PO"
+                                string="Диагностика PO"
                             />
                         </button>
 
@@ -393,24 +355,6 @@
                         <page string="Строки" name="page_lines">
                             <group groups="object_request.group_supply_manager">
                                 <div>
-                                    <button
-                                        name="action_lines_buy_all"
-                                        string="Закупить всё"
-                                        type="object"
-                                        class="btn-secondary me-2"
-                                    />
-                                    <button
-                                        name="action_lines_issue_max"
-                                        string="Выдать максимум"
-                                        type="object"
-                                        class="btn-secondary me-2"
-                                    />
-                                    <button
-                                        name="action_lines_reset_split"
-                                        string="Сбросить разбивку"
-                                        type="object"
-                                        class="btn-secondary me-2"
-                                    />
                                     <button
                                         name="action_sort_lines_by_location"
                                         string="Отсортировать строки"
@@ -627,13 +571,60 @@
                                     />
                                     <button
                                         name="action_refresh_stock_match_warning"
-                                        string="Проверить склад"
+                                        string="Проверить складской кандидат"
                                         type="object"
                                         groups="object_request.group_supply_manager"
                                         invisible="not product_id"
                                     />
                                 </list>
                             </field>
+                        </page>
+
+                        <page
+                            string="Сопоставление"
+                            name="page_matching"
+                            groups="object_request.group_supply_manager"
+                        >
+                            <group string="Сопоставление номенклатуры">
+                                <group>
+                                    <button
+                                        name="action_rematch_lines"
+                                        string="Пересопоставить несопоставленные"
+                                        type="object"
+                                        class="btn-secondary"
+                                        invisible="state in ('closed', 'cancelled')"
+                                        title="Повторно запустить автосопоставление по несопоставленным строкам"
+                                    />
+                                    <button
+                                        name="action_rematch_all_lines"
+                                        string="Пересопоставить все строки"
+                                        type="object"
+                                        class="btn-secondary"
+                                        invisible="state in ('closed', 'cancelled')"
+                                        confirm="Пересмотреть все строки документа? Автоматические старые совпадения могут быть изменены или очищены."
+                                        title="Повторно запустить автосопоставление по всем строкам документа"
+                                    />
+                                </group>
+                                <group>
+                                    <button
+                                        name="action_prepare_ai_candidates"
+                                        string="Подобрать AI-кандидатов"
+                                        type="object"
+                                        class="btn-secondary"
+                                        invisible="state in ('closed', 'cancelled')"
+                                        title="Подобрать shortlist кандидатов без записи товара в строки"
+                                    />
+                                    <button
+                                        name="action_apply_confident_ai_matches"
+                                        string="Применить уверенные AI-сопоставления"
+                                        type="object"
+                                        class="btn-secondary"
+                                        invisible="state in ('closed', 'cancelled')"
+                                        confirm="Применить уверенные AI-сопоставления? Это массово запишет товары в строки с уверенностью не ниже 0.90."
+                                        title="Массово записать товар только для строк с высокой уверенностью"
+                                    />
+                                </group>
+                            </group>
                         </page>
 
                         <page

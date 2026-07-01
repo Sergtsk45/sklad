@@ -449,11 +449,18 @@ class TestOBR021Purchase(TransactionCase):
         request.write({"state": "in_progress"})
 
         wizard = self._open_wizard(request)
-        with self.assertRaises(UserError) as err:
-            wizard.action_create_purchase()
+        result = wizard.action_create_purchase()
 
-        self.assertIn("Закупка остановлена", str(err.exception))
-        self.assertIn(stock_product.display_name, str(err.exception))
+        self.assertEqual(result["res_model"], "object.request.purchase.wizard")
+        self.assertEqual(result["res_id"], wizard.id)
+        self.assertTrue(wizard.show_stock_guard_override)
+        self.assertFalse(wizard.confirm_stock_guard_override)
+        self.assertIn("Закупка остановлена", wizard.stock_guard_warning_text)
+        self.assertIn(
+            stock_product.display_name,
+            wizard.stock_guard_warning_text,
+        )
+        self.assertFalse(request.purchase_order_ids)
 
     def test_purchase_guard_override_creates_po_and_logs_note(self):
         """Явное подтверждение создаёт PO и пишет решение в chatter."""

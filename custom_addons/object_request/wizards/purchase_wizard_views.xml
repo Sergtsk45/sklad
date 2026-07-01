@@ -14,10 +14,14 @@
                     <group string="Параметры">
                         <group>
                             <field name="company_id" invisible="1"/>
+                            <field name="show_stock_guard_override" invisible="1"/>
                             <field name="picking_type_id"/>
                             <field name="group_by_vendor"/>
                             <field name="create_draft_only"/>
-                            <field name="confirm_stock_guard_override"/>
+                            <field
+                                name="confirm_stock_guard_override"
+                                invisible="not show_stock_guard_override"
+                            />
                         </group>
                         <group>
                             <field name="line_count" readonly="1"/>
@@ -28,6 +32,17 @@
                                 widget="integer"
                             />
                         </group>
+                    </group>
+
+                    <group
+                        string="Проверка складских кандидатов"
+                        invisible="not show_stock_guard_override"
+                    >
+                        <field
+                            name="stock_guard_warning_text"
+                            readonly="1"
+                            nolabel="1"
+                        />
                     </group>
 
                     <group>

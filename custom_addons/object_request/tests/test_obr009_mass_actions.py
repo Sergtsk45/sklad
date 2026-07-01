@@ -4,6 +4,7 @@ OBR-009: Тесты массовых действий и ускорения со
 from odoo.tests.common import TransactionCase
 from odoo.tests import tagged
 from odoo.exceptions import UserError
+from lxml import etree
 import datetime
 
 
@@ -458,6 +459,63 @@ class TestObr009MassActions(TransactionCase):
         self.assertIn("action_prepare_ai_candidates", view.arch_db)
         self.assertIn("action_apply_confident_ai_matches", view.arch_db)
         self.assertIn("action_accept_ai_candidate", view.arch_db)
+
+    def test_object_request_form_keeps_risky_actions_out_of_main_flow(self):
+        view = self.env.ref("object_request.view_object_request_form")
+        root = etree.fromstring(view.arch_db.encode())
+
+        header_risky_buttons = root.xpath(
+            "//header//button[@name='action_rematch_lines' "
+            "or @name='action_rematch_all_lines' "
+            "or @name='action_prepare_ai_candidates' "
+            "or @name='action_apply_confident_ai_matches']"
+        )
+        self.assertFalse(header_risky_buttons)
+
+        main_line_risky_buttons = root.xpath(
+            "//page[@name='page_lines']//button[@name='action_lines_buy_all' "
+            "or @name='action_lines_issue_max' "
+            "or @name='action_lines_reset_split']"
+        )
+        self.assertFalse(main_line_risky_buttons)
+
+        matching_buttons = root.xpath(
+            "//page[@name='page_matching']"
+            "//button[@name='action_rematch_lines' "
+            "or @name='action_rematch_all_lines' "
+            "or @name='action_prepare_ai_candidates' "
+            "or @name='action_apply_confident_ai_matches']"
+        )
+        self.assertEqual(len(matching_buttons), 4)
+
+        po_diagnostic = root.xpath(
+            "//button[@name='action_check_purchase_stock_matches']"
+            "//field[@string='Диагностика PO']"
+        )
+        self.assertTrue(po_diagnostic)
+
+    def test_purchase_wizard_hides_stock_guard_override_initially(self):
+        view = self.env.ref(
+            "object_request.view_object_request_purchase_wizard_form"
+        )
+        root = etree.fromstring(view.arch_db.encode())
+
+        override_fields = root.xpath(
+            "//field[@name='confirm_stock_guard_override']"
+        )
+        self.assertEqual(len(override_fields), 1)
+        self.assertEqual(
+            override_fields[0].get("invisible"),
+            "not show_stock_guard_override",
+        )
+        warning_groups = root.xpath(
+            "//group[@string='Проверка складских кандидатов']"
+        )
+        self.assertEqual(len(warning_groups), 1)
+        self.assertEqual(
+            warning_groups[0].get("invisible"),
+            "not show_stock_guard_override",
+        )
 
     # ----- line_count в wizard -----
 
