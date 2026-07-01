@@ -580,3 +580,48 @@ class TestOBR021Purchase(TransactionCase):
         self.assertTrue(
             any("Проверка закупок нашла строки" in body for body in messages)
         )
+
+    def test_existing_po_diagnostic_flags_purchase_line_product_mismatch(self):
+        """Диагностика PO ловит расхождение товара PO и строки требования."""
+        request = self._create_request()
+        wrong_product = self.env["product.product"].create(
+            {
+                "name": "Фланец 65-10 кованый OBR021-MISMATCH-OLD",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        correct_product = self.env["product.product"].create(
+            {
+                "name": "Фланец DN65 PN16 OBR021-MISMATCH-NEW",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        warehouse = self.project.warehouse_id
+        request.write({"issue_warehouse_ids": [(6, 0, [warehouse.id])]})
+        self.env["stock.quant"]._update_available_quantity(
+            correct_product,
+            warehouse.lot_stock_id,
+            201.0,
+        )
+        line = self._add_line(request, wrong_product, 5.0, self.vendor1)
+        line.write({"name_raw": "Фланец ст. Ду 65мм 1,0МПа OBR021-MISMATCH"})
+        request.write({"state": "in_progress"})
+
+        wizard = self._open_wizard(request)
+        wizard.confirm_stock_guard_override = True
+        wizard.action_create_purchase()
+        line.write({"product_id": correct_product.id})
+
+        action = request.action_check_purchase_stock_matches()
+
+        line.invalidate_recordset()
+        self.assertTrue(line.stock_match_warning)
+        self.assertIn(
+            "отличается от товара требования",
+            line.stock_match_warning_text,
+        )
+        self.assertEqual(line.stock_match_candidate_id, correct_product)
+        self.assertEqual(action["res_model"], "object.request.line")
+        self.assertEqual(action["domain"], [("id", "in", line.ids)])

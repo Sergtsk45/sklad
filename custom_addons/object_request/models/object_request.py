@@ -759,8 +759,15 @@ class ObjectRequest(models.Model):
                     "sticky": False,
                 },
             }
-        lines.action_refresh_stock_match_warning()
-        warnings = lines.filtered("stock_match_warning")
+        mismatch_lines = self._purchase_product_mismatch_lines(lines)
+        for line in mismatch_lines:
+            line.write(self._purchase_product_mismatch_warning_vals(line))
+
+        stock_check_lines = lines - mismatch_lines
+        stock_check_lines.action_refresh_stock_match_warning()
+        warnings = mismatch_lines | stock_check_lines.filtered(
+            "stock_match_warning"
+        )
         if not warnings:
             return {
                 "type": "ir.actions.client",
@@ -784,11 +791,37 @@ class ObjectRequest(models.Model):
             "context": {"default_request_id": self.id},
         }
 
+    def _purchase_product_mismatch_lines(self, lines):
+        return lines.filtered(
+            lambda line: (
+                line.purchase_order_line_id
+                and line.purchase_order_line_id.product_id
+                and line.product_id
+                and line.purchase_order_line_id.product_id != line.product_id
+            )
+        )
+
+    def _purchase_product_mismatch_warning_vals(self, line):
+        purchase_product = line.purchase_order_line_id.product_id
+        return {
+            "stock_match_warning": True,
+            "stock_match_candidate_id": line.product_id.id,
+            "stock_match_candidate_qty": line.stock_qty_on_hand,
+            "stock_match_warning_text": (
+                "Товар в строке закупки отличается от товара требования: "
+                "в PO выбран «%s», в требовании сейчас «%s»."
+            )
+            % (
+                purchase_product.display_name,
+                line.product_id.display_name,
+            ),
+        }
+
     def _post_purchase_stock_match_note(self, lines):
         self.ensure_one()
         body_lines = [
             "Проверка закупок нашла строки, где есть похожий товар "
-            "с остатком на складах выдачи:"
+            "с остатком на складах выдачи или расхождение с PO:"
         ]
         for line in lines:
             po = line.purchase_order_id or line.purchase_order_line_id.order_id

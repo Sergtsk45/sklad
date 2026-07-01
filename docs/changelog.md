@@ -1,3 +1,26 @@
+## [2026-07-02] — fix(object_request): память сопоставлений и диагностика PO
+
+### Исправлено
+- Кнопки **«Запомнить»** и **«Принять и запомнить»** доступны без
+  `supplier_article`: строка сохраняется в `object.request.matching.memory`,
+  а создание `product.supplierinfo` пропускается.
+- Диагностика закупок теперь помечает строку предупреждением, если товар в
+  строке PO отличается от текущего товара строки требования.
+
+### Проверено
+- `python3 -m py_compile` по изменённым Python-файлам.
+- `python3 -m flake8` по изменённым тестам `test_obr021_purchase.py`,
+  `test_obr032_memory.py`.
+- `git diff --check` по изменённым файлам.
+- `docker exec odoo19-local odoo -u object_request --test-enable --test-tags /object_request:TestOBR021Purchase,/object_request:TestObr032Memory -d odoo19_local --stop-after-init --http-port=8075`
+  — 35 post-tests, 0 failed, 0 errors.
+- Полный `/object_request` запускался той же базой:
+  `382 post-tests, 17 failed, 9 errors`; падения остались в существующих
+  складских/проектных сценариях вне scope изменения (`OBR-012`, `OBR-018`,
+  `OBR-019`, `OBR-033`, `OBR-034`, `OBR-035`, duplicate warehouse code).
+
+---
+
 ## [2026-07-02] — feat(object_request): упрощение UI сценария требования
 
 ### Добавлено
