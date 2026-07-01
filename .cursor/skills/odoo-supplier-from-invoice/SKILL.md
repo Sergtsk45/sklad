@@ -24,12 +24,16 @@ compatibility: "Odoo MCP (инструменты: odoo:search_records, odoo:crea
 ## Шаг 1 — Чтение файла
 
 ### PDF
-Файл уже виден в контексте как документ — читай текст напрямую.
-Если содержимое не пришло в контекст, используй bash:
+
+1. Проверь текстовый слой (`pdfplumber`, `len(page.chars)`).
+2. **Скан без текста** (`chars == 0`) → скилл **scanned-invoice-parsing**
+   (OCR через `scripts/ocr_parse.py`, постобработка `ocr-corrections.md`).
+3. **Текстовый PDF** — читай напрямую или через `extract_invoice()` из `ai_assistant`.
+
 ```python
-from pypdf import PdfReader
-r = PdfReader("/mnt/user-data/uploads/filename.pdf")
-print(r.pages[0].extract_text())
+import pdfplumber
+with pdfplumber.open(path) as pdf:
+    has_text = len(pdf.pages[0].chars) > 0
 ```
 
 ### Excel (.xlsx)

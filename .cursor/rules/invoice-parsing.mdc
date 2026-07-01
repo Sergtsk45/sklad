@@ -1,0 +1,21 @@
+---
+description: Парсинг счетов и накладных из docs/invoices — OCR для сканов, extract_invoice для текстовых PDF
+globs: docs/invoices/**
+alwaysApply: false
+---
+
+# Парсинг счетов
+
+При работе с файлами в `docs/invoices/` или по запросу «распарсь / посмотри счёт»:
+
+1. Прочитай скилл **scanned-invoice-parsing** (`.cursor/skills/scanned-invoice-parsing/SKILL.md`).
+2. Сначала проверь текстовый слой (`pdfplumber`, `len(page.chars)`).
+3. **Скан Амурстроя** (ИНН `2801019127`, `schetП*.pdf`) → правило **amurstroy-invoice-parsing** / `amurstroy_parse.py`.
+4. **Другой скан** (chars=0) → OCR: `ocr_parse.py` (для Амурстроя внутри вызовет спец. парсер).
+5. **Текстовый PDF** → `extract_invoice()` из `ai_assistant`.
+6. Примени исправления из `ocr-corrections.md` (DIN 934, Амурстрой, М6 и т.д.).
+7. Покажи структурированный результат; **не заноси в Odoo** без явной команды.
+8. Занесение поставщика → скилл **odoo-supplier-from-invoice** (только по явному запросу).
+9. Создание закупки → правило **purchase-from-invoice** / скилл `purchase-from-invoice` (только по явному запросу).
+
+Уточнения пользователя по номенклатуре (например, «это DIN 934») имеют приоритет над OCR.
