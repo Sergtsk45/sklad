@@ -404,6 +404,43 @@ class ObjectRequestLine(models.Model):
                 "Запоминание сопоставлений доступно только снабженцу."
             )
 
+    def _object_request_issue_moves(self, current_picking_ids=None):
+        self.ensure_one()
+        current_picking_ids = set(current_picking_ids or [])
+        moves = self.stock_ids.mapped("move_id").filtered(
+            lambda move: move.exists()
+            and move.picking_id.is_object_request_issue
+            and (
+                move.picking_id.id in current_picking_ids
+                or move.state == "done"
+            )
+        )
+        if (
+            not moves
+            and self.issue_move_id
+            and (
+                self.issue_move_id.picking_id.id in current_picking_ids
+                or self.issue_move_id.state == "done"
+            )
+        ):
+            moves = self.issue_move_id
+        return moves
+
+    def _object_request_purchase_receipt_moves(self, current_picking_ids=None):
+        self.ensure_one()
+        current_picking_ids = set(current_picking_ids or [])
+        if not self.purchase_order_line_id:
+            return self.env["stock.move"]
+        return self.env["stock.move"].search(
+            [
+                ("purchase_line_id", "=", self.purchase_order_line_id.id),
+                ("picking_type_id.code", "=", "incoming"),
+                "|",
+                ("picking_id", "in", list(current_picking_ids) or [0]),
+                ("state", "=", "done"),
+            ]
+        )
+
     def _ai_candidate_clear_vals(self):
         return {
             "ai_candidate_product_ids": [(5, 0, 0)],

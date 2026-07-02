@@ -354,6 +354,91 @@ class TestOBR021Purchase(TransactionCase):
             self.project.warehouse_id.in_type_id,
         )
 
+    def test_validated_receipt_updates_request_qty_issued(self):
+        """Проведённый приход PO отражается в колонке 'Выдано'."""
+        product = self.env["product.product"].create(
+            {
+                "name": "Продукт receipt OBR021",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        request = self._create_request()
+        line = self._add_line(request, product, 4.0, self.vendor1)
+        request.write({"state": "in_progress"})
+
+        wizard = self._open_wizard(request)
+        result = wizard.action_create_purchase()
+        po = self.env["purchase.order"].browse(result["res_id"])
+        po.button_confirm()
+        picking = po.picking_ids.filtered(
+            lambda item: item.picking_type_id.code == "incoming"
+        )[:1]
+
+        for move in picking.move_ids:
+            move.quantity = move.product_uom_qty
+        picking.with_context(skip_backorder=True).button_validate()
+
+        line.invalidate_recordset()
+        self.assertEqual(line.qty_issued, 4.0)
+        self.assertEqual(request.qty_total_issued, 4.0)
+
+    def test_receipt_qty_issued_is_added_to_internal_issue_qty(self):
+        """Выдано суммирует внутреннюю выдачу и закупочный приход."""
+        product = self.env["product.product"].create(
+            {
+                "name": "Продукт mixed receipt OBR021",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        request = self._create_request()
+        line = self._add_line(request, product, 4.0, self.vendor1)
+        line.write({"qty_requested": 10.0, "qty_to_issue": 6.0})
+        request.write({"state": "in_progress"})
+        warehouse = request._get_issue_warehouses()[:1]
+        self.env["object.request.line.stock"].with_context(
+            auto_stock_distribution=True,
+        ).create(
+            {
+                "line_id": line.id,
+                "warehouse_id": warehouse.id,
+                "qty_on_hand": 6.0,
+                "qty_to_issue": 6.0,
+            }
+        )
+        issue_wizard = (
+            self.env["object.request.issue.preview.wizard"]
+            .with_context(default_request_id=request.id)
+            .create({})
+        )
+        issue_wizard.action_create_issues()
+        issue_picking = line.stock_ids.picking_id
+        self.env["stock.quant"]._update_available_quantity(
+            product,
+            warehouse.lot_stock_id,
+            6.0,
+        )
+        issue_picking.action_confirm()
+        issue_picking.action_assign()
+        for move_line in issue_picking.move_line_ids:
+            move_line.quantity = move_line.move_id.product_uom_qty
+        issue_picking.with_context(skip_backorder=True).button_validate()
+
+        purchase_wizard = self._open_wizard(request)
+        result = purchase_wizard.action_create_purchase()
+        po = self.env["purchase.order"].browse(result["res_id"])
+        po.button_confirm()
+        picking = po.picking_ids.filtered(
+            lambda item: item.picking_type_id.code == "incoming"
+        )[:1]
+        for move in picking.move_ids:
+            move.quantity = move.product_uom_qty
+        picking.with_context(skip_backorder=True).button_validate()
+
+        line.invalidate_recordset()
+        self.assertEqual(line.qty_issued, 10.0)
+
     def test_purchase_wizard_fallback_receipt_type_without_project_warehouse(
         self,
     ):
