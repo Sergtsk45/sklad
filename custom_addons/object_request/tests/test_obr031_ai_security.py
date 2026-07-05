@@ -109,6 +109,7 @@ class TestObr031AISecurity(TransactionCase):
             article,
             vendor=None,
             technical_designation=None,
+            **kwargs,
         ):
             call_count.append(1)
             return _EMPTY_RESULT
@@ -139,6 +140,7 @@ class TestObr031AISecurity(TransactionCase):
             article,
             vendor=None,
             technical_designation=None,
+            **kwargs,
         ):
             raise RuntimeError('Test LLM error')
 

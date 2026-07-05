@@ -1112,6 +1112,8 @@ class ObjectRequest(models.Model):
                     supplier_article,
                     vendor=vendor,
                     technical_designation=technical_designation,
+                    request=self,
+                    issue_warehouses=self._get_issue_warehouses(),
                 )
                 line.write(
                     line._ai_candidate_result_vals(candidate_result)

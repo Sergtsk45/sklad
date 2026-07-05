@@ -410,6 +410,17 @@ class ObjectRequestLine(models.Model):
         if self.matching_required:
             self.matching_required = False
         self.matching_source = "manual"
+        if self.request_id:
+            candidate = self._find_stock_match_warning_candidate()
+            if candidate:
+                for key, value in self._stock_match_warning_vals(
+                    candidate
+                ).items():
+                    self[key] = value
+            else:
+                for key, value in self._stock_match_warning_clear_vals(
+                ).items():
+                    self[key] = value
 
     @api.onchange("preferred_vendor_id")
     def _onchange_preferred_vendor_id(self):
@@ -487,14 +498,45 @@ class ObjectRequestLine(models.Model):
             reason_parts.append(
                 "Не совпали токены: %s." % ", ".join(missing_tokens[:6])
             )
-        return {
+        stock_note = self._candidate_matching_stock_note(best)
+        if stock_note:
+            reason_parts.append(stock_note)
+        requires_substitution_confirmation = (
+            best.get("substitution_decision") == "allowed_with_confirmation"
+            and best.get("substitution_requires_confirmation")
+        )
+        if requires_substitution_confirmation:
+            reason_parts.append("Замена требует ручного подтверждения.")
+        confidence = best["local_score"]
+        if requires_substitution_confirmation:
+            confidence = min(confidence, 0.89)
+        vals = {
             "ai_candidate_product_ids": [
                 (6, 0, [item["product_id"] for item in candidates])
             ],
             "ai_suggested_product_id": best["product_id"],
-            "ai_match_confidence": best["local_score"],
+            "ai_match_confidence": confidence,
             "ai_match_reason": " ".join(reason_parts),
         }
+        if stock_note:
+            vals["matching_note"] = self._append_matching_note(stock_note)
+        return vals
+
+    def _candidate_matching_stock_note(self, candidate):
+        qty = candidate.get("stock_qty_on_issue_warehouses") or 0.0
+        if qty <= 0:
+            return ""
+        warehouses = candidate.get("stock_warehouse_names") or "склад выдачи"
+        return "Есть остаток на Ос.ск: %g шт (%s)." % (qty, warehouses)
+
+    def _append_matching_note(self, note):
+        self.ensure_one()
+        current = (self.matching_note or "").strip()
+        if not note:
+            return current or False
+        if note in current:
+            return current
+        return ("%s\n%s" % (current, note)).strip() if current else note
 
     def _apply_ai_suggestion_vals(self):
         self.ensure_one()
@@ -538,6 +580,7 @@ class ObjectRequestLine(models.Model):
         }
 
     def _stock_match_warning_vals(self, candidate):
+        stock_note = self._candidate_matching_stock_note(candidate)
         return {
             "stock_match_warning": True,
             "stock_match_candidate_id": candidate["product_id"],
@@ -555,6 +598,7 @@ class ObjectRequestLine(models.Model):
                 candidate.get("stock_warehouse_names") or "склад не указан",
                 candidate.get("substitution_reason") or "",
             ),
+            "matching_note": self._append_matching_note(stock_note),
         }
 
     def _find_stock_match_warning_candidate(self, warehouses=None):
@@ -626,6 +670,50 @@ class ObjectRequestLine(models.Model):
                     f"Предупреждений: {warnings}."
                 ),
                 "type": "warning" if warnings else "success",
+                "sticky": False,
+                "next": {"type": "ir.actions.client", "tag": "reload"},
+            },
+        }
+
+    def action_select_stock_match_candidate(self):
+        self._check_supply_manager_matching_action()
+        updated = 0
+        for line in self:
+            if not line.stock_match_candidate_id:
+                continue
+            candidate = line._find_stock_match_warning_candidate()
+            if not candidate:
+                raise UserError(
+                    "Складской кандидат больше не найден или не имеет "
+                    "доступного остатка."
+                )
+            if candidate["product_id"] != line.stock_match_candidate_id.id:
+                raise UserError(
+                    "Складской кандидат изменился. Обновите проверку строки."
+                )
+            product = line.stock_match_candidate_id
+            stock_note = line._candidate_matching_stock_note(candidate)
+            line.write(
+                {
+                    "product_id": product.id,
+                    "uom_id": product.uom_id.id,
+                    "matching_required": False,
+                    "matching_source": "manual",
+                    "matching_note": line._append_matching_note(
+                        "Выбран складской кандидат: %s. %s"
+                        % (product.display_name, stock_note)
+                    ),
+                    **line._stock_match_warning_clear_vals(),
+                }
+            )
+            updated += 1
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Складской кандидат выбран",
+                "message": f"Обновлено строк: {updated}.",
+                "type": "success" if updated else "warning",
                 "sticky": False,
                 "next": {"type": "ir.actions.client", "tag": "reload"},
             },

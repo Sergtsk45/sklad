@@ -183,6 +183,77 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             "target": "current",
         }
 
+    def action_replace_with_stock_candidate(self):
+        """Replace guarded lines and recalculate issue."""
+        self.ensure_one()
+        self.request_id._check_supply_manager_processing_action()
+        self.request_id._check_purchase_preparation_state()
+        lines = self.line_ids.filtered(
+            lambda ln: ln.qty_to_buy > 0 and ln.product_id
+        )
+        warnings = self._find_similar_stock_purchase_warnings(lines)
+        if not warnings:
+            self.write(
+                {
+                    "show_stock_guard_override": False,
+                    "confirm_stock_guard_override": False,
+                    "stock_guard_warning_text": False,
+                }
+            )
+            return self._purchase_guard_warning_action()
+
+        updated_lines = self.env["object.request.line"]
+        for item in warnings:
+            line = item["line"]
+            candidate = item["candidate"]
+            product = self.env["product.product"].browse(
+                candidate["product_id"]
+            )
+            stock_note = line._candidate_matching_stock_note(candidate)
+            line.write(
+                {
+                    "product_id": product.id,
+                    "uom_id": product.uom_id.id,
+                    "matching_required": False,
+                    "matching_source": "manual",
+                    "matching_note": line._append_matching_note(
+                        "Перед закупкой выбран складской кандидат: %s. %s"
+                        % (product.display_name, stock_note)
+                    ),
+                    **line._stock_match_warning_clear_vals(),
+                }
+            )
+            updated_lines |= line
+
+        if updated_lines:
+            self.request_id.action_check_stock()
+            updated_lines.action_issue_max()
+            self.line_ids = [(6, 0, self.line_ids.ids)]
+            self.write(
+                {
+                    "show_stock_guard_override": False,
+                    "confirm_stock_guard_override": False,
+                    "stock_guard_warning_text": False,
+                }
+            )
+            self.request_id.message_post(
+                body=(
+                    "Перед созданием закупки выбран складской кандидат "
+                    "для строк: %s."
+                )
+                % ", ".join(updated_lines.mapped("display_name")),
+                message_type="notification",
+                subtype_xmlid="mail.mt_note",
+            )
+
+        return self._purchase_guard_warning_action()
+
+    def action_keep_purchase_despite_stock_candidate(self):
+        """Explicitly keep purchase after stock guard warning."""
+        self.ensure_one()
+        self.write({"confirm_stock_guard_override": True})
+        return self.action_create_purchase()
+
     def _purchase_guard_warning_action(self):
         self.ensure_one()
         return {

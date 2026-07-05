@@ -47,6 +47,14 @@ class TestObr029LlmMatching(TransactionCase):
             "local_score": score,
             "matched_tokens": [],
             "missing_tokens": [],
+            "stock_qty_on_issue_warehouses": 0.0,
+            "stock_warehouse_names": "",
+            "has_issue_stock": False,
+            "stock_rank_bonus": 0.0,
+            "substitution_decision": "unknown_requires_review",
+            "substitution_reason": "",
+            "substitution_rule_applied": False,
+            "substitution_requires_confirmation": False,
         }
 
     # ------------------------------------------------------------------

@@ -193,6 +193,13 @@
                     groups="object_request.group_supply_manager"
                     invisible="not product_id"
                 />
+                <button
+                    name="action_select_stock_match_candidate"
+                    string="Выбрать кандидата"
+                    type="object"
+                    groups="object_request.group_supply_manager"
+                    invisible="not stock_match_candidate_id"
+                />
             </list>
         </field>
     </record>

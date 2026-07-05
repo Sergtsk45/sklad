@@ -127,6 +127,13 @@ class TestImportMatchingV2(TransactionCase):
             }
         )
 
+    def _put_stock(self, product, warehouse, qty):
+        self.env["stock.quant"]._update_available_quantity(
+            product,
+            warehouse.lot_stock_id,
+            qty,
+        )
+
     def test_reference_cases_are_fixed_as_test_data(self):
         self.assertEqual(len(REFERENCE_MATCHING_CASES), 6)
         for case in REFERENCE_MATCHING_CASES:
@@ -288,6 +295,37 @@ class TestImportMatchingV2(TransactionCase):
             self.parser.match_product_by_name(
                 "Кран латунный OBR027-EQUAL Ду15 В-В"
             )
+        )
+
+    def test_candidate_service_payload_contains_stock_reason(self):
+        warehouse = self.project.warehouse_id
+        self.request.write({"issue_warehouse_ids": [(6, 0, [warehouse.id])]})
+        stock_product = self._create_product(
+            "Фланец DN65 PN16 OBR027-STOCK-PAYLOAD"
+        )
+        self._put_stock(stock_product, warehouse, 201.0)
+
+        result = self.env[
+            "object.request.matching.candidate.service"
+        ].build_candidates(
+            "Фланец ст. Ду65 1,0МПа OBR027-STOCK-PAYLOAD",
+            "",
+            request=self.request,
+        )
+
+        candidate = next(
+            item for item in result["candidates"]
+            if item["product_id"] == stock_product.id
+        )
+        self.assertTrue(candidate["has_issue_stock"])
+        self.assertAlmostEqual(
+            candidate["stock_qty_on_issue_warehouses"],
+            201.0,
+        )
+        self.assertIn("Есть остаток на складах выдачи", candidate["reason"])
+        self.assertEqual(
+            candidate["substitution_decision"],
+            "allowed_with_confirmation",
         )
 
     def test_remember_matching_creates_supplierinfo_for_repeat_import(self):

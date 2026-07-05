@@ -68,6 +68,20 @@
                         string="Создать закупки"
                         type="object"
                         class="btn-primary"
+                        invisible="show_stock_guard_override"
+                    />
+                    <button
+                        name="action_replace_with_stock_candidate"
+                        string="Заменить на этот товар"
+                        type="object"
+                        class="btn-primary"
+                        invisible="not show_stock_guard_override"
+                    />
+                    <button
+                        name="action_keep_purchase_despite_stock_candidate"
+                        string="Оставить закупку"
+                        type="object"
+                        invisible="not show_stock_guard_override"
                     />
                     <button string="Отмена" class="btn-secondary" special="cancel"/>
                 </footer>
