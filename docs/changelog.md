@@ -1,3 +1,36 @@
+## [2026-07-06] — feat(object_request): нормализация признаков номенклатуры
+
+### Добавлено
+- `object.request.product.feature.parser` — общий parser технических признаков
+  товара: семейство, DN/Ду, PN/Ру/МПа, материал, ГОСТ и тип соединения.
+- Stored-поля на `product.template` и related stored-поля на
+  `product.product`: `or_product_family`, `or_diameter_nominal`,
+  `or_pressure_nominal`, `or_material`, `or_standard`,
+  `or_connection_type`, `or_feature_key`, `or_feature_parse_warning`.
+- Отчёт **Аудит номенклатуры** для ручной чистки справочника: потенциальные
+  дубли, позиции без DN/Ду и конфликтующие PN.
+- Shell-команда `custom_addons/object_request/scripts/product_feature_audit.py`
+  для вывода audit-summary в `odoo shell`.
+
+### Изменено
+- `object.request.substitution.policy` теперь использует общий parser
+  признаков.
+- `object.request.matching.candidate.service` добавляет источник кандидатов
+  `feature` и ищет по `family + DN + PN>=requested`, чтобы подбор использовал
+  структуру товара, а не только текстовые токены.
+- Конфликт семейства или DN отсекается до ранжирования; PN downgrade остаётся
+  видимым как `blocked`-кандидат без складского бонуса.
+
+### Проверено
+- `docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request`
+  — 0 ошибок.
+- `docker exec odoo19-local odoo --test-enable -u object_request --test-tags /object_request:TestObr037ProductFeatures,/object_request:TestObr028CombinedMatching -d odoo19_local --stop-after-init --http-port=8090`
+  — 30 post-tests, 0 failed, 0 errors.
+- `docker exec odoo19-local odoo --test-enable -u object_request --test-tags /object_request -d odoo19_local --stop-after-init --http-port=8091`
+  — 428 post-tests, 0 failed, 0 errors.
+
+---
+
 ## [2026-07-06] — feat(object_request): каталог допустимых аналогов
 
 ### Добавлено

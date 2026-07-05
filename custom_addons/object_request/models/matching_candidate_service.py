@@ -84,6 +84,7 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
 
         self._add_supplierinfo_candidates(result, supplier_article, vendor)
         self._add_default_code_candidate(result, supplier_article)
+        self._add_feature_candidates(result)
         self._add_name_score_candidates(result, name_raw, designation_context)
         self._add_combined_search_candidates(
             result,
@@ -148,6 +149,8 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
         parser = self.env["object.request.excel.parser"]
         if parser._has_diameter_conflict(result["combined_query"], product):
             return
+        if self._has_feature_conflict(result, product):
+            return
         if any(
             item["product_id"] == product.id
             for item in result["candidates"]
@@ -191,11 +194,37 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
         )
 
     @api.model
+    def _has_feature_conflict(self, result, product):
+        parser = self.env["object.request.product.feature.parser"]
+        source = parser.parse_text(
+            result.get("substitution_source_text") or result["combined_query"]
+        )
+        candidate = parser.parse_text(product.display_name)
+        source_family = source.get("product_family")
+        candidate_family = candidate.get("product_family")
+        if (
+            source_family
+            and candidate_family
+            and source_family != candidate_family
+        ):
+            return True
+        source_diameter = source.get("diameter_nominal")
+        candidate_diameter = candidate.get("diameter_nominal")
+        if (
+            source_diameter
+            and candidate_diameter
+            and source_diameter != candidate_diameter
+        ):
+            return True
+        return False
+
+    @api.model
     def _sort_candidates(self, result):
         source_rank = {
             "memory": 4,
             "supplierinfo": 3,
             "default_code": 3,
+            "feature": 2,
             "name_score": 2,
             "combined_search": 1,
         }
@@ -442,6 +471,52 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
                 "name_score",
                 score,
                 "Совпали значимые токены наименования.",
+            )
+
+    @api.model
+    def _add_feature_candidates(self, result):
+        feature_parser = self.env["object.request.product.feature.parser"]
+        features = feature_parser.parse_text(
+            result.get("substitution_source_text") or result["combined_query"]
+        )
+        family = features.get("product_family")
+        diameter = features.get("diameter_nominal")
+        if not family or not diameter:
+            return
+        domain = [
+            ("active", "=", True),
+            ("or_product_family", "=", family),
+            ("or_diameter_nominal", "=", diameter),
+        ]
+        pressure = features.get("pressure_nominal")
+        if pressure:
+            domain.append(("or_pressure_nominal", ">=", pressure))
+        products = self.env["product.product"].search(
+            domain,
+            limit=NAME_TOKEN_SEARCH_LIMIT,
+        )
+        for product in products:
+            score = 0.78
+            reason_parts = [
+                "Совпали структурные признаки: %s, DN%s."
+                % (family, diameter)
+            ]
+            if pressure and product.or_pressure_nominal:
+                if product.or_pressure_nominal == pressure:
+                    score = 0.88
+                    reason_parts.append("PN совпадает: PN%s." % pressure)
+                elif product.or_pressure_nominal > pressure:
+                    score = 0.84
+                    reason_parts.append(
+                        "PN кандидата выше: PN%s -> PN%s."
+                        % (pressure, product.or_pressure_nominal)
+                    )
+            self._add_candidate(
+                result,
+                product,
+                "feature",
+                score,
+                " ".join(reason_parts),
             )
 
     @api.model

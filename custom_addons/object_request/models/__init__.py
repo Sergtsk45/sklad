@@ -1,5 +1,8 @@
 from . import excel_parser  # noqa: F401
 from . import matching_memory  # noqa: F401
+from . import product_feature_parser  # noqa: F401
+from . import product_feature_models  # noqa: F401
+from . import product_feature_audit  # noqa: F401
 from . import substitution_policy  # noqa: F401
 from . import product_substitute_rule  # noqa: F401
 from . import matching_candidate_service  # noqa: F401

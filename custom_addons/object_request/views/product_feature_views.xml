@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_product_template_form_object_request_features" model="ir.ui.view">
+        <field name="name">product.template.form.object.request.features</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='general_information']/group" position="inside">
+                <group string="Технические признаки" name="object_request_product_features">
+                    <field name="or_product_family"/>
+                    <field name="or_diameter_nominal"/>
+                    <field name="or_pressure_nominal"/>
+                    <field name="or_material"/>
+                    <field name="or_standard"/>
+                    <field name="or_connection_type"/>
+                    <field name="or_feature_key" readonly="1"/>
+                    <field name="or_feature_parse_warning" readonly="1"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_object_request_product_feature_audit_search" model="ir.ui.view">
+        <field name="name">object.request.product.feature.audit.search</field>
+        <field name="model">object.request.product.feature.audit.line</field>
+        <field name="arch" type="xml">
+            <search string="Аудит признаков">
+                <field name="product_id"/>
+                <field name="feature_key"/>
+                <field name="product_family"/>
+                <filter
+                    name="filter_duplicate"
+                    string="Потенциальные дубли"
+                    domain="[('issue_type', '=', 'duplicate')]"
+                />
+                <filter
+                    name="filter_missing_diameter"
+                    string="Нет DN/Ду"
+                    domain="[('issue_type', '=', 'missing_diameter')]"
+                />
+                <filter
+                    name="filter_pressure_conflict"
+                    string="Конфликт PN"
+                    domain="[('issue_type', '=', 'pressure_conflict')]"
+                />
+                <separator/>
+                <filter
+                    name="group_issue_type"
+                    string="Проблема"
+                    context="{'group_by': 'issue_type'}"
+                />
+                <filter
+                    name="group_feature_key"
+                    string="Ключ признаков"
+                    context="{'group_by': 'feature_key'}"
+                />
+                <filter
+                    name="group_family"
+                    string="Семейство"
+                    context="{'group_by': 'product_family'}"
+                />
+            </search>
+        </field>
+    </record>
+
+    <record id="view_object_request_product_feature_audit_list" model="ir.ui.view">
+        <field name="name">object.request.product.feature.audit.list</field>
+        <field name="model">object.request.product.feature.audit.line</field>
+        <field name="arch" type="xml">
+            <list string="Аудит признаков" create="0" edit="0">
+                <header>
+                    <button
+                        name="action_refresh_report"
+                        type="object"
+                        string="Обновить аудит"
+                        class="btn-primary"
+                    />
+                </header>
+                <field name="issue_type"/>
+                <field name="product_id"/>
+                <field name="product_family"/>
+                <field name="diameter_nominal"/>
+                <field name="pressure_nominal"/>
+                <field name="feature_key"/>
+                <field name="note"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_object_request_product_feature_audit_form" model="ir.ui.view">
+        <field name="name">object.request.product.feature.audit.form</field>
+        <field name="model">object.request.product.feature.audit.line</field>
+        <field name="arch" type="xml">
+            <form string="Аудит признаков" create="0" edit="0">
+                <sheet>
+                    <group>
+                        <field name="issue_type"/>
+                        <field name="product_id"/>
+                        <field name="product_family"/>
+                        <field name="diameter_nominal"/>
+                        <field name="pressure_nominal"/>
+                        <field name="feature_key"/>
+                        <field name="note"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_object_request_product_feature_audit" model="ir.actions.act_window">
+        <field name="name">Аудит признаков номенклатуры</field>
+        <field name="res_model">object.request.product.feature.audit.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_object_request_product_feature_audit_search"/>
+    </record>
+
+    <record id="action_object_request_product_feature_audit_refresh" model="ir.actions.server">
+        <field name="name">Обновить аудит признаков</field>
+        <field name="model_id" ref="model_object_request_product_feature_audit_line"/>
+        <field name="state">code</field>
+        <field name="code">action = model.refresh_report()</field>
+    </record>
+
+</odoo>
