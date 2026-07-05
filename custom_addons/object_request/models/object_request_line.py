@@ -358,6 +358,26 @@ class ObjectRequestLine(models.Model):
         for line in self:
             line.has_substitutes = bool(line.allowed_substitute_ids)
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get("allowed_substitute_ids"):
+                self._check_supply_manager_substitution_action()
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if "allowed_substitute_ids" in vals:
+            self._check_supply_manager_substitution_action()
+        return super().write(vals)
+
+    def _check_supply_manager_substitution_action(self):
+        if not self.env.user.has_group("object_request.group_supply_manager"):
+            if self.env.user.has_group("base.group_system"):
+                return
+            raise UserError(
+                "Подтверждение и ведение замен доступно только снабженцу."
+            )
+
     @api.depends("product_id", "matching_required")
     def _compute_matching_flags(self):
         for line in self:
@@ -527,12 +547,13 @@ class ObjectRequestLine(models.Model):
             ),
             "stock_match_warning_text": (
                 "Выбранный товар без остатка. Есть похожий товар "
-                "на складах выдачи: %s (%g; %s)."
+                "на складах выдачи: %s (%g; %s). %s"
             )
             % (
                 candidate["display_name"],
                 candidate.get("stock_qty_on_issue_warehouses", 0.0),
                 candidate.get("stock_warehouse_names") or "склад не указан",
+                candidate.get("substitution_reason") or "",
             ),
         }
 
@@ -567,6 +588,8 @@ class ObjectRequestLine(models.Model):
             if candidate.get("product_id") == self.product_id.id:
                 continue
             if not candidate.get("has_issue_stock"):
+                continue
+            if candidate.get("substitution_decision") == "blocked":
                 continue
             if candidate.get("local_score", 0.0) < 0.25:
                 continue

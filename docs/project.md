@@ -103,6 +103,25 @@ flowchart TD
 - Формирует shortlist кандидатов из `product.supplierinfo`, `default_code`, token-scoring и `ai_search_products()`
 - Использует `technical_designation` как контекст для combined search/scoring/LLM, но не как ключ exact matching
 - Дедуплицирует по `product_id` и отдаёт лимиты: 15 для детерминированного поиска / 8 для LLM / 3 для preview импорта
+- Обогащает кандидатов результатом `object.request.substitution.policy`:
+  `substitution_decision`, `substitution_reason`,
+  `substitution_requires_confirmation`; запрещённые замены не получают
+  складской бонус и не используются как причина остановки закупки.
+
+**`object.request.substitution.policy`** (AbstractModel)
+- Возвращает единый кодовый контракт правил замены:
+  `allowed_with_confirmation`, `blocked`, `unknown_requires_review`.
+- Для фланцев нормализует `Ду/DN/65мм` в единый диаметр и приводит
+  `1,0МПа`, `PN 10`, `PN10`, `Ру10` к `PN10`, а `1,6МПа`, `PN 16`,
+  `PN16`, `Ру16` к `PN16`.
+- Базовые правила: семейство товара и диаметр должны совпадать строго;
+  `PN10` можно заменить на `PN16`, обратная замена запрещена; явный конфликт
+  материала, ГОСТ, исполнения или типа соединения блокирует замену.
+- Если ключевые дополнительные признаки распознаны не полностью, кандидат
+  может быть рекомендован только с ручным подтверждением снабженца.
+- Автоматическая выдача или автоприменение аналога без подтверждения
+  пользователя запрещены: такие кандидаты не проходят
+  `auto_match_candidate()`.
 
 **`object.request.llm.matching.service`** (AbstractModel)
 - Принимает shortlist кандидатов, формирует prompt через `OpenRouterClient`, валидирует JSON-ответ
@@ -113,6 +132,10 @@ flowchart TD
 - Хранит подтверждённые сопоставления с полями: `name_normalized`, `designation_normalized`, `product_id`, `confirmed_by`, `source_request_id`, `confidence`, `active`
 - SQL constraint `UNIQUE(name_normalized, product_id)` предотвращает дубликаты
 - Используется перед LLM и детерминированным поиском: сначала ищется точное совпадение `name_normalized + designation_normalized`, затем безопасный fallback к записям без designation; при попадании возвращает `source="memory"`, `can_call_llm=False`
+- Содержит идемпотентный backfill `backfill_flange_pn16_memory()`: для
+  активных фланцев `PN10` / `1,0МПа` создаёт стартовую память на единственный
+  безопасный фланец `PN16` того же диаметра. Если PN16-кандидатов несколько
+  или policy находит конфликт, запись не создаётся.
 
 ### Пороги уверенности
 
@@ -139,6 +162,9 @@ flowchart TD
 - **Batch size ограничивает стоимость API** — rate limiting в `action_prepare_ai_candidates`
 - **AI может быть отключён** — `ai_matching_enabled=False` полностью блокирует LLM, работает только детерминированный поиск
 - **Все AI-действия доступны только для `group_supply_manager`** — без специальной роли LLM не вызывается
+- **Подтверждение замен доступно только `group_supply_manager`** — запись
+  `allowed_substitute_ids` и действия принятия кандидатов защищены проверками
+  роли снабженца; системный администратор сохраняет доступ для обслуживания.
 - **Логирование в chatter** — `_post_ai_candidates_note()` записывает статистику AI в документ требования
 - **Валидация параметров LLM-сервиса** — неверная конфигурация не вызывает исключение, используется graceful fallback
 

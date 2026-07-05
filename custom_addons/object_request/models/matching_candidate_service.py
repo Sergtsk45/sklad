@@ -35,6 +35,11 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
             name_raw,
             designation_context,
         )
+        substitution_source_text = " ".join(
+            value
+            for value in [name_raw, designation_context]
+            if value
+        )
         limits = {
             "internal": INTERNAL_CANDIDATE_LIMIT,
             "llm": LLM_CANDIDATE_LIMIT,
@@ -49,6 +54,7 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
                 "can_call_llm": False,
                 "note": "Найдено в памяти сопоставлений.",
                 "limits": limits,
+                "substitution_source_text": substitution_source_text,
             }
             self._add_candidate(
                 result,
@@ -70,6 +76,7 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
             "can_call_llm": False,
             "note": "",
             "limits": limits,
+            "substitution_source_text": substitution_source_text,
         }
         if line_type == "manual_only":
             result["note"] = "Строка оставлена для ручного сопоставления."
@@ -128,6 +135,10 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
         candidate = candidates[0]
         if candidate["local_score"] < AUTO_MATCH_MIN_SCORE:
             return self.env["product.product"].browse()
+        if candidate.get("substitution_requires_confirmation"):
+            return self.env["product.product"].browse()
+        if candidate.get("substitution_decision") == "blocked":
+            return self.env["product.product"].browse()
         return candidate["product"]
 
     @api.model
@@ -146,6 +157,14 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
             product,
             result["combined_query"],
         )
+        policy = self.env["object.request.substitution.policy"]
+        substitution = policy.evaluate_texts(
+            result.get("substitution_source_text") or result["combined_query"],
+            product.display_name,
+        )
+        substitution_reason = substitution.get("reason") or ""
+        if substitution_reason:
+            reason = ("%s %s" % (reason or "", substitution_reason)).strip()
         result["candidates"].append(
             {
                 "product": product,
@@ -162,6 +181,12 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
                 "stock_warehouse_names": "",
                 "has_issue_stock": False,
                 "stock_rank_bonus": 0.0,
+                "substitution_decision": substitution["decision"],
+                "substitution_reason": substitution_reason,
+                "substitution_rule_applied": substitution["rule_applied"],
+                "substitution_requires_confirmation": substitution[
+                    "requires_confirmation"
+                ],
             }
         )
 
@@ -230,7 +255,12 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
             candidate["stock_qty_on_issue_warehouses"] = total_qty
             candidate["stock_warehouse_names"] = ", ".join(stock_items)
             candidate["has_issue_stock"] = True
-            candidate["stock_rank_bonus"] = self._stock_rank_bonus(candidate)
+            if candidate.get("substitution_decision") == "blocked":
+                candidate["stock_rank_bonus"] = 0.0
+            else:
+                candidate["stock_rank_bonus"] = self._stock_rank_bonus(
+                    candidate
+                )
             stock_note = "Есть остаток на складах выдачи: %s." % (
                 candidate["stock_warehouse_names"]
             )

@@ -130,6 +130,67 @@ class TestObr032Memory(TransactionCase):
         self.assertEqual(result['candidates'][0]['source'], 'memory')
         self.assertFalse(result['can_call_llm'])
 
+    def test_flange_pn16_backfill_creates_safe_memory(self):
+        """Backfill закрепляет однозначную замену PN10-фланца на PN16."""
+        source = self.env['product.product'].create({
+            'name': 'Фланец ст. Ду777 1.0МПа OBR032-BF',
+            'type': 'consu',
+            'is_storable': True,
+        })
+        target = self.env['product.product'].create({
+            'name': 'Фланец DN777 PN16 OBR032-BF',
+            'type': 'consu',
+            'is_storable': True,
+        })
+
+        stats = self.env[
+            'object.request.matching.memory'
+        ].backfill_flange_pn16_memory()
+
+        parser = self.env['object.request.excel.parser']
+        name_norm = parser.normalize_str(source.display_name)
+        record = self.env['object.request.matching.memory'].search([
+            ('name_normalized', '=', name_norm),
+        ])
+        self.assertGreaterEqual(stats['created'], 1)
+        self.assertEqual(record.product_id, target)
+
+        result = self.env[
+            'object.request.matching.candidate.service'
+        ].build_candidates(source.display_name, '')
+        self.assertEqual(result['candidates'][0]['source'], 'memory')
+        self.assertEqual(result['candidates'][0]['product_id'], target.id)
+
+    def test_flange_pn16_backfill_skips_ambiguous_candidates(self):
+        """Backfill не создаёт память, если есть несколько PN16-кандидатов."""
+        source = self.env['product.product'].create({
+            'name': 'Фланец ст. Ду778 1.0МПа OBR032-BF',
+            'type': 'consu',
+            'is_storable': True,
+        })
+        self.env['product.product'].create({
+            'name': 'Фланец DN778 PN16 OBR032-BF A',
+            'type': 'consu',
+            'is_storable': True,
+        })
+        self.env['product.product'].create({
+            'name': 'Фланец DN778 PN16 OBR032-BF B',
+            'type': 'consu',
+            'is_storable': True,
+        })
+
+        stats = self.env[
+            'object.request.matching.memory'
+        ].backfill_flange_pn16_memory()
+
+        parser = self.env['object.request.excel.parser']
+        name_norm = parser.normalize_str(source.display_name)
+        record = self.env['object.request.matching.memory'].search([
+            ('name_normalized', '=', name_norm),
+        ])
+        self.assertGreaterEqual(stats['ambiguous'], 1)
+        self.assertFalse(record)
+
     def test_memory_prefers_exact_designation_match(self):
         """При совпадении имени память учитывает конкретное обозначение."""
         parser = self.env['object.request.excel.parser']

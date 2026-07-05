@@ -1,3 +1,37 @@
+## [2026-07-06] — feat(object_request): правила замен и стартовая память фланцев
+
+### Добавлено
+- `object.request.substitution.policy` — единый кодовый контракт допустимых,
+  запрещённых и требующих проверки замен.
+- Кандидаты сопоставления обогащаются полями `substitution_decision`,
+  `substitution_reason`, `substitution_requires_confirmation`; запрещённые
+  замены не получают складской бонус и не блокируют закупку как допустимый
+  складской аналог.
+- `object.request.matching.memory.backfill_flange_pn16_memory()` создаёт
+  стартовые записи памяти для однозначных замен фланцев `PN10` / `1,0МПа`
+  на `PN16` того же диаметра.
+- Миграция `19.0.1.7.5` запускает backfill при обновлении модуля.
+
+### Защита
+- Для фланцев реализовано правило: `PN10` можно рекомендовать как `PN16`, но
+  обратная замена `PN16` → `PN10` блокируется.
+- Автосопоставление не применяет кандидатов, требующих ручного подтверждения
+  по policy.
+- Подтверждение допустимых замен ограничено ролью снабженца или системного
+  администратора.
+- Backfill не создаёт запись, если по диаметру найдено несколько допустимых
+  `PN16`-кандидатов или `object.request.substitution.policy` видит конфликт.
+
+### Проверено
+- `docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request`
+  — 0 ошибок.
+- `docker exec odoo19-local odoo --test-enable -u object_request --test-tags /object_request:TestObr028CombinedMatching,/object_request:TestACLForeman,/object_request:TestACLSupplyManager -d odoo19_local --stop-after-init --http-port=8083`
+  — 41 post-tests, 0 failed, 0 errors.
+- `docker exec odoo19-local odoo --test-enable -u object_request --test-tags /object_request -d odoo19_local --stop-after-init --http-port=8084`
+  — 407 post-tests, 0 failed, 0 errors.
+
+---
+
 ## [2026-07-02] — fix(object_request): стабилизация release suite
 
 ### Исправлено

@@ -258,7 +258,7 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             line = item["line"]
             candidate = item["candidate"]
             lines.append(
-                "- %s: выбран «%s», но есть «%s» (%g; %s)."
+                "- %s: выбран «%s», но есть «%s» (%g; %s). %s"
                 % (
                     line.name_raw,
                     item["selected_product"],
@@ -266,6 +266,7 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                     candidate.get("stock_qty_on_issue_warehouses", 0.0),
                     candidate.get("stock_warehouse_names")
                     or "склад не указан",
+                    candidate.get("substitution_reason") or "",
                 )
             )
         if len(warnings) > 10:
@@ -290,7 +291,7 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             line = item["line"]
             candidate = item["candidate"]
             body_lines.append(
-                "- %s: выбран «%s», отклонён кандидат «%s» (%g; %s)."
+                "- %s: выбран «%s», отклонён кандидат «%s» (%g; %s). %s"
                 % (
                     line.name_raw,
                     item["selected_product"],
@@ -298,6 +299,7 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                     candidate.get("stock_qty_on_issue_warehouses", 0.0),
                     candidate.get("stock_warehouse_names")
                     or "склад не указан",
+                    candidate.get("substitution_reason") or "",
                 )
             )
         self.request_id.message_post(

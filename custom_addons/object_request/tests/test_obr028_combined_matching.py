@@ -12,6 +12,7 @@ class TestObr028CombinedMatching(TransactionCase):
         super().setUp()
         self.parser = self.env["object.request.excel.parser"]
         self.service = self.env["object.request.matching.candidate.service"]
+        self.policy = self.env["object.request.substitution.policy"]
         self.vendor = self.env["res.partner"].create(
             {"name": "Поставщик OBR028", "supplier_rank": 1}
         )
@@ -184,6 +185,139 @@ class TestObr028CombinedMatching(TransactionCase):
             candidate["stock_qty_on_issue_warehouses"],
             201.0,
         )
+        self.assertEqual(
+            candidate["substitution_decision"],
+            "allowed_with_confirmation",
+        )
+        self.assertTrue(candidate["substitution_requires_confirmation"])
+
+    def test_substitution_policy_allows_pn_upgrade_with_confirmation(self):
+        decision = self.policy.evaluate_texts(
+            "Фланец ст. Ду 65мм 1,0МПа",
+            "Фланец DN65, PN 16",
+        )
+
+        self.assertEqual(decision["decision"], "allowed_with_confirmation")
+        self.assertTrue(decision["requires_confirmation"])
+        self.assertIn("PN10 -> PN16", decision["reason"])
+
+    def test_substitution_policy_blocks_pn_downgrade(self):
+        decision = self.policy.evaluate_texts(
+            "Фланец DN65, PN 16",
+            "Фланец ст. Ду 65мм 1,0МПа",
+        )
+
+        self.assertEqual(decision["decision"], "blocked")
+        self.assertIn("Понижение давления", decision["reason"])
+
+    def test_substitution_policy_blocks_wrong_diameter(self):
+        decision = self.policy.evaluate_texts(
+            "Фланец DN65 PN16",
+            "Фланец DN40 PN16",
+        )
+
+        self.assertEqual(decision["decision"], "blocked")
+        self.assertIn("Диаметр отличается", decision["reason"])
+
+    def test_substitution_policy_blocks_family_mismatch(self):
+        decision = self.policy.evaluate_texts(
+            "Фланец DN65 PN16",
+            "Кран DN65 PN16",
+        )
+
+        self.assertEqual(decision["decision"], "blocked")
+        self.assertIn("Семейство товара отличается", decision["reason"])
+
+    def test_substitution_policy_unknown_requires_review(self):
+        decision = self.policy.evaluate_texts(
+            "Материал монтажный DN65 PN16",
+            "Материал монтажный DN65 PN16",
+        )
+
+        self.assertEqual(decision["decision"], "unknown_requires_review")
+        self.assertTrue(decision["requires_confirmation"])
+
+    def test_substitution_policy_blocks_explicit_feature_conflicts(self):
+        material = self.policy.evaluate_texts(
+            "Фланец ст. Ду65 PN10",
+            "Фланец латунный DN65 PN16",
+        )
+        gost = self.policy.evaluate_texts(
+            "Фланец Ду65 PN10 ГОСТ 12820",
+            "Фланец DN65 PN16 ГОСТ 33259",
+        )
+        connection = self.policy.evaluate_texts(
+            "Фланец муфтовый Ду65 PN10",
+            "Фланец приварной DN65 PN16",
+        )
+
+        self.assertEqual(material["decision"], "blocked")
+        self.assertEqual(gost["decision"], "blocked")
+        self.assertEqual(connection["decision"], "blocked")
+
+    def test_blocked_substitution_does_not_get_stock_bonus(self):
+        project = self.env["object.request.project"].create(
+            {"name": "Объект OBR028 blocked stock"}
+        )
+        request = self.env["object.request"].create(
+            {
+                "project_id": project.id,
+                "foreman_user_id": self.env.uid,
+                "need_date": "2026-07-01",
+                "issue_warehouse_ids": [(6, 0, [project.warehouse_id.id])],
+            }
+        )
+        blocked = self._create_product("Фланец ст. Ду65 PN10 OBR028-BLOCK")
+        self._put_stock(blocked, project.warehouse_id, 201.0)
+
+        result = self.service.build_candidates(
+            "Фланец ст. Ду65 PN16 OBR028-BLOCK",
+            "",
+            request=request,
+        )
+
+        candidate = next(
+            item
+            for item in result["candidates"]
+            if item["product_id"] == blocked.id
+        )
+        self.assertEqual(candidate["substitution_decision"], "blocked")
+        self.assertTrue(candidate["has_issue_stock"])
+        self.assertEqual(candidate["stock_rank_bonus"], 0.0)
+
+    def test_blocked_substitution_is_not_purchase_stock_warning(self):
+        project = self.env["object.request.project"].create(
+            {"name": "Объект OBR028 blocked guard"}
+        )
+        request = self.env["object.request"].create(
+            {
+                "project_id": project.id,
+                "foreman_user_id": self.env.uid,
+                "need_date": "2026-07-01",
+                "issue_warehouse_ids": [(6, 0, [project.warehouse_id.id])],
+            }
+        )
+        selected = self._create_product(
+            "Фланец ст. Ду65 PN16 OBR028-GUARD"
+        )
+        blocked = self._create_product("Фланец ст. Ду65 PN10 OBR028-GUARD")
+        self._put_stock(blocked, project.warehouse_id, 201.0)
+        line = self.env["object.request.line"].create(
+            {
+                "request_id": request.id,
+                "name_raw": "Фланец ст. Ду65 PN16 OBR028-GUARD",
+                "qty_requested": 1.0,
+                "product_id": selected.id,
+                "preferred_vendor_id": self.vendor.id,
+                "qty_to_buy": 1.0,
+            }
+        )
+
+        candidate = line._find_stock_match_warning_candidate(
+            warehouses=project.warehouse_id,
+        )
+
+        self.assertFalse(candidate)
 
     def test_candidate_service_filters_wrong_diameter_and_keeps_likely_valves(
         self,
