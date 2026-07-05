@@ -1,3 +1,35 @@
+## [2026-07-06] — feat(object_request): каталог допустимых аналогов
+
+### Добавлено
+- Модель `object.request.product.substitute.rule` для управляемых правил
+  аналогов с направлением `one_way` / `two_way`, причиной, подтверждением,
+  компанией и счётчиками использования.
+- Меню **Комплектация объектов → Правила аналогов** и smart-button
+  **Аналоги** на карточке варианта товара.
+- В строках требования отдельные поля для разрешённого аналога:
+  `substitute_product_id`, `substitute_stock_qty`,
+  `substitute_stock_warehouse_names`, `substitute_warning_text`.
+- Действие строки **«Использовать аналог»**: явно заменяет `product_id` на
+  разрешённый аналог, пересчитывает наличие и пишет решение в chatter.
+
+### Защита
+- Правило аналога нельзя создать, если `object.request.substitution.policy`
+  считает замену запрещённой; для `two_way` проверяются оба направления.
+- Прораб и кладовщик могут читать каталог аналогов, но создание/изменение
+  доступно только снабженцу или системному администратору.
+- Закупочный wizard отдельно предупреждает о разрешённом аналоге с остатком и
+  не создаёт PO без явного решения пользователя; обход логируется в chatter.
+
+### Проверено
+- `docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request`
+  — 0 ошибок.
+- `docker exec odoo19-local odoo --test-enable -u object_request --test-tags /object_request:TestObr036SubstituteRules,/object_request:TestACLForeman,/object_request:TestACLSupplyManager -d odoo19_local --stop-after-init --http-port=8088`
+  — 24 post-tests, 0 failed, 0 errors.
+- `docker exec odoo19-local odoo --test-enable -u object_request --test-tags /object_request -d odoo19_local --stop-after-init --http-port=8089`
+  — 423 post-tests, 0 failed, 0 errors.
+
+---
+
 ## [2026-07-06] — feat(object_request): правила замен и стартовая память фланцев
 
 ### Добавлено
@@ -18,8 +50,9 @@
   `matching_note`.
 - `@api.onchange('product_id')` сразу обновляет предупреждение о похожем
   товаре с остатком при ручном выборе товара.
-- В wizard закупки добавлены действия **«Заменить на этот товар»** и
-  **«Оставить закупку»** после срабатывания складского guard-а.
+- В wizard закупки добавлены действия **«Заменить на этот товар»**,
+  **«Оставить закупку»** и **«Отмена»** после срабатывания складского
+  guard-а.
 
 ### Защита
 - Для фланцев реализовано правило: `PN10` можно рекомендовать как `PN16`, но
@@ -40,8 +73,8 @@
   — 0 ошибок.
 - `docker exec odoo19-local odoo --test-enable -u object_request --test-tags /object_request:TestObr028CombinedMatching,/object_request:TestACLForeman,/object_request:TestACLSupplyManager -d odoo19_local --stop-after-init --http-port=8083`
   — 41 post-tests, 0 failed, 0 errors.
-- `docker exec odoo19-local odoo --test-enable -u object_request --test-tags /object_request -d odoo19_local --stop-after-init --http-port=8084`
-  — 413 post-tests, 0 failed, 0 errors.
+- `docker exec odoo19-local odoo -u object_request --test-enable --test-tags /object_request -d odoo19_local --stop-after-init --http-port=8078`
+  — 415 post-tests, 0 failed, 0 errors.
 
 ---
 

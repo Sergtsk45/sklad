@@ -150,6 +150,31 @@ class ObjectRequestLine(models.Model):
     stock_match_warning_text = fields.Text(
         string="Предупреждение по номенклатуре"
     )
+    substitute_rule_id = fields.Many2one(
+        "object.request.product.substitute.rule",
+        string="Правило аналога",
+        index=True,
+        readonly=True,
+    )
+    substitute_product_id = fields.Many2one(
+        "product.product",
+        string="Разрешённый аналог",
+        index=True,
+        readonly=True,
+    )
+    substitute_stock_qty = fields.Float(
+        string="Остаток аналога",
+        digits="Product Unit of Measure",
+        readonly=True,
+    )
+    substitute_stock_warehouse_names = fields.Char(
+        string="Склады аналога",
+        readonly=True,
+    )
+    substitute_warning_text = fields.Text(
+        string="Предупреждение по аналогу",
+        readonly=True,
+    )
     manual_vendor_required = fields.Boolean(
         string="Требует выбора поставщика",
         default=False,
@@ -577,9 +602,17 @@ class ObjectRequestLine(models.Model):
             "stock_match_candidate_id": False,
             "stock_match_candidate_qty": 0.0,
             "stock_match_warning_text": False,
+            "substitute_rule_id": False,
+            "substitute_product_id": False,
+            "substitute_stock_qty": 0.0,
+            "substitute_stock_warehouse_names": False,
+            "substitute_warning_text": False,
+            "allowed_substitute_ids": [(5, 0, 0)],
         }
 
     def _stock_match_warning_vals(self, candidate):
+        if candidate.get("substitute_rule_id"):
+            return self._substitute_stock_warning_vals(candidate)
         stock_note = self._candidate_matching_stock_note(candidate)
         return {
             "stock_match_warning": True,
@@ -601,6 +634,109 @@ class ObjectRequestLine(models.Model):
             "matching_note": self._append_matching_note(stock_note),
         }
 
+    def _substitute_stock_warning_vals(self, candidate):
+        stock_note = self._candidate_matching_stock_note(candidate)
+        rule = self.env["object.request.product.substitute.rule"].browse(
+            candidate["substitute_rule_id"]
+        )
+        warning = (
+            "Выбранный товар без остатка. Есть разрешённый аналог "
+            "по правилу: %s (%g; %s). Причина: %s"
+        ) % (
+            candidate["display_name"],
+            candidate.get("stock_qty_on_issue_warehouses", 0.0),
+            candidate.get("stock_warehouse_names") or "склад не указан",
+            candidate.get("substitution_reason") or rule.reason or "",
+        )
+        return {
+            "stock_match_warning": True,
+            "stock_match_candidate_id": candidate["product_id"],
+            "stock_match_candidate_qty": candidate.get(
+                "stock_qty_on_issue_warehouses",
+                0.0,
+            ),
+            "stock_match_warning_text": warning,
+            "substitute_rule_id": rule.id,
+            "substitute_product_id": candidate["product_id"],
+            "substitute_stock_qty": candidate.get(
+                "stock_qty_on_issue_warehouses",
+                0.0,
+            ),
+            "substitute_stock_warehouse_names": (
+                candidate.get("stock_warehouse_names") or False
+            ),
+            "substitute_warning_text": warning,
+            "allowed_substitute_ids": [(6, 0, [candidate["product_id"]])],
+            "matching_note": self._append_matching_note(stock_note),
+        }
+
+    def _find_substitute_stock_candidate(self, warehouses=None):
+        self.ensure_one()
+        if not self.product_id or self.is_cancelled:
+            return None
+        request = self.request_id
+        warehouses = warehouses or request._get_issue_warehouses()
+        if not warehouses:
+            return None
+        Rule = self.env["object.request.product.substitute.rule"]
+        rules = Rule.search(
+            Rule._applicable_domain(self.product_id, self.company_id)
+        )
+        if not rules:
+            return None
+        products = self.env["product.product"].browse()
+        rule_products = []
+        for rule in rules:
+            product = rule.substitute_for(self.product_id)
+            if not product:
+                continue
+            rule_products.append((rule, product))
+            products |= product
+        if not products:
+            return None
+        qty_by_key = request._get_stock_qty_by_product_warehouse(
+            products,
+            warehouses,
+        )
+        candidates = []
+        for rule, product in rule_products:
+            total_qty = 0.0
+            stock_items = []
+            for warehouse in warehouses:
+                qty = qty_by_key.get((product.id, warehouse.id), 0.0)
+                if qty <= 0:
+                    continue
+                total_qty += qty
+                stock_items.append("%s: %g" % (warehouse.display_name, qty))
+            if total_qty <= 0:
+                continue
+            candidates.append(
+                {
+                    "product": product,
+                    "product_id": product.id,
+                    "display_name": product.display_name,
+                    "local_score": 1.0,
+                    "source": "substitute_rule",
+                    "reason": rule.reason,
+                    "stock_qty_on_issue_warehouses": total_qty,
+                    "stock_warehouse_names": ", ".join(stock_items),
+                    "has_issue_stock": True,
+                    "stock_rank_bonus": 1.0,
+                    "substitution_decision": "allowed_with_confirmation",
+                    "substitution_reason": rule.reason,
+                    "substitution_rule_applied": True,
+                    "substitution_requires_confirmation": True,
+                    "substitute_rule_id": rule.id,
+                }
+            )
+        if not candidates:
+            return None
+        candidates.sort(
+            key=lambda item: item["stock_qty_on_issue_warehouses"],
+            reverse=True,
+        )
+        return candidates[0]
+
     def _find_stock_match_warning_candidate(self, warehouses=None):
         self.ensure_one()
         if not self.product_id or self.is_cancelled:
@@ -619,6 +755,11 @@ class ObjectRequestLine(models.Model):
         )
         if selected_qty > 0:
             return None
+        substitute = self._find_substitute_stock_candidate(
+            warehouses=warehouses,
+        )
+        if substitute:
+            return substitute
         service = self.env["object.request.matching.candidate.service"]
         candidate_result = service.build_candidates(
             self.name_raw,
@@ -675,8 +816,88 @@ class ObjectRequestLine(models.Model):
             },
         }
 
+    def action_use_substitute_product(self):
+        self._check_supply_manager_matching_action()
+        updated = 0
+        updated_lines = self.env["object.request.line"]
+        for line in self:
+            candidate = line._find_substitute_stock_candidate()
+            if not candidate:
+                raise UserError(
+                    "Разрешённый аналог с остатком больше не найден."
+                )
+            if (
+                line.substitute_product_id
+                and candidate["product_id"] != line.substitute_product_id.id
+            ):
+                raise UserError(
+                    "Разрешённый аналог изменился. Обновите проверку строки."
+                )
+            product = self.env["product.product"].browse(
+                candidate["product_id"]
+            )
+            rule = self.env["object.request.product.substitute.rule"].browse(
+                candidate["substitute_rule_id"]
+            )
+            stock_note = line._candidate_matching_stock_note(candidate)
+            old_product = line.product_id
+            line.write(
+                {
+                    "product_id": product.id,
+                    "uom_id": product.uom_id.id,
+                    "matching_required": False,
+                    "matching_source": "manual",
+                    "matching_note": line._append_matching_note(
+                        "Использован разрешённый аналог: %s вместо %s. "
+                        "Правило: %s. %s"
+                        % (
+                            product.display_name,
+                            old_product.display_name,
+                            rule.reason,
+                            stock_note,
+                        )
+                    ),
+                    **line._stock_match_warning_clear_vals(),
+                }
+            )
+            rule.mark_used()
+            updated_lines |= line
+            line.request_id.message_post(
+                body=(
+                    "Снабженец применил разрешённый аналог в строке %s: "
+                    "«%s» заменён на «%s». Причина правила: %s."
+                )
+                % (
+                    line.display_name,
+                    old_product.display_name,
+                    product.display_name,
+                    rule.reason,
+                ),
+                message_type="notification",
+                subtype_xmlid="mail.mt_note",
+            )
+            updated += 1
+        for request in updated_lines.mapped("request_id"):
+            request.action_check_stock()
+            updated_lines.filtered(
+                lambda line: line.request_id == request
+            ).action_issue_max()
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Аналог применён",
+                "message": f"Обновлено строк: {updated}.",
+                "type": "success" if updated else "warning",
+                "sticky": False,
+                "next": {"type": "ir.actions.client", "tag": "reload"},
+            },
+        }
+
     def action_select_stock_match_candidate(self):
         self._check_supply_manager_matching_action()
+        if self and all(line.substitute_rule_id for line in self):
+            return self.action_use_substitute_product()
         updated = 0
         for line in self:
             if not line.stock_match_candidate_id:
@@ -691,6 +912,10 @@ class ObjectRequestLine(models.Model):
                 raise UserError(
                     "Складской кандидат изменился. Обновите проверку строки."
                 )
+            if candidate.get("substitute_rule_id"):
+                line.action_use_substitute_product()
+                updated += 1
+                continue
             product = line.stock_match_candidate_id
             stock_note = line._candidate_matching_stock_note(candidate)
             line.write(

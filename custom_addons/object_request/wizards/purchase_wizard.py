@@ -210,6 +210,9 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                 candidate["product_id"]
             )
             stock_note = line._candidate_matching_stock_note(candidate)
+            rule = self.env["object.request.product.substitute.rule"]
+            if candidate.get("substitute_rule_id"):
+                rule = rule.browse(candidate["substitute_rule_id"])
             line.write(
                 {
                     "product_id": product.id,
@@ -217,12 +220,26 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                     "matching_required": False,
                     "matching_source": "manual",
                     "matching_note": line._append_matching_note(
-                        "Перед закупкой выбран складской кандидат: %s. %s"
-                        % (product.display_name, stock_note)
+                        (
+                            "Перед закупкой использован разрешённый аналог: "
+                            "%s. Правило: %s. %s"
+                            % (
+                                product.display_name,
+                                rule.reason,
+                                stock_note,
+                            )
+                        )
+                        if rule
+                        else (
+                            "Перед закупкой выбран складской кандидат: %s. %s"
+                            % (product.display_name, stock_note)
+                        )
                     ),
                     **line._stock_match_warning_clear_vals(),
                 }
             )
+            if rule:
+                rule.mark_used()
             updated_lines |= line
 
         if updated_lines:
@@ -328,11 +345,16 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
         for item in warnings[:10]:
             line = item["line"]
             candidate = item["candidate"]
+            if candidate.get("substitute_rule_id"):
+                kind = "разрешённый аналог"
+            else:
+                kind = "похожий товар"
             lines.append(
-                "- %s: выбран «%s», но есть «%s» (%g; %s). %s"
+                "- %s: выбран «%s», но есть %s «%s» (%g; %s). %s"
                 % (
                     line.name_raw,
                     item["selected_product"],
+                    kind,
                     candidate["display_name"],
                     candidate.get("stock_qty_on_issue_warehouses", 0.0),
                     candidate.get("stock_warehouse_names")
@@ -356,16 +378,22 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
         self.ensure_one()
         body_lines = [
             "Снабженец подтвердил закупку несмотря на похожие товары "
-            "с остатком на складах выдачи:"
+            "или разрешённые аналоги с остатком на складах выдачи:"
         ]
         for item in warnings:
             line = item["line"]
             candidate = item["candidate"]
+            kind = (
+                "разрешённый аналог"
+                if candidate.get("substitute_rule_id")
+                else "кандидат"
+            )
             body_lines.append(
-                "- %s: выбран «%s», отклонён кандидат «%s» (%g; %s). %s"
+                "- %s: выбран «%s», отклонён %s «%s» (%g; %s). %s"
                 % (
                     line.name_raw,
                     item["selected_product"],
+                    kind,
                     candidate["display_name"],
                     candidate.get("stock_qty_on_issue_warehouses", 0.0),
                     candidate.get("stock_warehouse_names")

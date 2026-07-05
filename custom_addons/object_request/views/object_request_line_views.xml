@@ -125,6 +125,27 @@
                     string="Предупреждение"
                     optional="show"
                 />
+                <field
+                    name="substitute_product_id"
+                    string="Разрешённый аналог"
+                    optional="show"
+                />
+                <field
+                    name="substitute_stock_qty"
+                    string="Остаток аналога"
+                    optional="show"
+                />
+                <field
+                    name="substitute_stock_warehouse_names"
+                    string="Склады аналога"
+                    optional="hide"
+                />
+                <field
+                    name="substitute_warning_text"
+                    string="Предупреждение по аналогу"
+                    optional="hide"
+                />
+                <field name="substitute_rule_id" string="Правило аналога" optional="hide"/>
                 <field name="matching_source" string="Источник" optional="hide"/>
                 <field
                     name="ai_suggested_product_id"
@@ -198,7 +219,14 @@
                     string="Выбрать кандидата"
                     type="object"
                     groups="object_request.group_supply_manager"
-                    invisible="not stock_match_candidate_id"
+                    invisible="not stock_match_candidate_id or substitute_rule_id"
+                />
+                <button
+                    name="action_use_substitute_product"
+                    string="Использовать аналог"
+                    type="object"
+                    groups="object_request.group_supply_manager"
+                    invisible="not substitute_rule_id"
                 />
             </list>
         </field>

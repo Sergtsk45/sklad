@@ -182,6 +182,25 @@ class TestACLForeman(TransactionCase):
                 {"allowed_substitute_ids": [(4, self.product.id)]}
             )
 
+    def test_foreman_cannot_create_substitute_rule(self):
+        """Прораб не создаёт правила каталога аналогов."""
+        substitute = self.env["product.product"].create(
+            {
+                "name": "Товар ACL аналог",
+                "type": "consu",
+            }
+        )
+        env = self.env(user=self.foreman)
+
+        with self.assertRaises(UserError):
+            env["object.request.product.substitute.rule"].create(
+                {
+                    "product_id": self.product.id,
+                    "substitute_product_id": substitute.id,
+                    "reason": "ACL",
+                }
+            )
+
 
 @tagged("post_install", "-at_install")
 class TestACLSupplyManager(TransactionCase):
@@ -333,6 +352,32 @@ class TestACLSupplyManager(TransactionCase):
 
         line.invalidate_recordset()
         self.assertIn(self.product, line.allowed_substitute_ids)
+
+    def test_supply_can_create_substitute_rule(self):
+        """Снабженец может вести каталог аналогов."""
+        source = self.env["product.product"].create(
+            {
+                "name": "Фланец DN65 PN16 ACL source",
+                "type": "consu",
+            }
+        )
+        substitute = self.env["product.product"].create(
+            {
+                "name": "Фланец DN65 PN16 ACL substitute",
+                "type": "consu",
+            }
+        )
+        env = self.env(user=self.supply)
+
+        rule = env["object.request.product.substitute.rule"].create(
+            {
+                "product_id": source.id,
+                "substitute_product_id": substitute.id,
+                "reason": "ACL",
+            }
+        )
+
+        self.assertTrue(rule.id)
 
     def test_supply_can_use_import_wizard(self):
         """Снабженец имеет доступ к wizard импорта."""

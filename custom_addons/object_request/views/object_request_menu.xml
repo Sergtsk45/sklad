@@ -19,6 +19,14 @@
 
     <!-- Подменю: Объекты (справочник) -->
     <menuitem id="menu_object_request_project" name="Объекты" parent="menu_object_request_root" action="action_object_request_project" sequence="20" groups="object_request.group_supply_manager"/>
+    <menuitem
+        id="menu_object_request_product_substitute_rule"
+        name="Правила аналогов"
+        parent="menu_object_request_root"
+        action="action_object_request_product_substitute_rule"
+        sequence="25"
+        groups="object_request.group_supply_manager"
+    />
 
     <!-- Подменю: Отчёты -->
     <menuitem
