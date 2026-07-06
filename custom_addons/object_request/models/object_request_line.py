@@ -526,13 +526,20 @@ class ObjectRequestLine(models.Model):
         stock_note = self._candidate_matching_stock_note(best)
         if stock_note:
             reason_parts.append(stock_note)
+        feature_note = self._candidate_feature_note(best)
+        if feature_note:
+            reason_parts.append(feature_note)
         requires_substitution_confirmation = (
             best.get("substitution_decision") == "allowed_with_confirmation"
             and best.get("substitution_requires_confirmation")
         )
         if requires_substitution_confirmation:
             reason_parts.append("Замена требует ручного подтверждения.")
-        confidence = best["local_score"]
+        confidence = self._ai_candidate_confidence(
+            best,
+            candidates,
+            requires_substitution_confirmation,
+        )
         if requires_substitution_confirmation:
             confidence = min(confidence, 0.89)
         vals = {
@@ -546,6 +553,119 @@ class ObjectRequestLine(models.Model):
         if stock_note:
             vals["matching_note"] = self._append_matching_note(stock_note)
         return vals
+
+    def _ai_candidate_confidence(
+        self,
+        best,
+        candidates,
+        requires_substitution_confirmation=False,
+    ):
+        confidence = best.get("local_score", 0.0)
+        if best.get("substitution_decision") == "blocked":
+            return min(confidence, 0.85)
+        if requires_substitution_confirmation:
+            return min(confidence, 0.89)
+        if self._candidate_has_feature_conflict(best):
+            return min(confidence, 0.85)
+        if (
+            best.get("has_issue_stock")
+            and best.get("local_score", 0.0) >= 0.84
+        ):
+            confidence = max(confidence, 0.90)
+        if self._candidate_has_better_stock_alternative(best, candidates):
+            confidence = min(confidence, 0.85)
+        return confidence
+
+    def _candidate_has_better_stock_alternative(self, best, candidates):
+        if best.get("has_issue_stock"):
+            return False
+        best_score = best.get("local_score", 0.0)
+        for candidate in candidates:
+            if candidate.get("product_id") == best.get("product_id"):
+                continue
+            if not candidate.get("has_issue_stock"):
+                continue
+            if candidate.get("substitution_decision") == "blocked":
+                continue
+            if self._candidate_has_feature_conflict(candidate):
+                continue
+            if candidate.get("local_score", 0.0) >= best_score - 0.05:
+                return True
+        return False
+
+    def _candidate_has_feature_conflict(self, candidate):
+        requested = candidate.get("requested_features") or {}
+        features = candidate.get("candidate_features") or {}
+        for key in ("product_family", "diameter_nominal"):
+            if requested.get(key) and features.get(key):
+                if requested[key] != features[key]:
+                    return True
+        requested_pn = requested.get("pressure_nominal")
+        candidate_pn = features.get("pressure_nominal")
+        if requested_pn and candidate_pn and candidate_pn < requested_pn:
+            return True
+        return False
+
+    def _candidate_feature_note(self, candidate):
+        features = candidate.get("candidate_features") or {}
+        parts = []
+        family = features.get("product_family")
+        diameter = features.get("diameter_nominal")
+        pressure = features.get("pressure_nominal")
+        material = features.get("material")
+        if family:
+            parts.append("семейство=%s" % family)
+        if diameter:
+            parts.append("DN%s" % diameter)
+        if pressure:
+            parts.append("PN%s" % pressure)
+        if material:
+            parts.append("материал=%s" % material)
+        if not parts:
+            return ""
+        return "Признаки кандидата: %s." % ", ".join(parts)
+
+    def _safe_stock_rematch_apply_vals(self, candidate_result):
+        self.ensure_one()
+        candidates = candidate_result.get("candidates", [])
+        if not candidates:
+            return {}
+        best = candidates[0]
+        requires_confirmation = (
+            best.get("substitution_decision") == "allowed_with_confirmation"
+            and best.get("substitution_requires_confirmation")
+            and bool(self.product_id)
+        )
+        confidence = self._ai_candidate_confidence(
+            best,
+            candidates,
+            requires_confirmation,
+        )
+        if confidence < 0.90:
+            return {}
+        if not best.get("has_issue_stock"):
+            return {}
+        if requires_confirmation:
+            return {}
+        if best.get("substitution_decision") == "blocked":
+            return {}
+        if self._candidate_has_feature_conflict(best):
+            return {}
+        product = self.env["product.product"].browse(best["product_id"])
+        if not product:
+            return {}
+        stock_note = self._candidate_matching_stock_note(best)
+        return {
+            "product_id": product.id,
+            "uom_id": product.uom_id.id,
+            "matching_required": False,
+            "matching_state": "matched",
+            "matching_source": "combined_auto",
+            "matching_note": self._append_matching_note(
+                "Переподобрано с учётом остатков: %s. %s"
+                % (product.display_name, stock_note)
+            ),
+        }
 
     def _candidate_matching_stock_note(self, candidate):
         qty = candidate.get("stock_qty_on_issue_warehouses") or 0.0

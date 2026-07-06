@@ -165,6 +165,11 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
             result.get("substitution_source_text") or result["combined_query"],
             product.display_name,
         )
+        feature_parser = self.env["object.request.product.feature.parser"]
+        source_features = feature_parser.parse_text(
+            result.get("substitution_source_text") or result["combined_query"]
+        )
+        candidate_features = self._product_feature_payload(product)
         substitution_reason = substitution.get("reason") or ""
         if substitution_reason:
             reason = ("%s %s" % (reason or "", substitution_reason)).strip()
@@ -180,6 +185,20 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
                 "matched_tokens": matched_tokens,
                 "missing_tokens": missing_tokens,
                 "reason": reason,
+                "requested_features": source_features,
+                "candidate_features": candidate_features,
+                "product_family": candidate_features.get("product_family"),
+                "diameter_nominal": candidate_features.get(
+                    "diameter_nominal"
+                ),
+                "pressure_nominal": candidate_features.get(
+                    "pressure_nominal"
+                ),
+                "material": candidate_features.get("material"),
+                "standard": candidate_features.get("standard"),
+                "connection_type": candidate_features.get(
+                    "connection_type"
+                ),
                 "stock_qty_on_issue_warehouses": 0.0,
                 "stock_warehouse_names": "",
                 "has_issue_stock": False,
@@ -192,6 +211,21 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
                 ],
             }
         )
+
+    @api.model
+    def _product_feature_payload(self, product):
+        if not product:
+            return {}
+        return {
+            "product_family": product.or_product_family or False,
+            "diameter_nominal": product.or_diameter_nominal or False,
+            "pressure_nominal": product.or_pressure_nominal or False,
+            "material": product.or_material or False,
+            "standard": product.or_standard or False,
+            "connection_type": product.or_connection_type or False,
+            "feature_key": product.or_feature_key or False,
+            "parse_warning": product.or_feature_parse_warning or False,
+        }
 
     @api.model
     def _has_feature_conflict(self, result, product):

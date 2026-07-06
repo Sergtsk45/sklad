@@ -48,7 +48,11 @@ class ObjectRequestImportPreview(models.TransientModel):
         readonly=True,
     )
     match_status = fields.Selection(
-        [("matched", "Сопоставлен"), ("unmatched", "Не сопоставлен")],
+        [
+            ("matched", "Сопоставлен"),
+            ("manual_review", "Требует проверки"),
+            ("unmatched", "Не сопоставлен"),
+        ],
         string="Статус",
         readonly=True,
     )
@@ -476,10 +480,8 @@ class ObjectRequestImportWizard(models.TransientModel):
             elif qty <= 0:
                 has_error, error_msg = True, "Количество не указано или 0"
 
-            if has_error:
-                problem_count += 1
-
-            match = parser.match_row(
+            match = self._match_import_row(
+                parser,
                 supplier_article,
                 name_raw,
                 supplier_raw,
@@ -488,6 +490,15 @@ class ObjectRequestImportWizard(models.TransientModel):
             product = match["product"]
             vendor = match["vendor"]
             candidates = match.get("candidate_products")
+            review = self._import_manual_review_decision(
+                match,
+                product,
+                name_raw,
+                supplier_article,
+                technical_designation,
+            )
+            if has_error or review["manual_review"]:
+                problem_count += 1
 
             preview_vals.append(
                 {
@@ -508,16 +519,201 @@ class ObjectRequestImportWizard(models.TransientModel):
                     "candidate_product_ids": [
                         (6, 0, candidates.ids)
                     ] if candidates else False,
-                    "match_status": "matched" if product else "unmatched",
-                    "matching_required": match["matching_required"],
+                    "match_status": self._preview_match_status(
+                        product,
+                        review["manual_review"],
+                    ),
+                    "matching_required": (
+                        match["matching_required"]
+                        or review["manual_review"]
+                    ),
                     "manual_vendor_required": match["manual_vendor_required"],
                     "has_error": has_error,
-                    "error_message": error_msg,
+                    "error_message": self._join_messages(
+                        error_msg,
+                        review["message"],
+                    ),
                 }
             )
 
         self._enrich_with_ai_candidates(preview_vals)
         return preview_vals, problem_count
+
+    def _match_import_row(
+        self,
+        parser,
+        supplier_article,
+        name_raw,
+        supplier_raw,
+        technical_designation=None,
+    ):
+        match = parser.match_row(
+            supplier_article,
+            name_raw,
+            supplier_raw,
+            technical_designation=technical_designation,
+        )
+        candidate_result = self._stock_context_candidate_result(
+            name_raw,
+            supplier_article,
+            supplier_raw,
+            technical_designation,
+        )
+        if candidate_result:
+            service = self.env["object.request.matching.candidate.service"]
+            match["candidate_details"] = candidate_result.get(
+                "candidates", []
+            )
+            candidate_products = service.candidate_products(candidate_result)
+            if not match["product"] and candidate_products:
+                match["candidate_products"] |= candidate_products
+            match["line_type"] = candidate_result.get(
+                "line_type", match.get("line_type")
+            )
+            match["combined_query"] = candidate_result.get(
+                "combined_query", match.get("combined_query")
+            )
+        return match
+
+    def _stock_context_candidate_result(
+        self,
+        name_raw,
+        supplier_article,
+        supplier_raw,
+        technical_designation=None,
+    ):
+        warehouses = self._preview_issue_warehouses()
+        if not warehouses:
+            return None
+        parser = self.env["object.request.excel.parser"].sudo()
+        vendor = parser.match_vendor_by_name(supplier_raw)
+        service = self.env["object.request.matching.candidate.service"]
+        return service.build_candidates(
+            name_raw,
+            supplier_article,
+            vendor=vendor,
+            technical_designation=technical_designation,
+            issue_warehouses=warehouses,
+        )
+
+    def _preview_issue_warehouses(self):
+        warehouse = self.project_id.warehouse_id
+        if warehouse:
+            return warehouse
+        return self.env["stock.warehouse"].browse()
+
+    def _import_manual_review_decision(
+        self,
+        match,
+        product,
+        name_raw,
+        supplier_article,
+        technical_designation,
+    ):
+        reasons = []
+        candidates = match.get("candidate_details") or []
+        if self._has_multiple_strong_candidates(candidates):
+            reasons.append("найдено несколько сильных кандидатов")
+        if product and self._selected_has_stock_alternative(
+            product,
+            candidates,
+        ):
+            reasons.append(
+                "выбранный товар без остатка, но есть похожий товар на складе"
+            )
+        if product and self._selected_has_policy_or_feature_conflict(
+            product,
+            candidates,
+            name_raw,
+            supplier_article,
+            technical_designation,
+        ):
+            reasons.append("есть конфликт DN/PN/семейства")
+        if not reasons:
+            return {"manual_review": False, "message": ""}
+        return {
+            "manual_review": True,
+            "message": "Требует проверки: %s." % "; ".join(reasons),
+        }
+
+    def _has_multiple_strong_candidates(self, candidates):
+        strong = [
+            item for item in candidates
+            if item.get("local_score", 0.0) >= 0.70
+            and item.get("substitution_decision") != "blocked"
+        ]
+        if len(strong) < 2:
+            return False
+        strong = sorted(
+            strong,
+            key=lambda item: item.get("local_score", 0.0),
+            reverse=True,
+        )
+        return (
+            strong[0].get("local_score", 0.0)
+            - strong[1].get("local_score", 0.0)
+        ) < 0.15
+
+    def _selected_has_stock_alternative(self, product, candidates):
+        selected = self._candidate_by_product(product, candidates)
+        if selected and selected.get("has_issue_stock"):
+            return False
+        for candidate in candidates:
+            if candidate.get("product_id") == product.id:
+                continue
+            if not candidate.get("has_issue_stock"):
+                continue
+            if candidate.get("substitution_decision") == "blocked":
+                continue
+            if candidate.get("local_score", 0.0) < 0.25:
+                continue
+            return True
+        return False
+
+    def _selected_has_policy_or_feature_conflict(
+        self,
+        product,
+        candidates,
+        name_raw,
+        supplier_article,
+        technical_designation,
+    ):
+        selected = self._candidate_by_product(product, candidates)
+        if selected:
+            return (
+                selected.get("substitution_decision") == "blocked"
+                or self.env[
+                    "object.request.llm.matching.service"
+                ]._has_feature_conflict(selected)
+            )
+        source = " ".join(
+            value
+            for value in [
+                name_raw,
+                technical_designation,
+                supplier_article,
+            ]
+            if value
+        )
+        if not source:
+            return False
+        policy = self.env["object.request.substitution.policy"]
+        result = policy.evaluate_texts(source, product.display_name)
+        return result.get("decision") == "blocked"
+
+    def _candidate_by_product(self, product, candidates):
+        for candidate in candidates:
+            if candidate.get("product_id") == product.id:
+                return candidate
+        return None
+
+    def _preview_match_status(self, product, manual_review):
+        if manual_review:
+            return "manual_review"
+        return "matched" if product else "unmatched"
+
+    def _join_messages(self, *messages):
+        return " ".join(msg for msg in messages if msg)
 
     def _enrich_with_ai_candidates(self, preview_vals):
         """Для режима suggest/auto — добавляет AI-поля в preview_vals."""
@@ -572,8 +768,19 @@ class ObjectRequestImportWizard(models.TransientModel):
             "preferred_vendor_id": preview.matched_vendor_id.id or False,
             "matching_required": matching_required,
             "manual_vendor_required": preview.manual_vendor_required,
+            "matching_state": (
+                "manual_review"
+                if preview.match_status == "manual_review"
+                else (
+                    "requires_mapping"
+                    if matching_required or not product
+                    else "matched"
+                )
+            ),
             "matching_note": (
-                "import auto match" if product and not matching_required
+                preview.error_message
+                if preview.match_status == "manual_review"
+                else "import auto match" if product and not matching_required
                 else False
             ),
             "matching_source": matching_source,
@@ -589,6 +796,12 @@ class ObjectRequestImportWizard(models.TransientModel):
         """Определяет товар, источник и флаг matching_required для строки."""
         selected = preview.selected_product_id
         if selected:
+            if preview.match_status == "manual_review":
+                if preview.matched_product_id == selected:
+                    return selected, "import_auto", True
+                if ai_suggested == selected:
+                    return selected, "llm_confirmed", True
+                return selected, "manual", True
             if preview.matched_product_id == selected:
                 return selected, "import_auto", False
             if ai_suggested == selected:

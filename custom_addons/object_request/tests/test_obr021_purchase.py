@@ -107,6 +107,22 @@ class TestOBR021Purchase(TransactionCase):
             po.picking_type_id, self.project.warehouse_id.in_type_id
         )
 
+    def test_purchase_blocks_unresolved_manual_review_line(self):
+        """Закупка не создаётся, если строка требует проверки номенклатуры."""
+        request = self._create_request()
+        line = self._add_line(request, self.product1, 5.0, self.vendor1)
+        line.write(
+            {
+                "matching_required": True,
+                "matching_state": "manual_review",
+            }
+        )
+        request.write({"state": "in_progress"})
+        wizard = self._open_wizard(request)
+
+        with self.assertRaisesRegex(UserError, "нерешённые предупреждения"):
+            wizard.action_create_purchase()
+
     def test_object_request_po_report_filename(self):
         """PDF закупки по требованию получает имя передаточной ведомости."""
         request = self._create_request()

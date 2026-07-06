@@ -36,7 +36,25 @@ class TestObr029LlmMatching(TransactionCase):
             }
         )
 
-    def _make_candidate(self, product, score=0.8, source="name_score"):
+    def _make_candidate(
+        self,
+        product,
+        score=0.8,
+        source="name_score",
+        requested_features=None,
+        has_stock=False,
+        stock_qty=0.0,
+        substitution_decision="unknown_requires_review",
+        substitution_requires_confirmation=False,
+    ):
+        candidate_features = {
+            "product_family": product.or_product_family or False,
+            "diameter_nominal": product.or_diameter_nominal or False,
+            "pressure_nominal": product.or_pressure_nominal or False,
+            "material": product.or_material or False,
+            "standard": product.or_standard or False,
+            "connection_type": product.or_connection_type or False,
+        }
         return {
             "product": product,
             "product_id": product.id,
@@ -47,14 +65,19 @@ class TestObr029LlmMatching(TransactionCase):
             "local_score": score,
             "matched_tokens": [],
             "missing_tokens": [],
-            "stock_qty_on_issue_warehouses": 0.0,
-            "stock_warehouse_names": "",
-            "has_issue_stock": False,
+            "requested_features": requested_features or {},
+            "candidate_features": candidate_features,
+            "stock_qty_on_issue_warehouses": stock_qty,
+            "stock_warehouse_names": "Основной склад: %g" % stock_qty
+            if has_stock else "",
+            "has_issue_stock": has_stock,
             "stock_rank_bonus": 0.0,
-            "substitution_decision": "unknown_requires_review",
+            "substitution_decision": substitution_decision,
             "substitution_reason": "",
             "substitution_rule_applied": False,
-            "substitution_requires_confirmation": False,
+            "substitution_requires_confirmation": (
+                substitution_requires_confirmation
+            ),
         }
 
     # ------------------------------------------------------------------
@@ -323,3 +346,131 @@ class TestObr029LlmMatching(TransactionCase):
         self.assertEqual(result["decision"], "match")
         self.assertEqual(result["product"], product)
         self.assertTrue(result["auto_applicable"])
+
+    def test_user_message_contains_features_stock_and_policy(self):
+        product = self._create_product("Фланец DN65 PN16 OBR029-PAYLOAD")
+        requested_features = {
+            "product_family": "flange",
+            "diameter_nominal": 65,
+            "pressure_nominal": 10,
+        }
+        candidates = [
+            self._make_candidate(
+                product,
+                score=0.84,
+                source="feature",
+                requested_features=requested_features,
+                has_stock=True,
+                stock_qty=201.0,
+                substitution_decision="allowed_with_confirmation",
+                substitution_requires_confirmation=True,
+            )
+        ]
+
+        payload = json.loads(
+            self.service._build_user_message(
+                "Фланец ст. Ду65 1,0МПа",
+                "",
+                candidates,
+            )
+        )
+
+        self.assertEqual(
+            payload["requested_features"]["diameter_nominal"],
+            65,
+        )
+        candidate = payload["candidates"][0]
+        self.assertTrue(candidate["has_issue_stock"])
+        self.assertEqual(
+            candidate["stock_qty_on_issue_warehouses"],
+            201.0,
+        )
+        self.assertEqual(
+            candidate["candidate_features"]["pressure_nominal"],
+            16,
+        )
+        self.assertEqual(
+            candidate["substitution_decision"],
+            "allowed_with_confirmation",
+        )
+
+    def test_stock_candidate_confidence_is_boosted_without_conflicts(self):
+        product = self._create_product("Фланец DN65 PN16 OBR029-STOCK")
+        requested_features = {
+            "product_family": "flange",
+            "diameter_nominal": 65,
+            "pressure_nominal": 16,
+        }
+        candidates = [
+            self._make_candidate(
+                product,
+                score=0.88,
+                source="feature",
+                requested_features=requested_features,
+                has_stock=True,
+                stock_qty=10.0,
+                substitution_decision="allowed_with_confirmation",
+            )
+        ]
+        answer = {
+            "decision": "match",
+            "product_id": product.id,
+            "confidence": 0.86,
+            "reason": "Совпали DN и PN",
+            "risk_flags": [],
+        }
+        with _mock_openrouter_patch(answer):
+            result = self.service.rerank_candidates(
+                "Фланец DN65 PN16",
+                "",
+                candidates,
+            )
+
+        self.assertEqual(result["decision"], "match")
+        self.assertGreaterEqual(result["confidence"], 0.90)
+        self.assertTrue(result["auto_applicable"])
+        self.assertIn("остаток", result["reason"])
+
+    def test_equal_stock_alternative_caps_no_stock_candidate(self):
+        no_stock = self._create_product("Фланец DN65 PN16 OBR029-NOSTOCK")
+        stock = self._create_product("Фланец DN65 PN16 OBR029-STOCK-ALT")
+        requested_features = {
+            "product_family": "flange",
+            "diameter_nominal": 65,
+            "pressure_nominal": 16,
+        }
+        candidates = [
+            self._make_candidate(
+                no_stock,
+                score=0.90,
+                source="name_score",
+                requested_features=requested_features,
+                substitution_decision="allowed_with_confirmation",
+            ),
+            self._make_candidate(
+                stock,
+                score=0.88,
+                source="feature",
+                requested_features=requested_features,
+                has_stock=True,
+                stock_qty=7.0,
+                substitution_decision="allowed_with_confirmation",
+            ),
+        ]
+        answer = {
+            "decision": "match",
+            "product_id": no_stock.id,
+            "confidence": 0.94,
+            "reason": "Текстовое совпадение",
+            "risk_flags": [],
+        }
+        with _mock_openrouter_patch(answer):
+            result = self.service.rerank_candidates(
+                "Фланец DN65 PN16",
+                "",
+                candidates,
+            )
+
+        self.assertFalse(result["auto_applicable"])
+        self.assertLessEqual(result["confidence"], 0.85)
+        self.assertIn("stock_alternative_available", result["risk_flags"])

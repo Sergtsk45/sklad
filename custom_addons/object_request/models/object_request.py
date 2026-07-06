@@ -495,6 +495,7 @@ class ObjectRequest(models.Model):
     @api.depends(
         "line_ids.line_state",
         "line_ids.matching_required",
+        "line_ids.matching_state",
         "line_ids.manual_vendor_required",
         "line_ids.stock_match_warning",
         "line_ids.qty_to_issue",
@@ -508,6 +509,7 @@ class ObjectRequest(models.Model):
                 for ln in lns
                 if (
                     ln.matching_required
+                    or ln.matching_state == "manual_review"
                     or ln.manual_vendor_required
                     or ln.stock_match_warning
                 )
@@ -1025,6 +1027,89 @@ class ObjectRequest(models.Model):
                 "sticky": False,
             },
         }
+
+    def action_rematch_with_stock_context(self):
+        """Rebuild matching hints with stock context and apply safe hits."""
+        self.ensure_one()
+        self._check_supply_manager_processing_action()
+        if self.state in ("closed", "cancelled"):
+            raise UserError(
+                "Переподбор доступен только для активного требования."
+            )
+        lines = self.env["object.request.line"].search(
+            [("request_id", "=", self.id)]
+        ).filtered(
+            lambda line: (
+                not line.is_cancelled
+                and not line._is_manual_match_protected()
+            )
+        )
+        if not lines:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Переподбор с остатками",
+                    "message": "Нет строк для переподбора.",
+                    "type": "info",
+                    "sticky": False,
+                },
+            }
+        stats = self._rematch_lines_with_stock_context(lines)
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Переподбор с остатками завершён",
+                "message": (
+                    f"Обработано: {stats['processed']}. "
+                    f"Применено: {stats['matched']}. "
+                    f"Оставлено на проверку: {stats['review']}."
+                ),
+                "type": "success" if stats["matched"] else "warning",
+                "sticky": False,
+                "next": {"type": "ir.actions.client", "tag": "reload"},
+            },
+        }
+
+    def _rematch_lines_with_stock_context(self, lines):
+        service = self.env["object.request.matching.candidate.service"]
+        parser = self.env["object.request.excel.parser"]
+        warehouses = self._get_issue_warehouses()
+        stats = {"processed": 0, "matched": 0, "review": 0}
+        for line in lines:
+            supplier_article, technical_designation = (
+                self._line_matching_inputs(line, parser)
+            )
+            vendor = (
+                line.preferred_vendor_id
+                or parser.match_vendor_by_name(line.supplier_raw)
+            )
+            candidate_result = service.build_candidates(
+                line.name_raw,
+                supplier_article,
+                vendor=vendor,
+                technical_designation=technical_designation,
+                request=self,
+                issue_warehouses=warehouses,
+            )
+            vals = line._ai_candidate_result_vals(candidate_result)
+            applied_vals = line._safe_stock_rematch_apply_vals(
+                candidate_result
+            )
+            if applied_vals:
+                vals.update(applied_vals)
+                stats["matched"] += 1
+            else:
+                vals["matching_state"] = (
+                    "manual_review"
+                    if vals.get("ai_suggested_product_id")
+                    else "requires_mapping"
+                )
+                stats["review"] += 1
+            line.write(vals)
+            stats["processed"] += 1
+        return stats
 
     def action_prepare_ai_candidates(self):
         """Заполнить AI-кандидатов из shortlist без записи товара."""

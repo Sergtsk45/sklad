@@ -226,6 +226,57 @@ class TestImportWizardOBR007(TransactionCase):
         self.assertFalse(line.matching_required)
         self.assertEqual(line.matching_source, "import_auto")
 
+    def test_import_marks_stock_alternative_for_manual_review(self):
+        """Импорт помечает строку, если выбранный товар без остатка."""
+        selected = self.env["product.product"].create(
+            {
+                "name": "Фланец ст. Ду65 1.0МПа кованый OBR007-STOCK",
+                "default_code": "OBR007-FLANGE-NOSTOCK",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        stock_product = self.env["product.product"].create(
+            {
+                "name": "Фланец DN65 PN16 OBR007-STOCK",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        warehouse = self.project.warehouse_id
+        self.env["stock.quant"]._update_available_quantity(
+            stock_product,
+            warehouse.lot_stock_id,
+            12.0,
+        )
+        wizard = self._make_wizard(
+            [
+                ["№", "Артикул", "Наименование", "Ед.", "Кол-во"],
+                [
+                    1,
+                    "OBR007-FLANGE-NOSTOCK",
+                    "Фланец ст. Ду65 1,0МПа OBR007-STOCK",
+                    "шт",
+                    1,
+                ],
+            ]
+        )
+
+        wizard.action_validate()
+        preview = wizard.preview_line_ids
+
+        self.assertEqual(preview.selected_product_id, selected)
+        self.assertEqual(preview.match_status, "manual_review")
+        self.assertTrue(preview.matching_required)
+        self.assertIn("похожий товар на складе", preview.error_message)
+
+        result = wizard.action_import()
+        request = self.env["object.request"].browse(result["res_id"])
+        line = request.line_ids
+        self.assertEqual(line.product_id, selected)
+        self.assertEqual(line.matching_state, "manual_review")
+        self.assertTrue(line.matching_required)
+
     def test_import_line_fields_copied_correctly(self):
         """Все поля строки (qty, price, comment) корректно переносятся."""
         wizard = self._make_wizard(

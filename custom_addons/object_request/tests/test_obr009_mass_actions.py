@@ -247,6 +247,38 @@ class TestObr009MassActions(TransactionCase):
 
         self.assertEqual(line.product_id, manual_product)
 
+    def test_rematch_with_stock_context_applies_safe_stock_candidate(self):
+        """Переподбор применяет безопасный складской товар."""
+        stock_product = self.env["product.product"].create(
+            {
+                "name": "Фланец DN65 PN16 OBR009-STOCK",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        self.env["stock.quant"]._update_available_quantity(
+            stock_product,
+            self.project.warehouse_id.lot_stock_id,
+            15.0,
+        )
+        line = self.env["object.request.line"].create(
+            {
+                "request_id": self.request.id,
+                "name_raw": "Фланец DN65 PN16 OBR009-STOCK",
+                "qty_requested": 1.0,
+                "matching_required": True,
+            }
+        )
+
+        result = self.request.action_rematch_with_stock_context()
+
+        self.assertEqual(result["type"], "ir.actions.client")
+        self.assertEqual(line.product_id, stock_product)
+        self.assertFalse(line.matching_required)
+        self.assertEqual(line.matching_state, "matched")
+        self.assertEqual(line.matching_source, "combined_auto")
+        self.assertIn("учётом остатков", line.matching_note)
+
     # ----- Wizard массового назначения: Назначить поставщика -----
 
     def test_assign_vendor_wizard(self):

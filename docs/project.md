@@ -107,6 +107,9 @@ flowchart TD
   `substitution_decision`, `substitution_reason`,
   `substitution_requires_confirmation`; запрещённые замены не получают
   складской бонус и не используются как причина остановки закупки.
+- Передаёт в candidate payload структурные признаки строки и товара:
+  `requested_features`, `candidate_features`, DN/Ду, PN, материал, ГОСТ и
+  тип соединения. Эти поля используются локальным AI shortlist и LLM rerank.
 - При переданном контексте требования добавляет складские остатки в candidate
   payload и reason; строка требования сохраняет краткое объяснение в
   `matching_note` формата «Есть остаток на Ос.ск: ...».
@@ -128,9 +131,17 @@ flowchart TD
   ограничивается ниже порога массового автоприменения.
 
 **`object.request.llm.matching.service`** (AbstractModel)
-- Принимает shortlist кандидатов, формирует prompt через `OpenRouterClient`, валидирует JSON-ответ
+- Принимает shortlist кандидатов, формирует prompt через `OpenRouterClient`,
+  валидирует JSON-ответ.
+- Prompt включает `requested_features`, `candidate_features`, остатки по
+  складам выдачи и policy-решение замены, чтобы LLM предпочитал технически
+  подходящий складской товар кандидату без остатка.
 - Возвращает структурированный результат: `{decision, product_id, confidence, reason, risk_flags}`
 - Критические флаги (`size_conflict` и т.д.) снижают confidence до ≤ 0.85
+- Пост-валидация ответа дополнительно ограничивает confidence для
+  `blocked`-кандидатов, конфликтов DN/PN/семейства и выбора без остатка при
+  наличии равноценного складского кандидата. Замены, требующие подтверждения,
+  не проходят порог массового автоприменения.
 
 **`object.request.matching.memory`** (Model)
 - Хранит подтверждённые сопоставления с полями: `name_normalized`, `designation_normalized`, `product_id`, `confirmed_by`, `source_request_id`, `confidence`, `active`
@@ -199,6 +210,11 @@ flowchart TD
 | &lt; 0.70 (LLM) | Ручной ввод | — (AI не применяется) |
 | &gt; 0.9 (детерминированный) | Авто-применение | `import_auto` |
 | память | Авто-применение | `memory` |
+
+Складской кандидат без конфликтов может поднять confidence до `0.90`.
+Если выбранный AI/LLM-кандидат без остатка, но есть равноценный кандидат с
+остатком на складе выдачи, confidence ограничивается до `≤0.85` и решение
+остаётся ручным.
 
 ### Конфигурация через ir.config_parameter
 

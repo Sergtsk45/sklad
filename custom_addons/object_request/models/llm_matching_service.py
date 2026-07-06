@@ -39,7 +39,8 @@ _SYSTEM_PROMPT = """\
 Входные данные:
 - name_raw: наименование из Excel
 - supplier_article: обозначение/артикул из Excel (ГОСТ, типоразмер, модель)
-- candidates: список [{product_id, display_name, default_code, uom}]
+- requested_features: распознанные признаки строки (family, DN, PN, material)
+- candidates: список кандидатов с признаками, остатками и policy-решением
 
 Обязательные правила:
 1. Отвечай ТОЛЬКО валидным JSON без markdown, без пояснений вне JSON.
@@ -47,8 +48,15 @@ _SYSTEM_PROMPT = """\
 3. Оценивай name_raw и supplier_article ВМЕСТЕ как единое описание потребности.
 4. При конфликте диаметра (Ду/DN), резьбы (М..., дюймы), давления (Ру/PN), \
    размера, модели — добавляй соответствующий risk_flag.
-5. Если уверенности нет — верни decision: "manual_review".
-6. Не создавай новые товары, не указывай product_id вне списка кандидатов.
+5. Учитывай candidate_features, stock_qty_on_issue_warehouses и \
+   substitution_decision.
+6. Если подходящий кандидат есть на складе выдачи и нет конфликтов — \
+   предпочитай его кандидату без остатка.
+7. Если substitution_decision = "blocked" — не выбирай этот товар.
+8. Если substitution_requires_confirmation = true — не завышай confidence; \
+   такая замена требует ручного подтверждения.
+9. Если уверенности нет — верни decision: "manual_review".
+10. Не создавай новые товары, не указывай product_id вне списка кандидатов.
 
 Схема ответа:
 {
@@ -136,7 +144,7 @@ class ObjectRequestLlmMatchingService(models.AbstractModel):
             )
             return self._error_result(str(exc))
 
-        return self._build_result(llm_result, valid_ids)
+        return self._build_result(llm_result, valid_ids, candidates)
 
     @api.model
     def _call_llm(self, name_raw, supplier_article, candidates):
@@ -175,21 +183,62 @@ class ObjectRequestLlmMatchingService(models.AbstractModel):
     @api.model
     def _build_user_message(self, name_raw, supplier_article, candidates):
         """Сформировать JSON-сообщение пользователя для LLM."""
+        requested_features = {}
+        for item in candidates:
+            requested_features = item.get("requested_features") or {}
+            if requested_features:
+                break
         candidate_list = [
             {
                 "product_id": item["product_id"],
                 "display_name": item.get("display_name", ""),
                 "default_code": item.get("default_code") or "",
                 "uom": str(item.get("uom_id") or ""),
+                "source": item.get("source") or "",
+                "local_score": item.get("local_score", 0.0),
+                "matched_tokens": item.get("matched_tokens") or [],
+                "missing_tokens": item.get("missing_tokens") or [],
+                "candidate_features": (
+                    item.get("candidate_features")
+                    or self._candidate_feature_payload(item)
+                ),
+                "stock_qty_on_issue_warehouses": item.get(
+                    "stock_qty_on_issue_warehouses", 0.0
+                ),
+                "stock_warehouse_names": (
+                    item.get("stock_warehouse_names") or ""
+                ),
+                "has_issue_stock": bool(item.get("has_issue_stock")),
+                "substitution_decision": (
+                    item.get("substitution_decision") or ""
+                ),
+                "substitution_reason": (
+                    item.get("substitution_reason") or ""
+                ),
+                "substitution_requires_confirmation": bool(
+                    item.get("substitution_requires_confirmation")
+                ),
             }
             for item in candidates
         ]
         data = {
             "name_raw": name_raw or "",
             "supplier_article": supplier_article or "",
+            "requested_features": requested_features,
             "candidates": candidate_list,
         }
         return json.dumps(data, ensure_ascii=False)
+
+    @api.model
+    def _candidate_feature_payload(self, candidate):
+        return {
+            "product_family": candidate.get("product_family") or False,
+            "diameter_nominal": candidate.get("diameter_nominal") or False,
+            "pressure_nominal": candidate.get("pressure_nominal") or False,
+            "material": candidate.get("material") or False,
+            "standard": candidate.get("standard") or False,
+            "connection_type": candidate.get("connection_type") or False,
+        }
 
     @api.model
     def _parse_llm_response(self, raw_text):
@@ -255,7 +304,7 @@ class ObjectRequestLlmMatchingService(models.AbstractModel):
         }
 
     @api.model
-    def _build_result(self, llm_result, valid_ids):
+    def _build_result(self, llm_result, valid_ids, candidates=None):
         """Собрать финальный результат из сырого LLM-ответа."""
         raw = llm_result.get("raw", "")
         base = {
@@ -267,6 +316,10 @@ class ObjectRequestLlmMatchingService(models.AbstractModel):
         try:
             data = self._parse_llm_response(raw)
             validated = self._validate_llm_data(data, valid_ids)
+            validated = self._adjust_result_by_candidate_context(
+                validated,
+                candidates or [],
+            )
         except Exception as exc:
             _logger.warning("[llm_matching] validation failed: %s", exc)
             base.update(self._error_fields(str(exc)))
@@ -299,6 +352,150 @@ class ObjectRequestLlmMatchingService(models.AbstractModel):
             }
         )
         return base
+
+    @api.model
+    def _adjust_result_by_candidate_context(self, validated, candidates):
+        if validated["decision"] != "match" or not validated["product_id"]:
+            return validated
+        by_id = {
+            item.get("product_id"): item
+            for item in candidates
+            if item.get("product_id")
+        }
+        selected = by_id.get(validated["product_id"]) or {}
+        risk_flags = list(validated.get("risk_flags") or [])
+        reason = validated.get("reason") or ""
+        confidence = validated.get("confidence", 0.0)
+
+        if selected.get("substitution_decision") == "blocked":
+            if "policy_blocked" not in risk_flags:
+                risk_flags.append("policy_blocked")
+            confidence = min(confidence, 0.85)
+            reason = self._append_reason(
+                reason,
+                "Кандидат заблокирован правилом замен: %s"
+                % (
+                    selected.get("substitution_reason")
+                    or "причина не указана"
+                ),
+            )
+
+        if selected.get("substitution_requires_confirmation"):
+            confidence = min(confidence, 0.89)
+            reason = self._append_reason(
+                reason,
+                "Замена требует ручного подтверждения.",
+            )
+
+        if self._has_feature_conflict(selected):
+            if "feature_conflict" not in risk_flags:
+                risk_flags.append("feature_conflict")
+            confidence = min(confidence, 0.85)
+            reason = self._append_reason(
+                reason,
+                "Есть конфликт структурных признаков DN/PN/семейства.",
+            )
+
+        if (
+            selected.get("has_issue_stock")
+            and not risk_flags
+            and not selected.get("substitution_requires_confirmation")
+            and selected.get("substitution_decision") != "blocked"
+            and selected.get("local_score", 0.0) >= 0.84
+            and confidence >= 0.84
+        ):
+            confidence = max(confidence, AUTO_MATCH_THRESHOLD)
+            reason = self._append_reason(
+                reason,
+                "Кандидат имеет остаток на складах выдачи.",
+            )
+
+        stock_alternative = self._better_stock_alternative(
+            selected,
+            candidates,
+        )
+        if stock_alternative:
+            if "stock_alternative_available" not in risk_flags:
+                risk_flags.append("stock_alternative_available")
+            confidence = min(confidence, 0.85)
+            reason = self._append_reason(
+                reason,
+                "Есть равноценный кандидат с остатком: %s."
+                % stock_alternative.get("display_name", ""),
+            )
+
+        critical_flags = CRITICAL_RISK_FLAGS | frozenset({
+            "policy_blocked",
+            "feature_conflict",
+            "stock_alternative_available",
+        })
+        has_critical_risks = bool(critical_flags & set(risk_flags))
+        if has_critical_risks:
+            confidence = min(confidence, 0.85)
+
+        validated.update(
+            {
+                "confidence": max(0.0, min(1.0, confidence)),
+                "reason": reason,
+                "risk_flags": risk_flags,
+                "has_critical_risks": has_critical_risks,
+            }
+        )
+        return validated
+
+    @api.model
+    def _has_feature_conflict(self, candidate):
+        requested = candidate.get("requested_features") or {}
+        features = (
+            candidate.get("candidate_features")
+            or self._candidate_feature_payload(candidate)
+        )
+        pairs = [
+            ("product_family", "feature_conflict"),
+            ("diameter_nominal", "diameter_conflict"),
+        ]
+        for key, _flag in pairs:
+            if requested.get(key) and features.get(key):
+                if requested[key] != features[key]:
+                    return True
+        requested_pn = requested.get("pressure_nominal")
+        candidate_pn = features.get("pressure_nominal")
+        if requested_pn and candidate_pn and candidate_pn < requested_pn:
+            return True
+        return False
+
+    @api.model
+    def _better_stock_alternative(self, selected, candidates):
+        if not selected or selected.get("has_issue_stock"):
+            return None
+        selected_score = selected.get("local_score", 0.0)
+        alternatives = [
+            item
+            for item in candidates
+            if item.get("product_id") != selected.get("product_id")
+            and item.get("has_issue_stock")
+            and item.get("substitution_decision") != "blocked"
+            and not self._has_feature_conflict(item)
+            and item.get("local_score", 0.0) >= selected_score - 0.05
+        ]
+        if not alternatives:
+            return None
+        alternatives.sort(
+            key=lambda item: (
+                item.get("local_score", 0.0),
+                item.get("stock_qty_on_issue_warehouses", 0.0),
+            ),
+            reverse=True,
+        )
+        return alternatives[0]
+
+    @api.model
+    def _append_reason(self, reason, addition):
+        reason = (reason or "").strip()
+        addition = (addition or "").strip()
+        if not addition or addition in reason:
+            return reason
+        return ("%s %s" % (reason, addition)).strip() if reason else addition
 
     @api.model
     def _error_result(self, message):

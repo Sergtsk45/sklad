@@ -1,3 +1,51 @@
+## [2026-07-07] — feat(object_request): складской контекст для AI/combined-подбора
+
+### Контроль качества строк
+- Excel preview теперь помечает строку `manual_review`, если найдено
+  несколько сильных кандидатов, выбранный товар без остатка при наличии
+  похожего складского кандидата или есть конфликт DN/PN/семейства.
+- При импорте `manual_review` сохраняет выбранный товар, но оставляет
+  `matching_required=True` и `matching_state='manual_review'` до ручного
+  решения снабженца.
+- `line_problem_count` учитывает `manual_review`, а wizard закупки блокирует
+  создание PO при нерешённых критических предупреждениях по номенклатуре.
+- На требовании добавлено действие **«Переподобрать с учётом остатков»**:
+  shortlist строится со складами выдачи, AI-подсказки обновляются, а товар
+  записывается только для безопасного складского совпадения с confidence
+  `≥0.90`.
+
+### Изменено
+- `object.request.matching.candidate.service` теперь добавляет в payload
+  кандидатов структурные признаки строки и товара: семейство, DN/Ду, PN,
+  материал, ГОСТ, тип соединения, а также складские остатки и policy-решение
+  замены.
+- `object.request.llm.matching.service` передаёт в LLM JSON-контекст с
+  `requested_features`, `candidate_features`,
+  `stock_qty_on_issue_warehouses`, `stock_warehouse_names`,
+  `substitution_decision` и `substitution_requires_confirmation`.
+- Confidence пост-валидируется по складскому сценарию: уверенный кандидат с
+  остатком и без конфликтов поднимается до `0.90`, а выбор товара без остатка
+  при наличии равноценного складского кандидата ограничивается до `≤0.85` и
+  получает risk flag `stock_alternative_available`.
+- `ai_match_reason` в строке требования дополняется складским объяснением и
+  структурными признаками кандидата; замены с ручным подтверждением остаются
+  ниже порога массового автоприменения.
+
+### Проверено
+- `python3 -m py_compile` по изменённым Python-файлам — 0 ошибок.
+- `docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request`
+  — 0 ошибок.
+- `docker exec odoo19-local odoo --http-port=8079 --test-enable --test-tags /object_request:TestObr029LlmMatching -u object_request -d odoo19_local --stop-after-init`
+  — 14 post-tests, 0 failed, 0 errors.
+- `docker exec odoo19-local odoo --http-port=8079 --test-enable --test-tags /object_request:TestOBR021Purchase -u object_request -d odoo19_local --stop-after-init`
+  — 32 post-tests, 0 failed, 0 errors.
+- `docker exec odoo19-local odoo --http-port=8079 --test-enable --test-tags /object_request:TestImportWizardOBR007,/object_request:TestObr009MassActions,/object_request:TestOBR021Purchase,/object_request:TestObr029LlmMatching -u object_request -d odoo19_local --stop-after-init`
+  — 86 post-tests, 0 failed, 0 errors.
+- `docker exec odoo19-local odoo --http-port=8079 --test-enable --test-tags /object_request -u object_request -d odoo19_local --stop-after-init`
+  — 434 post-tests, 0 failed, 0 errors.
+
+---
+
 ## [2026-07-06] — feat(object_request): нормализация признаков номенклатуры
 
 ### Добавлено

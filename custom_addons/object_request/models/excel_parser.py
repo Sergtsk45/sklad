@@ -558,9 +558,7 @@ class ExcelParser(models.AbstractModel):
             "matching_required": not bool(product),
             "manual_vendor_required": not bool(vendor),
             "candidate_products": candidate_products if not product else False,
-            "candidate_details": (
-                candidate_result["candidates"] if not product else []
-            ),
+            "candidate_details": candidate_result["candidates"],
             "line_type": line_type,
             "combined_query": combined_query,
             "match_source": match_source,

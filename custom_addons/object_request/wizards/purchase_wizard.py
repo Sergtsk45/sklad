@@ -108,6 +108,7 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
         )
         if not lines:
             raise UserError("Нет строк с товаром и количеством к закупке.")
+        self._check_unresolved_nomenclature_warnings(lines)
         lines_with_vendor = lines.filtered("preferred_vendor_id")
         lines_no_vendor = lines - lines_with_vendor
 
@@ -182,6 +183,25 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             "domain": [("id", "in", created_orders.ids)],
             "target": "current",
         }
+
+    def _check_unresolved_nomenclature_warnings(self, lines):
+        critical = lines.filtered(
+            lambda line: (
+                line.matching_required
+                or line.matching_state == "manual_review"
+            )
+        )
+        if not critical:
+            return
+        preview = ", ".join(critical[:5].mapped("display_name"))
+        suffix = ""
+        if len(critical) > 5:
+            suffix = " и ещё %s" % (len(critical) - 5)
+        raise UserError(
+            "Закупка остановлена: есть нерешённые предупреждения по "
+            "номенклатуре. Проверьте строки: %s%s."
+            % (preview, suffix)
+        )
 
     def action_replace_with_stock_candidate(self):
         """Replace guarded lines and recalculate issue."""
