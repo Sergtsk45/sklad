@@ -711,7 +711,10 @@ class ObjectRequest(models.Model):
             "res_model": "object.request.line",
             "view_mode": "list",
             "domain": [("request_id", "=", self.id)],
-            "context": {"default_request_id": self.id},
+            "context": {
+                "default_request_id": self.id,
+                "object_request_column_layout_scope": "request_action_lines",
+            },
         }
 
     def action_open_problem_lines(self):
@@ -729,7 +732,10 @@ class ObjectRequest(models.Model):
                 ("manual_vendor_required", "=", True),
                 ("stock_match_warning", "=", True),
             ],
-            "context": {"default_request_id": self.id},
+            "context": {
+                "default_request_id": self.id,
+                "object_request_column_layout_scope": "request_problem_lines",
+            },
         }
 
     def action_refresh_stock_match_warnings(self):
@@ -802,7 +808,10 @@ class ObjectRequest(models.Model):
             "domain": [
                 ("id", "in", warnings.ids),
             ],
-            "context": {"default_request_id": self.id},
+            "context": {
+                "default_request_id": self.id,
+                "object_request_column_layout_scope": "request_po_diagnostics",
+            },
         }
 
     def _purchase_product_mismatch_lines(self, lines):

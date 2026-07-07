@@ -1,3 +1,56 @@
+## [2026-07-08] — test(object_request): регрессия на layout-scope в action context
+
+### Добавлено
+- Регрессионные проверки, что `action_open_lines`, `action_open_problem_lines`
+  и `action_check_purchase_stock_matches` возвращают правильный
+  `object_request_column_layout_scope` в `context` (новый тест
+  `test_action_open_lines_sets_column_layout_scope` в
+  `tests/test_obr035_regressions.py`; дополнительные assert в существующих
+  тестах `tests/test_obr021_purchase.py`).
+- Полный прогон модуля: 818 post-tests, 0 failed, 0 errors.
+
+---
+
+## [2026-07-08] — fix(object_request): сохранение позиции скрытых колонок при drag
+
+### Исправлено
+- В `object_request_line_column_layout.js` перестановка колонок drag-and-drop
+  больше не перезаписывает весь сохранённый порядок только видимыми
+  колонками: добавлен `buildObjectRequestFullColumnOrder()`, восстанавливающий
+  полный порядок (видимые + скрытые optional-колонки) перед вычислением
+  перестановки. Ранее скрытая на момент drag колонка при повторном включении
+  уезжала в конец таблицы вместо ожидаемой позиции.
+- Найдено при ревью реализации из `docs/tasktracker-column-fix.md`.
+
+---
+
+## [2026-07-08] — feat(object_request): пользовательская раскладка колонок строк требования
+
+### Добавлено
+- Для таблиц строк требования добавлено browser-local сохранение раскладки
+  колонок: ширины, порядка и набора optional-колонок.
+- Настройки разделены по сценариям: встроенная вкладка **«Строки»**,
+  smart-button **«Строки»**, smart-button **«Проблем»** и список после
+  **«Диагностика PO»**.
+- Frontend-расширение ограничено `object.request.line` и явными layout-scope
+  в context, чтобы не затрагивать остальные list-view Odoo.
+- В заголовках поддерживаемых таблиц добавлен drag-and-drop field-колонок;
+  selector/action/open-form/button columns не участвуют в перестановке.
+
+### Проверено
+- `python3 -m py_compile custom_addons/object_request/models/object_request.py custom_addons/object_request/__manifest__.py`
+  — 0 ошибок.
+- `python3 -m xml.etree.ElementTree custom_addons/object_request/views/object_request_views.xml`
+  — 0 ошибок.
+- `node --check custom_addons/object_request/static/src/js/object_request_line_column_layout.js`
+  — 0 ошибок.
+- `docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request`
+  — 0 ошибок.
+- `docker exec odoo19-local odoo --http-port=8089 --test-enable -u object_request -d odoo19_local --stop-after-init`
+  — 817 post-tests, 0 failed, 0 errors.
+
+---
+
 ## [2026-07-07] — feat(object_request): складской контекст для AI/combined-подбора
 
 ### Контроль качества строк

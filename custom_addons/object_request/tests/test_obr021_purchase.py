@@ -702,6 +702,10 @@ class TestOBR021Purchase(TransactionCase):
         self.assertEqual(request.line_problem_count, 1)
         action = request.action_open_problem_lines()
         self.assertIn(("stock_match_warning", "=", True), action["domain"])
+        self.assertEqual(
+            action["context"].get("object_request_column_layout_scope"),
+            "request_problem_lines",
+        )
 
     def test_select_stock_match_candidate_applies_product(self):
         """Кнопка выбора складского кандидата записывает его в строку."""
@@ -858,6 +862,10 @@ class TestOBR021Purchase(TransactionCase):
         self.assertTrue(line.stock_match_warning)
         self.assertEqual(action["res_model"], "object.request.line")
         self.assertEqual(action["domain"], [("id", "in", line.ids)])
+        self.assertEqual(
+            action["context"].get("object_request_column_layout_scope"),
+            "request_po_diagnostics",
+        )
         messages = request.message_ids.mapped("body")
         self.assertTrue(
             any("Проверка закупок нашла строки" in body for body in messages)

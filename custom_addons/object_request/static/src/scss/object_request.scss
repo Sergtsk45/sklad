@@ -13,6 +13,21 @@
     }
 }
 
+.o_list_table.o_object_request_column_dragging {
+    th[data-name] {
+        cursor: grabbing;
+        user-select: none;
+    }
+
+    .o_object_request_column_drag_source {
+        opacity: 0.55;
+    }
+
+    .o_object_request_column_drag_over {
+        box-shadow: inset 3px 0 0 var(--o-brand-primary);
+    }
+}
+
 .modal-dialog:has(.o_object_request_import_wizard) {
     width: 96vw;
     max-width: 96vw;

@@ -1,3 +1,18 @@
+## Задача: object_request — пользовательская раскладка колонок строк требования
+- **Статус**: Реализована; ручной UI test plan ожидает прогона в браузере.
+- **Детальный трекер**: `docs/tasktracker-column-fix.md`.
+- **Описание**: Для таблиц строк требования добавлено сохранение пользовательской ширины, порядка и набора optional-колонок с независимыми профилями для вкладки **«Строки»**, smart-button **«Строки»**, smart-button **«Проблем»** и списка после **«Диагностика PO»**.
+- **Шаги выполнения**:
+ - [x] Подключить frontend asset в `web.assets_backend`.
+ - [x] Ограничить расширение поддерживаемыми таблицами `object.request.line`.
+ - [x] Разделить ключи хранения по scope: `request_form_lines`, `request_action_lines`, `request_problem_lines`, `request_po_diagnostics`.
+ - [x] Сохранять и применять ширину, порядок и optional-набор колонок через `localStorage`.
+ - [x] Добавить drag-and-drop field-колонок заголовка без вмешательства в selector/action/button columns.
+ - [x] Проверить syntax/XML/JS, flake8 и Odoo post-tests.
+- **Зависимости**:
+ - Модуль `object_request`.
+ - Odoo web `ListRenderer`, `column_width_hook`, `web.assets_backend`.
+
 ## Задача: Cursor — senior-review и fail-closed refactor парсера Амурстроя
 - **Статус**: Завершена
 - **Описание**: Проверить специализированный OCR-парсер счетов ОАО УПТК «Амурстрой» через senior-review и устранить риски тихого создания закупок при неполном или спорном OCR.

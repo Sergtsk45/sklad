@@ -225,6 +225,19 @@ class TestObr035Regressions(TransactionCase):
                 vals
             ).action_import()
 
+    def test_action_open_lines_sets_column_layout_scope(self):
+        """Smart-button «Строки» передаёт scope для раскладки колонок."""
+        request = self._create_request()
+        self._add_line(request)
+
+        action = request.action_open_lines()
+
+        self.assertEqual(action["res_model"], "object.request.line")
+        self.assertEqual(
+            action["context"].get("object_request_column_layout_scope"),
+            "request_action_lines",
+        )
+
     def test_only_assigned_approver_can_approve(self):
         approver_group = self.env.ref("object_request.group_approver")
         user_group = self.env.ref("base.group_user")
