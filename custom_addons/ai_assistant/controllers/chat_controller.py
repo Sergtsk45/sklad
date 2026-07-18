@@ -516,6 +516,18 @@ class AiAssistantController(http.Controller):
             )
         except ValueError as e:
             _logger.warning('[AI Assistant] OpenRouter unavailable: %s', e)
+            if OpenRouterClient.is_security_policy_error(e):
+                fallback = self._consult_fallback_response(
+                    message,
+                    history,
+                    context,
+                    override=override,
+                    image_data=image_data,
+                    model_override=model_override,
+                    original_error=str(e),
+                )
+                if fallback:
+                    return fallback
             return self._ai_unavailable_response(str(e))
         except ConnectionError as e:
             return {
@@ -523,6 +535,57 @@ class AiAssistantController(http.Controller):
                 'suggestions': [],
                 'meta': {'status': 'error'},
             }
+
+    def _consult_fallback_response(
+        self,
+        message,
+        history,
+        context,
+        override=None,
+        image_data=None,
+        model_override=None,
+        original_error='',
+    ):
+        """
+        Повторить запрос без tools при 403 security policy от OpenRouter.
+
+        Некоторые guardrails блокируют tool-calling / тяжёлый actions-промпт,
+        но пропускают обычный consult-чат.
+        """
+        _logger.warning(
+            '[AI Assistant] Retrying consult-only after OpenRouter block: %s',
+            original_error,
+        )
+        try:
+            consult_messages = self._build_messages(
+                message,
+                history,
+                context,
+                override=override,
+                image_data=image_data,
+                mode='consult',
+            )
+            client = OpenRouterClient(request.env)
+            response = client.send_chat(
+                consult_messages,
+                model_override=model_override,
+            )
+        except (ValueError, ConnectionError) as e:
+            _logger.warning(
+                '[AI Assistant] Consult fallback also failed: %s', e
+            )
+            return None
+        return {
+            'answer': response.get('answer', ''),
+            'suggestions': [],
+            'cards': [],
+            'links': [],
+            'meta': {
+                'status': 'ok',
+                'mode': 'consult_fallback',
+                'model_used': response.get('model_used'),
+            },
+        }
 
     def _build_messages(self, message, history, context,
                         override=None, image_data=None, mode='consult'):
@@ -1392,6 +1455,13 @@ class AiAssistantController(http.Controller):
                 'Модель OpenRouter недоступна (снята или неверный slug). '
                 'Обновите поле «Модель (текст)» в настройках AI-консультанта '
                 '(рекомендуется google/gemini-2.5-flash).'
+            )
+        elif OpenRouterClient.is_security_policy_error(reason):
+            answer = (
+                'OpenRouter блокирует запросы (security policy). '
+                'Проверьте ключ и privacy на openrouter.ai/keys и '
+                'openrouter.ai/settings/privacy, либо создайте новый API-ключ '
+                'и укажите его в Настройках → AI-консультант.'
             )
         else:
             answer = (

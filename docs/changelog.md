@@ -1,3 +1,38 @@
+## [2026-07-18] — chore(ai_assistant): переход с OpenRouter на ProxyAPI
+
+### Изменено
+- LLM-провайдер для `ai_assistant` сменён с OpenRouter на **ProxyAPI**
+  (`proxyapi.ru`) — российский OpenAI-совместимый прокси-сервис с оплатой
+  в рублях по счёту для юрлица, без VPN.
+- Причина: OpenRouter блокировал весь API (`/api/v1/key`, `/api/v1/models`,
+  все модели) с egress IP прод-VPS `195.209.210.27` — `403 Access denied by
+  security policy`. Подтверждено, что это гео-ограничение по IP/аккаунту, а
+  не баг конфигурации Referer/tools (см. `docs/deep-research-report.md`).
+  Та же блокировка воспроизведена у n8n на том же VPS с другими ключами
+  OpenRouter.
+- Изменение чисто конфигурационное, без изменений кода `openrouter_client.py`:
+  - `ai_assistant.openrouter_base_url` → `https://openai.api.proxyapi.ru/v1`
+  - `ai_assistant.openrouter_api_key` → ключ ProxyAPI
+  - `ai_assistant.text_model` → `gemini/gemini-2.5-flash` (было `google/gemini-2.5-flash`)
+  - `ai_assistant.vision_model` → `openai/gpt-4o` (не изменилось — совпадает с форматом ProxyAPI)
+- Проверено на проде: прямые запросы к ProxyAPI (текст, vision, tool-calling)
+  — 200 OK; живой чат в Odoo — 200 OK, без ошибок `security policy`.
+
+---
+
+## [2026-07-10] — fix(ai_assistant): fallback при OpenRouter 403 security policy
+
+### Исправлено
+- При ошибке OpenRouter `403 Access denied by security policy` ассистент
+  повторяет запрос в облегчённом режиме (без tools, consult-промпт).
+- `HTTP-Referer` берётся из `web.base.url` вместо захардкоженного localhost
+  (на проде `localhost` мог провоцировать security policy).
+- В лог пишется тело ответа OpenRouter при 403; текст ошибки в чате
+  указывает на keys/privacy OpenRouter.
+- `context_resolver`: `groups_id` → `group_ids`/`all_group_ids` (Odoo 19).
+
+---
+
 ## [2026-07-08] — test(object_request): регрессия на layout-scope в action context
 
 ### Добавлено

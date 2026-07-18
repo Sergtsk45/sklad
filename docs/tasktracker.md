@@ -1,3 +1,33 @@
+## Задача: ai_assistant — OpenRouter 403 security policy на проде
+- **Статус**: Завершена
+- **Описание**: На `skladtsk.duckdns.org` чат отвечал
+  `OpenRouter: ошибка 403: Access denied by security policy` даже на «привет».
+  Расследование показало: блокировка на уровне egress IP прод-VPS
+  (`195.209.210.27`) — резался весь OpenRouter API (`/api/v1/key`,
+  `/api/v1/models`, любые модели: Gemini/GPT/Claude/Mistral/DeepSeek), не
+  только tools-запросы. С другого IP (VPN/локально) тот же ключ работал.
+  У n8n на том же VPS — идентичная блокировка (другие ключи OpenRouter).
+  Причина — гео-ограничения OpenRouter/upstream-провайдеров для российской
+  инфраструктуры (см. `docs/deep-research-report.md`), не баг конфигурации.
+- **Решение**: переход с OpenRouter на **ProxyAPI** (`proxyapi.ru`) —
+  российский OpenAI-совместимый прокси-сервис с оплатой в рублях по счёту
+  для юрлица, без VPN. Чисто конфигурационная замена без изменений кода:
+  те же модели (`gemini-2.5-flash`, `openai/gpt-4o`), тот же формат API
+  (`tool_calls`, ошибки).
+- **Шаги выполнения**:
+ - [x] Подтвердить текст ошибки с прода и воспроизвести локально (локально 200 OK).
+ - [x] `HTTP-Referer` из `web.base.url` + `X-Title` (фикс не решил проблему — блок был по IP, не по Referer).
+ - [x] Fallback consult без tools при 403 security policy.
+ - [x] Диагностика с прод-VPS: `/api/v1/key`, `/api/v1/models`, разные модели — везде 403.
+ - [x] Проверка n8n на том же VPS — та же блокировка OpenRouter.
+ - [x] Deep research по гео-ограничениям OpenRouter (`docs/deep-research-report.md`).
+ - [x] Сравнение альтернатив: DeepSeek напрямую (оплата — блокер для юрлица), Yandex Cloud/GigaChat (нужна адаптация кода), ProxyAPI (drop-in, ₽, юрлицо).
+ - [x] Аккаунт ProxyAPI создан, ключ выпущен.
+ - [x] Конфиг на проде обновлён: `ai_assistant.openrouter_base_url=https://openai.api.proxyapi.ru/v1`,
+       `ai_assistant.text_model=gemini/gemini-2.5-flash`, `ai_assistant.vision_model=openai/gpt-4o`, новый ключ.
+ - [x] Проверено: прямые запросы (text/vision/tool-calling) через ProxyAPI — 200 OK; живой чат в Odoo на проде — 200 OK, без ошибок.
+- **Зависимости**: модуль `ai_assistant`, аккаунт ProxyAPI (ранее — OpenRouter), VPS deploy.
+
 ## Задача: object_request — пользовательская раскладка колонок строк требования
 - **Статус**: Реализована; ручной UI test plan ожидает прогона в браузере.
 - **Детальный трекер**: `docs/tasktracker-column-fix.md`.

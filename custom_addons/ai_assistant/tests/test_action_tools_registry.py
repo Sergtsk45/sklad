@@ -5,7 +5,9 @@ from odoo.addons.ai_assistant.services.action_tools.base import (
     AbstractReadTool,
     AbstractWriteTool,
 )
-from odoo.addons.ai_assistant.services.action_tools.registry import ToolRegistry
+from odoo.addons.ai_assistant.services.action_tools.registry import (
+    ToolRegistry,
+)
 
 
 class DummyEnv:
@@ -40,6 +42,56 @@ class DummyReadTool(AbstractReadTool):
 class GroupedReadTool(DummyReadTool):
     name = 'grouped_read'
     required_groups = ['ai_assistant.group_ai_assistant_supply']
+
+
+class NullableSchemaReadTool(AbstractReadTool):
+    name = 'nullable_read'
+    description = 'Read dummy data with nullable/enum fields'
+    parameters_schema = {
+        'type': 'object',
+        'properties': {
+            'query': {'type': ['string', 'null']},
+            'state': {
+                'type': ['string', 'null'],
+                'enum': ['draft', 'done', None],
+            },
+            'codes': {
+                'type': ['array', 'null'],
+                'items': {'type': 'string'},
+            },
+            'nested': {
+                'type': 'object',
+                'properties': {
+                    'count': {'type': ['integer', 'null']},
+                },
+            },
+        },
+        'required': [],
+        'additionalProperties': False,
+    }
+
+    def execute(self, env, args):
+        return {}
+
+
+class AnyOfReadTool(AbstractReadTool):
+    name = 'any_of_read'
+    description = 'Read dummy data requiring one of two fields'
+    parameters_schema = {
+        'type': 'object',
+        'properties': {
+            'query': {'type': 'string', 'minLength': 1},
+            'code_pattern': {'type': 'string', 'minLength': 1},
+        },
+        'anyOf': [
+            {'required': ['query']},
+            {'required': ['code_pattern']},
+        ],
+        'additionalProperties': False,
+    }
+
+    def execute(self, env, args):
+        return {}
 
 
 class DummyWriteTool(AbstractWriteTool):
@@ -99,6 +151,54 @@ class TestActionToolsRegistry(TransactionCase):
         self.assertEqual(function['description'], 'Read dummy data')
         self.assertEqual(function['parameters']['type'], 'object')
         self.assertFalse(function['parameters']['additionalProperties'])
+
+    def test_to_openrouter_tools_sanitizes_nullable_types(self):
+        registry = ToolRegistry()
+        registry.register(NullableSchemaReadTool())
+        tools = registry.to_openrouter_tools(DummyEnv())
+        props = tools[0]['function']['parameters']['properties']
+
+        self.assertEqual(props['query']['type'], 'string')
+        self.assertTrue(props['query']['nullable'])
+
+        self.assertEqual(props['state']['type'], 'string')
+        self.assertTrue(props['state']['nullable'])
+        self.assertNotIn(None, props['state']['enum'])
+
+        self.assertEqual(props['codes']['type'], 'array')
+        self.assertTrue(props['codes']['nullable'])
+
+        self.assertEqual(
+            props['nested']['properties']['count']['type'], 'integer'
+        )
+        self.assertTrue(props['nested']['properties']['count']['nullable'])
+
+    def test_to_openrouter_tools_does_not_mutate_class_schema(self):
+        registry = ToolRegistry()
+        registry.register(NullableSchemaReadTool())
+        registry.to_openrouter_tools(DummyEnv())
+
+        self.assertEqual(
+            NullableSchemaReadTool.parameters_schema['properties']['query'],
+            {'type': ['string', 'null']},
+        )
+
+    def test_to_openrouter_tools_makes_any_of_branches_self_contained(self):
+        registry = ToolRegistry()
+        registry.register(AnyOfReadTool())
+        tools = registry.to_openrouter_tools(DummyEnv())
+        any_of = tools[0]['function']['parameters']['anyOf']
+
+        self.assertEqual(any_of[0]['type'], 'object')
+        self.assertEqual(
+            any_of[0]['properties'],
+            {'query': {'type': 'string', 'minLength': 1}},
+        )
+        self.assertEqual(any_of[1]['type'], 'object')
+        self.assertEqual(
+            any_of[1]['properties'],
+            {'code_pattern': {'type': 'string', 'minLength': 1}},
+        )
 
     def test_validate_args_rejects_extra_properties(self):
         tool = DummyReadTool()

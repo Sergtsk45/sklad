@@ -138,6 +138,39 @@ class TestChatController(HttpCase):
         data = result.get('result', {})
         self.assertTrue(data.get('error') or data.get('answer'))
 
+    def test_chat_403_security_policy_falls_back_to_consult(self):
+        self.env['ir.config_parameter'].sudo().set_param(
+            'ai_assistant.openrouter_api_key', 'test-key'
+        )
+        self.env['ir.config_parameter'].sudo().set_param(
+            'ai_assistant.actions_enabled', 'True'
+        )
+        blocked = MagicMock()
+        blocked.status_code = 403
+        blocked.json.return_value = {
+            'error': {'message': 'Access denied by security policy.'},
+        }
+        blocked.text = (
+            '{"error":{"message":"Access denied by security policy."}}'
+        )
+        ok = MagicMock()
+        ok.status_code = 200
+        ok.json.return_value = {
+            'choices': [{'message': {'content': 'Я консультант Odoo.'}}],
+            'model': 'google/gemini-2.5-flash',
+            'usage': {'total_tokens': 10},
+        }
+        ok.text = ''
+        with patch(
+            'odoo.addons.ai_assistant.controllers.chat_controller.'
+            'AiAssistantController._resolve_mode',
+            return_value='actions',
+        ), patch('requests.post', side_effect=[blocked, ok]):
+            result = self._post_chat({'message': 'что ты умеешь'})
+        data = result.get('result', {})
+        self.assertIn('консультант', (data.get('answer') or '').lower())
+        self.assertEqual(data.get('meta', {}).get('mode'), 'consult_fallback')
+
     # --- check_access endpoint ---
 
     def test_check_access_returns_dict(self):

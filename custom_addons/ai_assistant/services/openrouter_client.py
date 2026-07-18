@@ -9,6 +9,7 @@ DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1'
 DEFAULT_TEXT_MODEL = 'google/gemini-2.5-flash'
 DEFAULT_VISION_MODEL = 'openai/gpt-4o'
 DEFAULT_TIMEOUT = 30
+DEFAULT_HTTP_REFERER = 'http://localhost:8069'
 
 # Ключ оставлен для обратной совместимости (старые инсталляции)
 _LEGACY_MODEL_PARAM = 'ai_assistant.openrouter_model'
@@ -25,7 +26,9 @@ class OpenRouterClient:
         # Основная модель для текстовых запросов; fallback → legacy → default
         text_model = params.get_param('ai_assistant.text_model', '')
         if not text_model:
-            text_model = params.get_param(_LEGACY_MODEL_PARAM, DEFAULT_TEXT_MODEL)
+            text_model = params.get_param(
+                _LEGACY_MODEL_PARAM, DEFAULT_TEXT_MODEL
+            )
         self._text_model = text_model or DEFAULT_TEXT_MODEL
 
         # Модель для vision-запросов (со скриншотом)
@@ -36,29 +39,45 @@ class OpenRouterClient:
         self._timeout = int(params.get_param(
             'ai_assistant.openrouter_timeout', DEFAULT_TIMEOUT
         ))
+        self._http_referer = (
+            params.get_param('web.base.url', '') or DEFAULT_HTTP_REFERER
+        ).rstrip('/') or DEFAULT_HTTP_REFERER
 
         # Для обратной совместимости: _model указывает на текстовую
         self._model = self._text_model
+
+    @staticmethod
+    def is_security_policy_error(exc):
+        """True, если OpenRouter отклонил запрос security policy."""
+        text = str(exc or '').lower()
+        return '403' in text and 'security policy' in text
+
+    def _request_headers(self):
+        return {
+            'Authorization': f'Bearer {self._api_key}',
+            'Content-Type': 'application/json',
+            'HTTP-Referer': self._http_referer,
+            'X-Title': 'Odoo AI Assistant',
+        }
 
     def send_chat(self, messages, max_tokens=1500, model_override=None):
         """
         Отправить сообщения в OpenRouter.
 
         :param model_override: str|None — если передан, используется вместо
-                               дефолтной модели (позволяет выбрать vision-модель).
+            дефолтной модели (позволяет выбрать vision-модель).
         """
         if not self._api_key:
             raise ValueError('OpenRouter API key не настроен')
 
         model = model_override or self._text_model
-        mode = 'vision' if model_override and model_override != self._text_model else 'text'
+        if model_override and model_override != self._text_model:
+            mode = 'vision'
+        else:
+            mode = 'text'
 
         url = self._base_url.rstrip('/') + '/chat/completions'
-        headers = {
-            'Authorization': f'Bearer {self._api_key}',
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'http://localhost:8069',
-        }
+        headers = self._request_headers()
         payload = {
             'model': model,
             'messages': messages,
@@ -66,7 +85,8 @@ class OpenRouterClient:
         }
 
         _logger.info(
-            'OpenRouter request: model=%s mode=%s', model, mode
+            'OpenRouter request: model=%s mode=%s referer=%s',
+            model, mode, self._http_referer,
         )
 
         try:
@@ -98,11 +118,7 @@ class OpenRouterClient:
 
         model = model_override or self._text_model
         url = self._base_url.rstrip('/') + '/chat/completions'
-        headers = {
-            'Authorization': f'Bearer {self._api_key}',
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'http://localhost:8069',
-        }
+        headers = self._request_headers()
         payload = {
             'model': model,
             'messages': messages,
@@ -112,8 +128,8 @@ class OpenRouterClient:
         }
 
         _logger.info(
-            'OpenRouter tools request: model=%s tools=%s',
-            model, len(tools or [])
+            'OpenRouter tools request: model=%s tools=%s referer=%s',
+            model, len(tools or []), self._http_referer,
         )
 
         try:
@@ -160,6 +176,11 @@ class OpenRouterClient:
                 if isinstance(data.get('error'), dict)
                 else data.get('error')
             )
+            if resp.status_code == 403:
+                _logger.warning(
+                    'OpenRouter 403 body: %s',
+                    (resp.text or '')[:500],
+                )
             raise ValueError(
                 'OpenRouter: ошибка %s%s' % (
                     resp.status_code,

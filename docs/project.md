@@ -7,7 +7,16 @@
 ## Основные компоненты
 
 - `odoo/` — исходники Odoo 19, используются как upstream core.
-- `custom_addons/ai_assistant/` — встроенный AI-ассистент через OpenRouter API.
+- `custom_addons/ai_assistant/` — встроенный AI-ассистент через OpenAI-совместимый
+  LLM API. **С 2026-07-18 провайдер — ProxyAPI** (`proxyapi.ru`, российский
+  прокси-сервис с оплатой в ₽ по счёту для юрлица); ранее — OpenRouter,
+  отключён из-за гео-блокировки API с egress IP прод-VPS (детали —
+  `docs/deep-research-report.md`, `docs/changelog.md` [2026-07-18]). Клиент
+  в коде (`services/openrouter_client.py`, класс `OpenRouterClient`) не
+  переименован — переключение провайдера чисто конфигурационное
+  (`ai_assistant.openrouter_base_url`, `ai_assistant.text_model`,
+  `ai_assistant.vision_model`), так как ProxyAPI совместим по формату API и
+  именам моделей.
 - `custom_addons/object_request/` — модуль требований на комплектацию объектов.
 - `custom_addons/custom_product_search/` — нормализованный поиск товаров для backend UI, складских документов и AI-сервисного слоя.
 - `docs/` — проектная документация, changelog и tasktracker.

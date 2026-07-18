@@ -42,3 +42,40 @@ class TestOpenRouterClient(TransactionCase):
         payload = call_kwargs[1]['json']
         self.assertEqual(payload['messages'][0]['role'], 'user')
         self.assertIn('model', payload)
+        headers = call_kwargs[1]['headers']
+        self.assertIn('HTTP-Referer', headers)
+        self.assertEqual(headers.get('X-Title'), 'Odoo AI Assistant')
+
+    def test_is_security_policy_error(self):
+        self.assertTrue(
+            OpenRouterClient.is_security_policy_error(
+                ValueError(
+                    'OpenRouter: ошибка 403: Access denied by security policy.'
+                )
+            )
+        )
+        self.assertFalse(
+            OpenRouterClient.is_security_policy_error(
+                ValueError('OpenRouter: неверный API ключ')
+            )
+        )
+
+    def test_http_referer_uses_web_base_url(self):
+        self.env['ir.config_parameter'].sudo().set_param(
+            'web.base.url', 'https://skladtsk.duckdns.org'
+        )
+        client = self._make_client(api_key='test-key-123')
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            'choices': [{'message': {'content': 'ok'}}],
+            'model': 'google/gemini-2.5-flash',
+            'usage': {'total_tokens': 1},
+        }
+        with patch('requests.post', return_value=mock_resp) as mock_post:
+            client.send_chat([{'role': 'user', 'content': 'hi'}])
+        headers = mock_post.call_args[1]['headers']
+        self.assertEqual(
+            headers['HTTP-Referer'],
+            'https://skladtsk.duckdns.org',
+        )
