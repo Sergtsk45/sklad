@@ -1,9 +1,12 @@
 import logging
 
+from odoo import SUPERUSER_ID, api
+
 _logger = logging.getLogger(__name__)
 
 
-def migrate(env, version):
+def migrate(cr, version):
+    env = api.Environment(cr, SUPERUSER_ID, {})
     env.cr.execute(
         """
         UPDATE object_request_line_stock
