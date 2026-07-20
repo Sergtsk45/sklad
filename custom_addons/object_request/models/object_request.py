@@ -508,8 +508,7 @@ class ObjectRequest(models.Model):
                 1
                 for ln in lns
                 if (
-                    ln.matching_required
-                    or ln.matching_state == "manual_review"
+                    ln._requires_nomenclature_review()
                     or ln.manual_vendor_required
                     or ln.stock_match_warning
                 )

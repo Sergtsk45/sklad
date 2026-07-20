@@ -186,10 +186,7 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
 
     def _check_unresolved_nomenclature_warnings(self, lines):
         critical = lines.filtered(
-            lambda line: (
-                line.matching_required
-                or line.matching_state == "manual_review"
-            )
+            lambda line: line._requires_nomenclature_review()
         )
         if not critical:
             return

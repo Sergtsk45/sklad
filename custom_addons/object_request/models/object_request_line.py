@@ -435,6 +435,7 @@ class ObjectRequestLine(models.Model):
         if self.matching_required:
             self.matching_required = False
         self.matching_source = "manual"
+        self.matching_state = "matched"
         if self.request_id:
             candidate = self._find_stock_match_warning_candidate()
             if candidate:
@@ -692,6 +693,7 @@ class ObjectRequestLine(models.Model):
             "product_id": product.id,
             "uom_id": product.uom_id.id,
             "matching_required": False,
+            "matching_state": "matched",
             "matching_source": "llm_confirmed",
             "matching_note": self.ai_match_reason or "AI-кандидат принят.",
         }
@@ -1156,6 +1158,18 @@ class ObjectRequestLine(models.Model):
         if not self.product_id or self.matching_required:
             return False
         return self.matching_source == "manual"
+
+    def _requires_nomenclature_review(self):
+        """Нужна ли проверка номенклатуры до закупки."""
+        self.ensure_one()
+        if self.matching_required:
+            return True
+        if (
+            self.matching_state == "manual_review"
+            and not self._is_manual_match_protected()
+        ):
+            return True
+        return False
 
     def _validate_remember_matching_values(self):
         self.ensure_one()

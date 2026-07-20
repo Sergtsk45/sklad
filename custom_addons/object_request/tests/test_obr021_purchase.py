@@ -123,6 +123,29 @@ class TestOBR021Purchase(TransactionCase):
         with self.assertRaisesRegex(UserError, "нерешённые предупреждения"):
             wizard.action_create_purchase()
 
+    def test_purchase_allows_manual_review_after_foreman_product_choice(self):
+        """Ручной выбор товара прорабом снимает блокировку закупки."""
+        request = self._create_request()
+        line = self._add_line(request, self.product1, 5.0, self.vendor1)
+        line.write(
+            {
+                "matching_state": "manual_review",
+                "matching_source": "manual",
+                "matching_required": False,
+                "matching_note": (
+                    "Требует проверки: найдено несколько сильных кандидатов."
+                ),
+            }
+        )
+        request.write({"state": "in_progress"})
+        wizard = self._open_wizard(request)
+
+        result = wizard.action_create_purchase()
+
+        po = self.env["purchase.order"].browse(result["res_id"])
+        self.assertEqual(po.partner_id, self.vendor1)
+        self.assertEqual(len(po.order_line), 1)
+
     def test_object_request_po_report_filename(self):
         """PDF закупки по требованию получает имя передаточной ведомости."""
         request = self._create_request()
