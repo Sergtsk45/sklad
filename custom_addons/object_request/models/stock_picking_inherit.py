@@ -31,6 +31,25 @@ class StockPickingInherit(models.Model):
         for rec in self:
             rec.object_request_count = len(rec.object_request_ids)
 
+    def _get_issue_report_filename(self):
+        """Имя PDF расходной накладной: №, склад-источник, объект назначения."""
+        self.ensure_one()
+        warehouse = self.picking_type_id.warehouse_id
+        warehouse_name = (
+            warehouse.display_name
+            if warehouse
+            else (self.location_id.display_name if self.location_id else "")
+        )
+        project = self.object_request_project_id
+        if not project and self.object_request_ids:
+            project = self.object_request_ids[:1].project_id
+        project_name = project.display_name if project else ""
+        return "Расходная накладная №%s%s%s" % (
+            self.name or "",
+            " %s" % warehouse_name if warehouse_name else "",
+            " %s" % project_name if project_name else "",
+        )
+
     def action_open_object_requests(self):
         self.ensure_one()
         if len(self.object_request_ids) == 1:
