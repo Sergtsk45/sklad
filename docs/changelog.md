@@ -23,6 +23,10 @@
 - `docker exec odoo19-local python3 -m flake8 ...` по затронутым файлам.
 - `docker exec odoo19-local odoo --test-enable --test-tags /object_request -u object_request -d odoo19_local --stop-after-init --http-port=8071`
   — 438 post-tests, 0 failed, 0 errors.
+- Prod upgrade `object_request` до `19.0.1.10.0`; backup:
+  `/opt/project_odoo/backups/sup-001-007-20260720-070944/`.
+- Для `OR/2026/07/0029` пересчитаны строки P00073: болт M6 и гайка M6
+  получили `qty_to_buy=0` и `fully_supplied`.
 
 ---
 
