@@ -40,7 +40,7 @@
                 <separator/>
                 <filter
                     name="filter_partially_issued"
-                    string="Частично выдано"
+                    string="Частично обеспечено"
                     domain="[('line_state', '=', 'partially_issued')]"
                 />
                 <filter
@@ -105,9 +105,11 @@
                 <field name="floor" string="Этаж (старое)" optional="hide"/>
                 <field name="section" string="Участок (старое)" optional="hide"/>
                 <field name="qty_requested" string="Запрошено"/>
-                <field name="qty_to_issue" string="К выдаче" optional="show"/>
-                <field name="qty_to_buy" string="К закупке" optional="show"/>
-                <field name="qty_issued" string="Выдано" optional="show"/>
+                <field name="qty_to_issue" string="К выдаче (план)" optional="show"/>
+                <field name="qty_to_buy" string="К закупке (план)" optional="show"/>
+                <field name="qty_issued" string="Обеспечено" optional="show"/>
+                <field name="qty_issued_from_stock" string="Со склада" optional="hide"/>
+                <field name="qty_received_purchase" string="Поступило по закупке" optional="hide"/>
                 <field name="qty_reserved" string="Зарезервировано" optional="show"/>
                 <field name="preferred_vendor_id" string="Поставщик" optional="show"/>
                 <field
@@ -257,7 +259,7 @@
                 />
                 <filter
                     name="filter_to_issue"
-                    string="К выдаче"
+                    string="К выдаче (план)"
                     domain="[('qty_to_issue', '>', 0)]"
                 />
                 <filter
@@ -348,6 +350,15 @@
         <field name="binding_view_types">list</field>
         <field name="state">code</field>
         <field name="code">records.action_refresh_stock_match_warning()</field>
+    </record>
+
+    <record id="server_action_object_request_line_recompute_supply_state" model="ir.actions.server">
+        <field name="name">Пересчитать обеспечение</field>
+        <field name="model_id" ref="model_object_request_line"/>
+        <field name="binding_model_id" ref="model_object_request_line"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_recompute_supply_state()</field>
     </record>
 
 </odoo>

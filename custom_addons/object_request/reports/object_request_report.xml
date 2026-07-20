@@ -94,7 +94,7 @@
                                     <th style="width: 30%;">Наименование</th>
                                     <th style="width: 8%; text-align: center;">Ед. изм.</th>
                                     <th style="width: 9%; text-align: right;">Кол-во</th>
-                                    <th style="width: 9%; text-align: right;">Выдано</th>
+                                    <th style="width: 9%; text-align: right;">Обеспечено</th>
                                     <th style="width: 16%;">Примечание</th>
                                 </tr>
                             </thead>

@@ -194,10 +194,10 @@ class ObjectRequestLine(models.Model):
         index=True,
     )
     qty_to_issue = fields.Float(
-        string="К выдаче", digits="Product Unit of Measure"
+        string="К выдаче (план)", digits="Product Unit of Measure"
     )
     qty_to_buy = fields.Float(
-        string="К закупке", digits="Product Unit of Measure"
+        string="К закупке (план)", digits="Product Unit of Measure"
     )
     qty_reserved = fields.Float(
         string="Зарезервировано",
@@ -209,7 +209,17 @@ class ObjectRequestLine(models.Model):
         index=True,
     )
     qty_issued = fields.Float(
-        string="Выдано", digits="Product Unit of Measure"
+        string="Обеспечено", digits="Product Unit of Measure"
+    )
+    qty_issued_from_stock = fields.Float(
+        string="Со склада",
+        digits="Product Unit of Measure",
+        readonly=True,
+    )
+    qty_received_purchase = fields.Float(
+        string="Поступило по закупке",
+        digits="Product Unit of Measure",
+        readonly=True,
     )
 
     # --- Технические поля склада ---
@@ -240,7 +250,7 @@ class ObjectRequestLine(models.Model):
             ("draft", "Черновик"),
             ("requires_mapping", "Требует сопоставления"),
             ("ready", "Готово к обработке"),
-            ("partially_issued", "Частично выдано"),
+            ("partially_issued", "Частично обеспечено"),
             ("fully_supplied", "Полностью обеспечено"),
             ("cancelled", "Отменено"),
         ],
@@ -345,7 +355,6 @@ class ObjectRequestLine(models.Model):
         "product_id",
         "matching_required",
         "qty_issued",
-        "qty_to_issue",
         "qty_requested",
         "is_cancelled",
     )
@@ -355,7 +364,7 @@ class ObjectRequestLine(models.Model):
                 line.line_state = "cancelled"
             elif not line.product_id or line.matching_required:
                 line.line_state = "requires_mapping"
-            elif line.qty_issued >= line.qty_to_issue > 0:
+            elif line.qty_issued >= line.qty_requested:
                 line.line_state = "fully_supplied"
             elif line.qty_issued > 0:
                 line.line_state = "partially_issued"
@@ -461,42 +470,210 @@ class ObjectRequestLine(models.Model):
                 "Запоминание сопоставлений доступно только снабженцу."
             )
 
-    def _object_request_issue_moves(self, current_picking_ids=None):
+    def _object_request_issue_moves(self):
         self.ensure_one()
-        current_picking_ids = set(current_picking_ids or [])
         moves = self.stock_ids.mapped("move_id").filtered(
             lambda move: move.exists()
             and move.picking_id.is_object_request_issue
-            and (
-                move.picking_id.id in current_picking_ids
-                or move.state == "done"
-            )
+            and move.state == "done"
         )
         if (
             not moves
             and self.issue_move_id
-            and (
-                self.issue_move_id.picking_id.id in current_picking_ids
-                or self.issue_move_id.state == "done"
-            )
+            and self.issue_move_id.state == "done"
         ):
             moves = self.issue_move_id
         return moves
 
-    def _object_request_purchase_receipt_moves(self, current_picking_ids=None):
+    def _object_request_purchase_receipt_moves(self):
         self.ensure_one()
-        current_picking_ids = set(current_picking_ids or [])
         if not self.purchase_order_line_id:
             return self.env["stock.move"]
         return self.env["stock.move"].search(
             [
                 ("purchase_line_id", "=", self.purchase_order_line_id.id),
                 ("picking_type_id.code", "=", "incoming"),
-                "|",
-                ("picking_id", "in", list(current_picking_ids) or [0]),
                 ("state", "=", "done"),
             ]
         )
+
+    def _object_request_move_qty_in_line_uom(self, moves):
+        self.ensure_one()
+        total = 0.0
+        target_uom = self.uom_id or self.product_id.uom_id
+        for move in moves:
+            source_uom = (
+                move.product_uom
+                if "product_uom" in move._fields
+                else move.product_uom_id
+            ) or move.product_id.uom_id
+            total += source_uom._compute_quantity(move.quantity, target_uom)
+        return total
+
+    def _get_object_request_supply_quantities(self):
+        self.ensure_one()
+        stock_qty = self._object_request_move_qty_in_line_uom(
+            self._object_request_issue_moves()
+        )
+        purchase_qty = self._object_request_move_qty_in_line_uom(
+            self._object_request_purchase_receipt_moves()
+        )
+        return {
+            "stock_qty": stock_qty,
+            "purchase_qty": purchase_qty,
+            "total_qty": stock_qty + purchase_qty,
+        }
+
+    def _get_object_request_original_issue_plan_qty(self):
+        self.ensure_one()
+        total = 0.0
+        target_uom = self.uom_id or self.product_id.uom_id
+        for stock in self.stock_ids:
+            if stock.qty_planned_to_issue:
+                total += stock.qty_planned_to_issue
+            elif stock.move_id:
+                source_uom = (
+                    stock.move_id.product_uom
+                    if "product_uom" in stock.move_id._fields
+                    else stock.move_id.product_uom_id
+                ) or stock.move_id.product_id.uom_id
+                total += source_uom._compute_quantity(
+                    stock.move_id.product_uom_qty,
+                    target_uom,
+                )
+            else:
+                total += stock.qty_to_issue
+        return total
+
+    def _get_object_request_original_purchase_plan_qty(self):
+        self.ensure_one()
+        if not self.purchase_order_line_id:
+            return self.qty_to_buy
+        purchase_line = self.purchase_order_line_id
+        source_uom = (
+            purchase_line.product_uom_id
+            if "product_uom_id" in purchase_line._fields
+            else purchase_line.product_uom
+        )
+        target_uom = self.uom_id or self.product_id.uom_id
+        if source_uom:
+            return source_uom._compute_quantity(
+                purchase_line.product_qty,
+                target_uom,
+            )
+        return purchase_line.product_qty
+
+    def _get_object_request_procurement_mode(self, qty_to_issue, qty_to_buy):
+        if qty_to_issue > 0 and qty_to_buy > 0:
+            return "mixed"
+        if qty_to_issue > 0:
+            return "issue"
+        if qty_to_buy > 0:
+            return "buy"
+        return "manual"
+
+    def _get_object_request_supply_recompute_vals(self):
+        self.ensure_one()
+        quantities = self._get_object_request_supply_quantities()
+        supplied = quantities["total_qty"]
+        remaining_need = max(self.qty_requested - supplied, 0.0)
+        issue_plan = min(
+            max(
+                self._get_object_request_original_issue_plan_qty()
+                - quantities["stock_qty"],
+                0.0,
+            ),
+            remaining_need,
+        )
+        buy_plan = min(
+            max(
+                self._get_object_request_original_purchase_plan_qty()
+                - quantities["purchase_qty"],
+                0.0,
+            ),
+            max(remaining_need - issue_plan, 0.0),
+        )
+        return {
+            "qty_issued_from_stock": quantities["stock_qty"],
+            "qty_received_purchase": quantities["purchase_qty"],
+            "qty_issued": supplied,
+            "qty_to_issue": issue_plan,
+            "qty_to_buy": buy_plan,
+            "procurement_mode": self._get_object_request_procurement_mode(
+                issue_plan,
+                buy_plan,
+            ),
+        }
+
+    def recompute_supply_state_from_done_moves(self):
+        """Synchronize supply quantities and remaining plan from done moves."""
+        for line in self:
+            line.write(line._get_object_request_supply_recompute_vals())
+            line._sync_object_request_remaining_stock_plan()
+        return True
+
+    def _sync_object_request_remaining_stock_plan(self):
+        self.ensure_one()
+        target_uom = self.uom_id or self.product_id.uom_id
+        remaining_issue_plan = self.qty_to_issue
+        unlinked_plan_qty = {
+            stock.id: stock.qty_to_issue
+            for stock in self.stock_ids
+            if not stock.move_id
+        }
+        sync_context = {
+            "auto_stock_distribution": True,
+            "supply_state_recompute": True,
+            "skip_qty_to_issue_limit": True,
+            "skip_stock_total_sync": True,
+        }
+        self.stock_ids.with_context(**sync_context).write(
+            {"qty_to_issue": 0.0}
+        )
+        for stock in self.stock_ids:
+            if stock.move_id:
+                move = stock.move_id
+                if stock.qty_planned_to_issue:
+                    planned_qty = stock.qty_planned_to_issue
+                else:
+                    source_uom = (
+                        move.product_uom
+                        if "product_uom" in move._fields
+                        else move.product_uom_id
+                    ) or move.product_id.uom_id
+                    planned_qty = source_uom._compute_quantity(
+                        move.product_uom_qty,
+                        target_uom,
+                    )
+                done_qty = (
+                    self._object_request_move_qty_in_line_uom(move)
+                    if move.state == "done"
+                    else 0.0
+                )
+                desired_qty = max(planned_qty - done_qty, 0.0)
+            else:
+                desired_qty = unlinked_plan_qty.get(stock.id, 0.0)
+            desired_qty = min(desired_qty, remaining_issue_plan)
+            stock.with_context(**sync_context).write(
+                {"qty_to_issue": desired_qty}
+            )
+            remaining_issue_plan = max(remaining_issue_plan - desired_qty, 0.0)
+        self.stock_ids._check_qty_to_issue_limit()
+        self._sync_stock_totals_from_stock_ids()
+
+    def action_recompute_supply_state(self):
+        self.recompute_supply_state_from_done_moves()
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Обеспечение пересчитано",
+                "message": f"Обработано строк: {len(self)}.",
+                "type": "success",
+                "sticky": False,
+                "next": {"type": "ir.actions.client", "tag": "reload"},
+            },
+        }
 
     def _ai_candidate_clear_vals(self):
         return {

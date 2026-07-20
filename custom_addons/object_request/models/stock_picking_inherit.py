@@ -32,7 +32,7 @@ class StockPickingInherit(models.Model):
             rec.object_request_count = len(rec.object_request_ids)
 
     def _get_issue_report_filename(self):
-        """Имя PDF расходной накладной: №, склад-источник, объект назначения."""
+        """Имя PDF расходной накладной: номер, склад, объект назначения."""
         self.ensure_one()
         warehouse = self.picking_type_id.warehouse_id
         warehouse_name = (
@@ -70,7 +70,7 @@ class StockPickingInherit(models.Model):
             "target": "current",
         }
 
-    # --- OBR-012: синхронизация qty_issued после подтверждения выдачи ---
+    # --- OBR-012: синхронизация обеспечения после подтверждения движения ---
 
     def _action_done(self):
         """После подтверждения выдачи/прихода обновить qty_issued."""
@@ -88,11 +88,10 @@ class StockPickingInherit(models.Model):
 
     def _sync_qty_issued_to_request_lines(self):
         """Обновить qty_issued строк требования по done-количеству."""
-        current_picking_ids = set(self.ids)
         request_lines = self.env["object.request.line"]
         request_lines |= self._request_lines_from_issue_pickings()
         request_lines |= self._request_lines_from_purchase_receipts()
-        self._sync_request_lines_qty_issued(request_lines, current_picking_ids)
+        request_lines.recompute_supply_state_from_done_moves()
         for request in request_lines.mapped("request_id"):
             request._notify_if_all_lines_supplied()
 
@@ -121,19 +120,3 @@ class StockPickingInherit(models.Model):
                 ("purchase_order_line_id", "in", purchase_lines.ids),
             ]
         )
-
-    def _sync_request_lines_qty_issued(
-        self, request_lines, current_picking_ids
-    ):
-        for line in request_lines:
-            qty_done = sum(
-                line._object_request_issue_moves(
-                    current_picking_ids
-                ).mapped("quantity")
-            )
-            qty_done += sum(
-                line._object_request_purchase_receipt_moves(
-                    current_picking_ids
-                ).mapped("quantity")
-            )
-            line.write({"qty_issued": qty_done})

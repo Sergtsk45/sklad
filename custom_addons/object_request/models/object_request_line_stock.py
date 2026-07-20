@@ -35,6 +35,11 @@ class ObjectRequestLineStock(models.Model):
         string="К выдаче со склада",
         digits="Product Unit of Measure",
     )
+    qty_planned_to_issue = fields.Float(
+        string="Исходный план выдачи",
+        digits="Product Unit of Measure",
+        readonly=True,
+    )
     qty_reserved = fields.Float(
         string="Зарезервировано",
         digits="Product Unit of Measure",
@@ -52,6 +57,9 @@ class ObjectRequestLineStock(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        for vals in vals_list:
+            if "qty_planned_to_issue" not in vals:
+                vals["qty_planned_to_issue"] = vals.get("qty_to_issue", 0.0)
         records = super().create(vals_list)
         records._check_qty_to_issue_limit()
         records.mapped("line_id")._sync_stock_totals_from_stock_ids()
@@ -62,11 +70,19 @@ class ObjectRequestLineStock(models.Model):
             "qty_to_issue" in vals
             and not self.env.context.get("auto_stock_distribution")
         )
+        if (
+            "qty_to_issue" in vals
+            and "qty_planned_to_issue" not in vals
+            and not self.env.context.get("supply_state_recompute")
+        ):
+            vals = dict(vals, qty_planned_to_issue=vals["qty_to_issue"])
         result = super().write(vals)
         if manual_qty_change:
             self.mapped("line_id").write({"manual_plan_override": True})
-        self._check_qty_to_issue_limit()
-        self.mapped("line_id")._sync_stock_totals_from_stock_ids()
+        if not self.env.context.get("skip_qty_to_issue_limit"):
+            self._check_qty_to_issue_limit()
+        if not self.env.context.get("skip_stock_total_sync"):
+            self.mapped("line_id")._sync_stock_totals_from_stock_ids()
         return result
 
     def unlink(self):

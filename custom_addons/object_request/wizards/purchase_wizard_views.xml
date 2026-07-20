@@ -57,7 +57,7 @@
                             <field name="product_id" string="Товар"/>
                             <field name="uom_id" string="Ед. изм."/>
                             <field name="qty_requested" string="Запрошено"/>
-                            <field name="qty_to_buy" string="К закупке"/>
+                            <field name="qty_to_buy" string="К закупке (план)"/>
                             <field name="preferred_vendor_id" string="Поставщик"/>
                         </list>
                     </field>

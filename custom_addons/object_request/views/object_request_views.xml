@@ -397,9 +397,11 @@
                                     />
                                     <field name="uom_id" string="Ед. изм." optional="show"/>
                                     <field name="qty_requested" string="Запрошено"/>
-                                    <field name="qty_to_issue" string="К выдаче"/>
-                                    <field name="qty_to_buy" string="К закупке"/>
-                                    <field name="qty_issued" string="Выдано"/>
+                                    <field name="qty_to_issue" string="К выдаче (план)"/>
+                                    <field name="qty_to_buy" string="К закупке (план)"/>
+                                    <field name="qty_issued" string="Обеспечено"/>
+                                    <field name="qty_issued_from_stock" string="Со склада" optional="hide"/>
+                                    <field name="qty_received_purchase" string="Поступило по закупке" optional="hide"/>
                                     <field name="stock_qty_on_hand" string="Остаток" optional="show"/>
                                     <field
                                         name="line_state"
@@ -459,17 +461,19 @@
                                     <field name="qty_requested" string="Запрошено" optional="show"/>
                                     <field
                                         name="qty_to_issue"
-                                        string="К выдаче"
+                                        string="К выдаче (план)"
                                         optional="show"
                                         readonly="parent.state != 'in_progress'"
                                     />
                                     <field
                                         name="qty_to_buy"
-                                        string="К закупке"
+                                        string="К закупке (план)"
                                         optional="show"
                                         readonly="parent.state != 'in_progress'"
                                     />
-                                    <field name="qty_issued" string="Выдано" optional="show" readonly="1"/>
+                                    <field name="qty_issued" string="Обеспечено" optional="show" readonly="1"/>
+                                    <field name="qty_issued_from_stock" string="Со склада" optional="hide" readonly="1"/>
+                                    <field name="qty_received_purchase" string="Поступило по закупке" optional="hide" readonly="1"/>
                                     <field name="qty_reserved" string="Зарезервировано" optional="show" readonly="1"/>
                                     <!-- Физический остаток (Этап 2) -->
                                     <field

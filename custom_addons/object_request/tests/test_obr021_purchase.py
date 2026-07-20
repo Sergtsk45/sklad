@@ -83,6 +83,11 @@ class TestOBR021Purchase(TransactionCase):
             .create({"request_id": request.id})
         )
 
+    def _validate_receipt(self, picking, qty=None):
+        for move in picking.move_ids:
+            move.quantity = qty if qty is not None else move.product_uom_qty
+        picking.with_context(skip_backorder=True).button_validate()
+
     # --- Тесты ---
 
     def test_create_po_single_vendor(self):
@@ -414,13 +419,43 @@ class TestOBR021Purchase(TransactionCase):
             lambda item: item.picking_type_id.code == "incoming"
         )[:1]
 
-        for move in picking.move_ids:
-            move.quantity = move.product_uom_qty
-        picking.with_context(skip_backorder=True).button_validate()
+        self._validate_receipt(picking)
 
         line.invalidate_recordset()
         self.assertEqual(line.qty_issued, 4.0)
+        self.assertEqual(line.qty_received_purchase, 4.0)
+        self.assertEqual(line.qty_issued_from_stock, 0.0)
+        self.assertEqual(line.qty_to_buy, 0.0)
+        self.assertEqual(line.line_state, "fully_supplied")
         self.assertEqual(request.qty_total_issued, 4.0)
+
+    def test_partial_receipt_keeps_remaining_purchase_plan(self):
+        """Частичный приход PO оставляет остаток в плане закупки."""
+        product = self.env["product.product"].create(
+            {
+                "name": "Продукт partial receipt OBR021",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        request = self._create_request()
+        line = self._add_line(request, product, 4.0, self.vendor1)
+        request.write({"state": "in_progress"})
+
+        wizard = self._open_wizard(request)
+        result = wizard.action_create_purchase()
+        po = self.env["purchase.order"].browse(result["res_id"])
+        po.button_confirm()
+        picking = po.picking_ids.filtered(
+            lambda item: item.picking_type_id.code == "incoming"
+        )[:1]
+        self._validate_receipt(picking, qty=2.0)
+
+        line.invalidate_recordset()
+        self.assertEqual(line.qty_issued, 2.0)
+        self.assertEqual(line.qty_received_purchase, 2.0)
+        self.assertEqual(line.qty_to_buy, 2.0)
+        self.assertEqual(line.line_state, "partially_issued")
 
     def test_receipt_qty_issued_is_added_to_internal_issue_qty(self):
         """Выдано суммирует внутреннюю выдачу и закупочный приход."""
@@ -471,12 +506,21 @@ class TestOBR021Purchase(TransactionCase):
         picking = po.picking_ids.filtered(
             lambda item: item.picking_type_id.code == "incoming"
         )[:1]
-        for move in picking.move_ids:
-            move.quantity = move.product_uom_qty
-        picking.with_context(skip_backorder=True).button_validate()
+        self._validate_receipt(picking)
 
         line.invalidate_recordset()
         self.assertEqual(line.qty_issued, 10.0)
+        self.assertEqual(line.qty_issued_from_stock, 6.0)
+        self.assertEqual(line.qty_received_purchase, 4.0)
+        self.assertEqual(line.qty_to_issue, 0.0)
+        self.assertEqual(line.qty_to_buy, 0.0)
+        self.assertEqual(line.line_state, "fully_supplied")
+
+        line.recompute_supply_state_from_done_moves()
+        line.invalidate_recordset()
+        self.assertEqual(line.qty_issued, 10.0)
+        self.assertEqual(line.qty_to_issue, 0.0)
+        self.assertEqual(line.qty_to_buy, 0.0)
 
     def test_purchase_wizard_fallback_receipt_type_without_project_warehouse(
         self,

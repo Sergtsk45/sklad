@@ -320,7 +320,7 @@ class TestPilotScenarios(TransactionCase):
 
         line.invalidate_recordset()
         self.assertEqual(line.qty_issued, 10.0)
-        self.assertEqual(line.line_state, "fully_supplied")
+        self.assertEqual(line.line_state, "partially_issued")
 
     # ─────────────────────────────────────────────────────────────────────────
     # Сценарий 5: Печать требования и расходной накладной
@@ -404,7 +404,7 @@ class TestPilotScenarios(TransactionCase):
         request.action_in_progress()
         self.assertEqual(request.state, "in_progress")
 
-        # qty_to_issue > 0 нужен для fully_supplied.
+        # Полный факт обеспечения нужен для fully_supplied.
         line.write({"qty_to_issue": 10.0, "qty_issued": 10.0})
         line.invalidate_recordset()
         self.assertEqual(line.line_state, "fully_supplied")
@@ -492,7 +492,7 @@ class TestPilotScenarios(TransactionCase):
 
         # Первая выдача — только 8 из 20 (частичная)
         move = line.issue_move_id
-        move.write({"quantity": 8.0})
+        move.write({"quantity": 8.0, "state": "done"})
         picking1._sync_qty_issued_to_request_lines()
         line.invalidate_recordset()
         self.assertEqual(line.qty_issued, 8.0)
