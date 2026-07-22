@@ -63,8 +63,13 @@
             "object_request/static/src/scss/object_request.scss",
             (
                 "object_request/static/src/js/"
+                "object_request_chatter_toggle.js"
+            ),
+            (
+                "object_request/static/src/js/"
                 "object_request_line_column_layout.js"
             ),
+            "object_request/static/src/xml/object_request_chatter_toggle.xml",
             (
                 "object_request/static/src/components/"
                 "purchase_file_uploader/purchase_file_uploader.xml"

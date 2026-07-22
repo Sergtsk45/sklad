@@ -13,7 +13,7 @@
     }
 }
 
-.o_form_view.o_object_request_full_width_form {
+.o_form_view.o_object_request_full_width_form.o_object_request_chatter_hidden {
     .o-mail-Form-chatter,
     .o-mail-ChatterContainer {
         display: none !important;
@@ -26,6 +26,12 @@
             width: 100%;
             max-width: 100%;
         }
+    }
+}
+
+.o_form_view.o_object_request_full_width_form {
+    .o_object_request_chatter_toggle {
+        white-space: nowrap;
     }
 
     .o_form_sheet {
