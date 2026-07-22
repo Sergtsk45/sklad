@@ -34,4 +34,16 @@
         </field>
     </record>
 
+    <record id="view_stock_picking_object_request_full_width_form" model="ir.ui.view">
+        <field name="name">stock.picking.object.request.full.width.form</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="attributes">
+                <attribute name="class" add="o_object_request_full_width_form" separator=" "/>
+            </xpath>
+        </field>
+    </record>
+
 </odoo>

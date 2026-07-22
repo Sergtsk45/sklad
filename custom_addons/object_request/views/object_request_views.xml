@@ -132,7 +132,7 @@
         <field name="name">object.request.form</field>
         <field name="model">object.request</field>
         <field name="arch" type="xml">
-            <form string="Требование на комплектацию">
+            <form string="Требование на комплектацию" class="o_object_request_full_width_form">
 
                 <!-- HEADER: кнопки действий + statusbar -->
                 <header>

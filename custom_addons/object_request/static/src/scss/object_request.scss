@@ -13,6 +13,26 @@
     }
 }
 
+.o_form_view.o_object_request_full_width_form {
+    .o-mail-Form-chatter,
+    .o-mail-ChatterContainer {
+        display: none !important;
+    }
+
+    &.o_xxl_form_view {
+        .o_form_view_container,
+        .o_form_sheet_bg {
+            flex: 1 1 100%;
+            width: 100%;
+            max-width: 100%;
+        }
+    }
+
+    .o_form_sheet {
+        max-width: none;
+    }
+}
+
 .o_list_table.o_object_request_column_dragging {
     th[data-name] {
         cursor: grabbing;

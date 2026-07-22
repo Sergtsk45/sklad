@@ -863,21 +863,29 @@ class ObjectRequest(models.Model):
 
     def action_open_issue_pickings(self):
         self.ensure_one()
+        form_view = self.env.ref(
+            "object_request.view_stock_picking_object_request_full_width_form"
+        )
         return {
             "type": "ir.actions.act_window",
             "name": "Выдачи",
             "res_model": "stock.picking",
             "view_mode": "list,form",
+            "views": [(False, "list"), (form_view.id, "form")],
             "domain": [("id", "in", self.issue_picking_ids.ids)],
         }
 
     def action_open_purchase_orders(self):
         self.ensure_one()
+        form_view = self.env.ref(
+            "object_request.view_purchase_order_object_request_full_width_form"
+        )
         return {
             "type": "ir.actions.act_window",
             "name": "Закупки",
             "res_model": "purchase.order",
             "view_mode": "list,form",
+            "views": [(False, "list"), (form_view.id, "form")],
             "domain": [("id", "in", self.purchase_order_ids.ids)],
         }
 
