@@ -1,22 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-inherit="web.FormView" t-inherit-mode="extension">
-        <xpath expr="//t[@t-set-slot='control-panel-additional-actions']/CogMenu" position="before">
-            <button
-                t-if="isObjectRequestChatterToggleEnabled"
-                type="button"
-                class="btn btn-secondary o_object_request_chatter_toggle me-2"
-                t-att-title="objectRequestChatterToggleTitle"
-                t-att-aria-label="objectRequestChatterToggleTitle"
-                t-att-aria-pressed="objectRequestChatterState.visible ? 'true' : 'false'"
-                t-on-click.stop="toggleObjectRequestChatter"
-            >
-                <i
-                    t-att-class="objectRequestChatterState.visible ? 'fa fa-comments' : 'fa fa-comments-o'"
-                    aria-hidden="true"
-                />
-                <span class="ms-1 d-none d-lg-inline">Активность</span>
-            </button>
+        <xpath expr="//Layout/t[@t-set-slot='control-panel-status-indicator']" position="after">
+            <t t-set-slot="control-panel-navigation-additional">
+                <div
+                    t-if="isObjectRequestChatterToggleEnabled"
+                    class="o_object_request_chatter_toggle_wrap d-flex justify-content-end w-100"
+                >
+                    <button
+                        type="button"
+                        class="btn btn-secondary o_object_request_chatter_toggle"
+                        t-att-title="objectRequestChatterToggleTitle"
+                        t-att-aria-label="objectRequestChatterToggleTitle"
+                        t-att-aria-pressed="objectRequestChatterState.visible ? 'true' : 'false'"
+                        t-on-click.stop="toggleObjectRequestChatter"
+                    >
+                        <i
+                            t-att-class="objectRequestChatterState.visible ? 'fa fa-comments' : 'fa fa-comments-o'"
+                            aria-hidden="true"
+                        />
+                        <span class="ms-1 d-none d-lg-inline">Активность</span>
+                    </button>
+                </div>
+            </t>
         </xpath>
     </t>
 </templates>

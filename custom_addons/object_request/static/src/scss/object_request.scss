@@ -30,6 +30,10 @@
 }
 
 .o_form_view.o_object_request_full_width_form {
+    .o_object_request_chatter_toggle_wrap {
+        flex-basis: 100%;
+    }
+
     .o_object_request_chatter_toggle {
         white-space: nowrap;
     }
