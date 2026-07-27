@@ -338,6 +338,27 @@
                             />
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>
+                        <group string="Статистика строк">
+                            <field name="line_count" string="Всего строк" readonly="1"/>
+                            <field name="line_matched_count" string="Сопоставлено" readonly="1"/>
+                            <field name="line_problem_count" string="Проблемных" readonly="1"/>
+                            <field name="line_to_issue_count" string="К выдаче" readonly="1"/>
+                            <field name="line_to_buy_count" string="К закупке" readonly="1"/>
+                            <field
+                                name="line_fully_supplied_count"
+                                string="Полностью обеспечено"
+                                readonly="1"
+                            />
+                            <field
+                                name="matching_state"
+                                string="Статус сопоставления"
+                                widget="badge"
+                                decoration-success="matching_state == 'all_matched'"
+                                decoration-warning="matching_state == 'partial'"
+                                decoration-danger="matching_state == 'requires_mapping'"
+                                readonly="1"
+                            />
+                        </group>
                     </group>
 
                     <group>
@@ -366,6 +387,33 @@
                                         string="Проверить номенклатуру"
                                         type="object"
                                         class="btn-secondary ms-2"
+                                        groups="object_request.group_supply_manager"
+                                    />
+                                    <button
+                                        string="Рассчитать наличие"
+                                        type="object"
+                                        name="action_check_stock"
+                                        class="btn-secondary ms-2"
+                                        invisible="state not in ('draft', 'in_progress')"
+                                        title="Запросить физический остаток по складу для каждой строки с товаром"
+                                        groups="object_request.group_supply_manager"
+                                    />
+                                    <button
+                                        string="Авто-разбивка"
+                                        type="object"
+                                        name="action_auto_split"
+                                        class="btn-secondary ms-2"
+                                        invisible="state not in ('draft', 'in_progress')"
+                                        title="Разбить строки на «К выдаче» и «К закупке» по остатку на складе"
+                                        groups="object_request.group_supply_manager"
+                                    />
+                                    <button
+                                        string="Подготовить закупку"
+                                        type="object"
+                                        name="action_open_purchase_wizard"
+                                        class="btn-secondary ms-2"
+                                        invisible="state not in ('draft', 'in_progress')"
+                                        title="Создать черновики закупок по строкам с количеством к закупке"
                                         groups="object_request.group_supply_manager"
                                     />
                                 </div>
@@ -742,67 +790,6 @@
                                     <field name="picking_id" readonly="1"/>
                                 </list>
                             </field>
-                        </page>
-
-                        <!-- Вкладка: Обработка -->
-                        <page string="Обработка" name="page_processing">
-                            <group string="Сводка по количествам">
-                                <group>
-                                    <field name="qty_total_requested" string="Всего запрошено"/>
-                                    <field name="qty_total_to_issue" string="Всего к выдаче"/>
-                                </group>
-                                <group>
-                                    <field name="qty_total_to_buy" string="Всего к закупке"/>
-                                    <field name="qty_total_issued" string="Всего выдано"/>
-                                    <field name="qty_total_reserved" string="Всего зарезервировано"/>
-                                </group>
-                            </group>
-                            <group string="Статистика строк">
-                                <group>
-                                    <field name="line_count" string="Всего строк"/>
-                                    <field name="line_matched_count" string="Сопоставлено"/>
-                                    <field name="line_problem_count" string="Проблемных"/>
-                                </group>
-                                <group>
-                                    <field name="line_to_issue_count" string="К выдаче"/>
-                                    <field name="line_to_buy_count" string="К закупке"/>
-                                    <field name="line_fully_supplied_count" string="Полностью обеспечено"/>
-                                </group>
-                            </group>
-                            <group string="Статус сопоставления">
-                                <field name="matching_state" readonly="1"/>
-                            </group>
-
-                            <!-- Автоматическая обработка -->
-                            <group string="Автоматическая обработка"
-                                invisible="state not in ('draft', 'in_progress')">
-                                <div>
-                                    <button
-                                        string="Рассчитать наличие"
-                                        type="object"
-                                        name="action_check_stock"
-                                        class="btn-secondary me-2"
-                                        title="Запросить физический остаток по складу для каждой строки с товаром"
-                                        groups="object_request.group_supply_manager"
-                                    />
-                                    <button
-                                        string="Авто-разбивка"
-                                        type="object"
-                                        name="action_auto_split"
-                                        class="btn-secondary me-2"
-                                        title="Разбить строки на «К выдаче» и «К закупке» по остатку на складе"
-                                        groups="object_request.group_supply_manager"
-                                    />
-                                    <button
-                                        string="Подготовить закупку"
-                                        type="object"
-                                        name="action_open_purchase_wizard"
-                                        class="btn-secondary"
-                                        title="Создать черновики закупок по строкам с количеством к закупке"
-                                        groups="object_request.group_supply_manager"
-                                    />
-                                </div>
-                            </group>
                         </page>
 
                         <!-- Вкладка: Связанные документы -->

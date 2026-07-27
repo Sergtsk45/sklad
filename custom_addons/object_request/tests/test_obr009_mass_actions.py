@@ -526,6 +526,61 @@ class TestObr009MassActions(TransactionCase):
         )
         self.assertTrue(po_diagnostic)
 
+    def test_form_merges_processing_actions_into_lines_tab(self):
+        view = self.env.ref("object_request.view_object_request_form")
+        root = etree.fromstring(view.arch_db.encode())
+
+        self.assertFalse(root.xpath("//page[@name='page_processing']"))
+        qty_total_fields = root.xpath(
+            "//field[starts-with(@name, 'qty_total_')]"
+        )
+        self.assertFalse(qty_total_fields)
+
+        line_buttons = root.xpath(
+            "//page[@name='page_lines']//button"
+            "[@name='action_sort_lines_by_location' "
+            "or @name='action_refresh_stock_match_warnings' "
+            "or @name='action_check_stock' "
+            "or @name='action_auto_split' "
+            "or @name='action_open_purchase_wizard']"
+        )
+        self.assertEqual(len(line_buttons), 5)
+        self.assertEqual(
+            {button.get("name") for button in line_buttons},
+            {
+                "action_sort_lines_by_location",
+                "action_refresh_stock_match_warnings",
+                "action_check_stock",
+                "action_auto_split",
+                "action_open_purchase_wizard",
+            },
+        )
+
+        processing_actions = root.xpath(
+            "//button[@name='action_check_stock' "
+            "or @name='action_auto_split' "
+            "or @name='action_open_purchase_wizard']"
+        )
+        self.assertTrue(
+            all(
+                button.get("invisible")
+                == "state not in ('draft', 'in_progress')"
+                for button in processing_actions
+            )
+        )
+
+        header_stats = root.xpath(
+            "//sheet/group/group[@string='Статистика строк']"
+            "/field[@name='line_count' "
+            "or @name='line_matched_count' "
+            "or @name='line_problem_count' "
+            "or @name='line_to_issue_count' "
+            "or @name='line_to_buy_count' "
+            "or @name='line_fully_supplied_count' "
+            "or @name='matching_state']"
+        )
+        self.assertEqual(len(header_stats), 7)
+
     def test_purchase_wizard_hides_stock_guard_override_initially(self):
         view = self.env.ref(
             "object_request.view_object_request_purchase_wizard_form"
