@@ -144,6 +144,23 @@ class TestObr025MultiwarehouseCheck(TransactionCase):
             result["res_model"], "object.request.stock.check.wizard"
         )
 
+    def test_wizard_shows_only_selected_issue_warehouses(self):
+        """Подпись «Проверено по складам» — только склады выдачи требования."""
+        self.request.write(
+            {"issue_warehouse_ids": [(6, 0, [self.warehouse2.id])]}
+        )
+        self._put_stock(self.warehouse2, 4.0)
+        self.request.action_check_stock()
+        wizard = self.env["object.request.stock.check.wizard"].create(
+            {"request_id": self.request.id}
+        )
+        self.assertEqual(wizard.warehouse_names, self.warehouse2.name)
+        other_names = (
+            self.default_issue_warehouses - self.warehouse2
+        ).mapped("name")
+        for name in other_names:
+            self.assertNotIn(name, wizard.warehouse_names)
+
     def test_wizard_action_confirm_returns_close(self):
         wizard = self.env["object.request.stock.check.wizard"].create(
             {

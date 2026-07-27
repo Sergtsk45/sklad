@@ -1769,10 +1769,14 @@ class ObjectRequestLine(models.Model):
 
     def _get_stock_breakdown_label(self):
         self.ensure_one()
+        allowed_ids = set(self.request_id._get_issue_warehouses().ids)
         parts = [
             f"{stock.warehouse_id.display_name}: {stock.qty_on_hand:g}"
             for stock in self.stock_ids.filtered(
-                lambda item: item.qty_on_hand > 0
+                lambda item: (
+                    item.qty_on_hand > 0
+                    and item.warehouse_id.id in allowed_ids
+                )
             )
         ]
         return ", ".join(parts)
