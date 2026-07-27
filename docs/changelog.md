@@ -9,6 +9,12 @@
 - UI-блок «Сводка по количествам» больше не показывается на форме требования;
   поля модели сохранены для совместимости.
 
+### Проверено
+- Prod upgrade `object_request` до `19.0.1.10.2` (ветка
+  `feature/import-matching-v2`, HEAD `8e1dfd0`); backup:
+  `/opt/project_odoo/backups/ui-merge-tabs-20260727-080108/`.
+- `https://skladtsk.duckdns.org/web/login` — HTTP 200 после restart.
+
 ---
 
 ## [2026-07-27] — fix(object_request): подпись складов в проверке наличия
