@@ -300,7 +300,7 @@
                     </div>
 
                     <!-- ШАПКА ДОКУМЕНТА -->
-                    <group>
+                    <group col="3">
                         <group string="Основные данные">
                             <field
                                 name="project_id"

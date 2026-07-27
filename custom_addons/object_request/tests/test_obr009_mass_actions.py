@@ -580,6 +580,13 @@ class TestObr009MassActions(TransactionCase):
             "or @name='matching_state']"
         )
         self.assertEqual(len(header_stats), 7)
+        header_group = root.xpath(
+            "//sheet/group[group[@string='Основные данные'] "
+            "and group[@string='Ответственные'] "
+            "and group[@string='Статистика строк']]"
+        )
+        self.assertEqual(len(header_group), 1)
+        self.assertEqual(header_group[0].get("col"), "3")
 
     def test_purchase_wizard_hides_stock_guard_override_initially(self):
         view = self.env.ref(
