@@ -90,6 +90,29 @@ class TestCustomProductSearch(TransactionCase):
         results = self.env['product.product'].ai_search_products('кран ду50')
         self.assertIn(self.product.id, [item['id'] for item in results])
 
+    def test_ai_search_products_by_supplier_article(self):
+        vendor = self.env['res.partner'].create({
+            'name': 'Vendor Article Search',
+            'supplier_rank': 1,
+        })
+        product = self.env['product.product'].create({
+            'name': 'Каноническое имя не из прайса',
+            'default_code': 'INT-ART-1',
+            'type': 'consu',
+        })
+        self.env['product.supplierinfo'].create({
+            'partner_id': vendor.id,
+            'product_tmpl_id': product.product_tmpl_id.id,
+            'product_code': '00-00036296',
+            'min_qty': 1,
+            'price': 100.0,
+        })
+
+        results = self.env['product.product'].ai_search_products(
+            '00-00036296',
+        )
+        self.assertIn(product.id, [item['id'] for item in results])
+
     def test_product_search_technical_designations(self):
         bushing = self.env['product.product'].create({
             'name': 'Бобышка М20×1,5 L=40',

@@ -90,6 +90,74 @@ class TestInvoiceContextHelper(TransactionCase):
         self.assertEqual(missing['status'], 'not_found')
         self.assertTrue(missing['needs_create_product_draft'])
 
+    def test_fetch_context_matches_product_by_supplier_article(self):
+        """Артикул поставщика матчит товар даже при другом каноническом имени."""
+        product = self.env['product.product'].create({
+            'name': 'Труба ПП наружная раструбная Ду110 L500, оранжевая',
+            'default_code': 'PIPE-CANON-110',
+            'purchase_ok': True,
+            'is_storable': True,
+        })
+        self.env['product.supplierinfo'].create({
+            'partner_id': self.supplier.id,
+            'product_tmpl_id': product.product_tmpl_id.id,
+            'product_id': product.id,
+            'product_code': '141551',
+            'product_name': (
+                'Труба ПП наружная с раструбом Ду- 110 L- 500 '
+                '*3,2мм (20шт) ОРАНЖ. FLEXTRON'
+            ),
+            'price': 241.81,
+            'min_qty': 1,
+        })
+        invoice = dict(_MOCK_INVOICE)
+        invoice['items'] = [{
+            'line_no': 1,
+            'name': (
+                'Труба ПП наружная с раструбом Ду- 110 L- 500 '
+                '*3,2мм (20шт) ОРАНЖ. FLEXTRON / СКВ'
+            ),
+            'unit': 'шт',
+            'qty': 20.0,
+            'price': 241.81,
+            'amount_w_vat': 4836.2,
+            'article': '141551',
+        }]
+        token = self.store.put(self.env.uid, invoice)
+
+        context = self.helper.fetch_context(self.env.uid, token)
+        matched = context['items'][0]['product']
+
+        self.assertEqual(matched['status'], 'matched')
+        self.assertEqual(matched['product_id'], product.id)
+        self.assertEqual(matched['match_by'], 'article')
+        self.assertFalse(matched['needs_create_product_draft'])
+
+    def test_fetch_context_matches_product_by_default_code_article(self):
+        product = self.env['product.product'].create({
+            'name': 'Заглушка ПП канон helper',
+            'default_code': '00-00036289',
+            'purchase_ok': True,
+        })
+        invoice = dict(_MOCK_INVOICE)
+        invoice['items'] = [{
+            'line_no': 1,
+            'name': 'Заглушка ПП наружная Ду-110 (30 шт) ОРАНЖ совсем другое имя',
+            'unit': 'шт',
+            'qty': 20.0,
+            'price': 50.48,
+            'amount_w_vat': 1009.6,
+            'article': '00-00036289',
+        }]
+        token = self.store.put(self.env.uid, invoice)
+
+        context = self.helper.fetch_context(self.env.uid, token)
+        matched = context['items'][0]['product']
+
+        self.assertEqual(matched['status'], 'matched')
+        self.assertEqual(matched['product_id'], product.id)
+        self.assertEqual(matched['match_by'], 'article')
+
     def test_fetch_context_marks_partner_draft_needed(self):
         invoice = dict(_MOCK_INVOICE)
         invoice['supplier'] = {

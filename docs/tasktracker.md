@@ -1,3 +1,44 @@
+## Задача: ai_assistant — матчинг позиций счёта по артикулу поставщика
+- **Статус**: Завершена
+- **Описание**: После загрузки счёта ассистент помечал существующие товары
+  как «создать», потому что `InvoiceContextHelper` искал только по названию
+  из PDF и игнорировал `article` / `product.supplierinfo.product_code`.
+  Пример: счёт УТБФ0006395 — 6 из 8 позиций уже были в базе.
+- **Шаги выполнения**:
+ - [x] Диагностика: `_match_item` без артикула; `ai_search_products` без
+   `seller_ids.product_code`.
+ - [x] Match по article → supplierinfo → default_code → name.
+ - [x] Расширить AI-поиск товаров по vendor code.
+ - [x] Тесты `TestInvoiceContextHelper` + `TestCustomProductSearch` (18 ok).
+ - [x] Задеплоить `ai_assistant` + `custom_product_search` на VPS и
+   `-u` модули.
+- **Зависимости**: `product.supplierinfo`, `custom_product_search`.
+
+## Задача: docs — инструкция пополнения Ос.ск / Расх
+- **Статус**: Завершена
+- **Описание**: UI-инструкция со скриншотами: пополнение базовых складов
+  (Ос.ск, Расходники) обычной закупкой с приёмкой на базу; отличие от цикла
+  OR → склад объекта.
+- **Шаги выполнения**:
+ - [x] Снять скриншоты prod (`P00040`, `P00048`, `Ос.ск/IN/00015`).
+ - [x] Написать `docs/instruction-base-warehouse-replenish.md`.
+ - [x] Сохранить изображения в `docs/screenshots/base-warehouse-replenish/`.
+ - [x] Обновить changelog.
+- **Зависимости**: стандартный Purchase/Stock; не модуль `object_request`.
+
+## Задача: docs — мини-инструкция закупки (два поставщика / частичная)
+- **Статус**: Завершена
+- **Описание**: Краткая UI-инструкция со скриншотами по двум сценариям
+  снабженца на вкладке «Строки» требования: (A) разные поставщики → несколько
+  PO; (B) купить только часть строк, остальное ждать склад.
+- **Шаги выполнения**:
+ - [x] Снять скриншоты с prod (`OR/2026/08/0032`, `P00077`).
+ - [x] Написать `docs/instruction-purchase-split-vendors.md`.
+ - [x] Сохранить изображения в `docs/screenshots/purchase-split-vendors/`.
+ - [x] Обновить changelog.
+- **Зависимости**: модуль `object_request`, мастер
+  `object.request.purchase.wizard`.
+
 ## Задача: object_request — объединить вкладки «Строки» и «Обработка»
 - **Статус**: Завершена и задеплоена на prod 2026-07-27
 - **Детальный план**: `docs/plans/2026-07-27-object-request-merge-lines-processing-tab.md`

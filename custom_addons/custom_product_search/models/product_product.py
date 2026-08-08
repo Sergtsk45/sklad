@@ -119,6 +119,12 @@ class ProductProduct(models.Model):
         search_domains = [
             Domain('default_code', operator, query),
             Domain('barcode', '=', query),
+            # Артикул поставщика (product.supplierinfo), точное совпадение
+            Domain(
+                'product_tmpl_id.seller_ids.product_code',
+                '=ilike',
+                query,
+            ),
             Domain('name', operator, query),
             Domain('x_search_name', 'ilike', normalized),
             Domain('product_tmpl_id.x_search_name', 'ilike', normalized),

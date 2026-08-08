@@ -40,6 +40,12 @@ class InvoiceContextHelper:
 
     def _build_context(self, invoice_data):
         supplier = invoice_data.get('supplier') or {}
+        partner = self._match_supplier(supplier)
+        partner_id = (
+            partner.get('partner_id')
+            if partner.get('status') == 'matched'
+            else None
+        )
         return {
             'invoice_number': invoice_data.get('invoice_number'),
             'invoice_date': invoice_data.get('invoice_date'),
@@ -49,9 +55,9 @@ class InvoiceContextHelper:
                 'kpp': supplier.get('kpp'),
                 'address': supplier.get('address'),
             },
-            'partner': self._match_supplier(supplier),
+            'partner': partner,
             'items': [
-                self._match_item(item)
+                self._match_item(item, partner_id=partner_id)
                 for item in (invoice_data.get('items') or [])
             ],
             'totals': invoice_data.get('totals') or {},
@@ -130,8 +136,9 @@ class InvoiceContextHelper:
             }
         return None
 
-    def _match_item(self, item):
+    def _match_item(self, item, partner_id=None):
         name = (item.get('name') or '').strip()
+        article = (item.get('article') or '').strip()
         line = {
             'line_no': item.get('line_no'),
             'name': name,
@@ -139,8 +146,32 @@ class InvoiceContextHelper:
             'qty': item.get('qty'),
             'price': item.get('price'),
             'amount_w_vat': item.get('amount_w_vat'),
-            'article': item.get('article') or '',
+            'article': article,
         }
+        if len(name) < 2 and not article:
+            line['product'] = {
+                'status': 'not_found',
+                'candidates': [],
+                'needs_create_product_draft': True,
+            }
+            return line
+
+        by_article = self._match_product_by_article(
+            article,
+            partner_id=partner_id,
+        )
+        if by_article:
+            candidate = self._format_product_record(by_article)
+            line['product'] = {
+                'status': 'matched',
+                'product_id': by_article.id,
+                'display_name': by_article.display_name,
+                'match_by': 'article',
+                'candidates': [candidate],
+                'needs_create_product_draft': False,
+            }
+            return line
+
         if len(name) < 2:
             line['product'] = {
                 'status': 'not_found',
@@ -164,6 +195,7 @@ class InvoiceContextHelper:
                 'status': 'matched',
                 'product_id': product['id'],
                 'display_name': product.get('display_name'),
+                'match_by': 'name',
                 'candidates': candidates,
                 'needs_create_product_draft': False,
             }
@@ -180,6 +212,55 @@ class InvoiceContextHelper:
                 'needs_create_product_draft': True,
             }
         return line
+
+    def _match_product_by_article(self, article, partner_id=None):
+        """Найти product.product по артикулу поставщика или default_code."""
+        code = (article or '').strip()
+        if not code:
+            return self.env['product.product'].browse()
+
+        SupplierInfo = self.env['product.supplierinfo']
+        domains = []
+        if partner_id:
+            domains.append([
+                ('product_code', '=ilike', code),
+                ('partner_id', '=', partner_id),
+            ])
+        domains.append([('product_code', '=ilike', code)])
+
+        for domain in domains:
+            infos = SupplierInfo.search(domain, limit=5)
+            if not infos:
+                continue
+            products = self.env['product.product']
+            for info in infos:
+                product = info.product_id
+                if not product and info.product_tmpl_id:
+                    product = info.product_tmpl_id.product_variant_id
+                if product:
+                    products |= product
+            products = products.filtered('active')
+            if len(products) == 1:
+                return products
+            if len(products) > 1:
+                # Несколько разных карточек с одним кодом — не матчим.
+                return self.env['product.product'].browse()
+            # infos найдены, но без product — пробуем следующий domain
+
+        product = self.env['product.product'].search(
+            [('default_code', '=ilike', code), ('active', '=', True)],
+            limit=1,
+        )
+        return product
+
+    def _format_product_record(self, product):
+        return {
+            'product_id': product.id,
+            'display_name': product.display_name,
+            'default_code': product.default_code or False,
+            'uom_id': product.uom_id.id if product.uom_id else False,
+            'list_price': product.list_price,
+        }
 
     def _format_product_candidate(self, product):
         return {

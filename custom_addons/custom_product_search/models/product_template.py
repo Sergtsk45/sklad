@@ -77,6 +77,7 @@ class ProductTemplate(models.Model):
         domains = [
             Domain('name', 'ilike', query),
             Domain('x_search_name', 'ilike', normalized),
+            Domain('seller_ids.product_code', '=ilike', query),
         ]
         if 'default_code' in self._fields:
             domains.append(Domain('default_code', 'ilike', query))

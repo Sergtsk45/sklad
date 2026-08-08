@@ -11,7 +11,10 @@ from .validators import LEGACY_OBJECT_WAREHOUSE_ALIASES
 
 class SearchProductsTool(AbstractReadTool):
     name = 'search_products'
-    description = 'Поиск номенклатуры по нормализованному названию.'
+    description = (
+        'Поиск номенклатуры по названию, внутреннему артикулу '
+        'и артикулу поставщика (product.supplierinfo).'
+    )
     parameters_schema = {
         'type': 'object',
         'properties': {
