@@ -444,7 +444,7 @@ def _parse_table(rows: list[list]) -> list[dict]:
     header_row_idx = None
     col_map: dict[str, int] = {}
 
-    for i, row in enumerate(rows[:5]):
+    for i, row in enumerate(rows[:10]):
         if row is None:
             continue
         matched = _map_columns(row)
@@ -453,7 +453,7 @@ def _parse_table(rows: list[list]) -> list[dict]:
             col_map = matched
             break
 
-    if header_row_idx is None:
+    if header_row_idx is None or len(col_map) < _MIN_HEADER_COLS:
         return []
 
     items = []
@@ -487,8 +487,19 @@ def _row_to_item(row: list, col_map: dict[str, int]) -> dict | None:
         v = row[idx]
         return str(v).strip() if v is not None else ""
 
-    name = get("name")
-    unit = get("unit")
+    def get_article() -> str:
+        idx = col_map.get("article")
+        if idx is None or idx >= len(row):
+            return ""
+        v = row[idx]
+        if not v:
+            return ""
+        # Sometimes pdfplumber puts newlines in the same cell
+        # e.g. "141551\nFLEXTRON" -> take just "141551"
+        return str(v).split('\n')[0].strip().split(' ')[0]
+
+    name = get("name").replace('\n', ' ')
+    unit = get("unit").replace('\n', ' ')
     if not name or re.match(r"^итого|^всего|^в том числе", name, re.I):
         return None
     if is_garbage_item(name, unit):
@@ -496,9 +507,9 @@ def _row_to_item(row: list, col_map: dict[str, int]) -> dict | None:
 
     return {
         "line_no":       get("line_no"),
-        "article":       get("article"),
-        "name":          name,
-        "unit":          unit,
+        "article":       get_article(),
+        "name":          name.strip(),
+        "unit":          unit.strip(),
         "qty":           _parse_number(get("qty")),
         "price":         _parse_number(get("price")),
         "amount_wo_vat": _parse_number(get("amount_wo_vat")),
