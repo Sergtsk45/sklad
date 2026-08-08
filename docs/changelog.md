@@ -1,3 +1,27 @@
+## [2026-08-08] — feat(object_request_calendar): встречи после оплаты bill
+
+### Добавлено
+- Новый модуль `object_request_calendar`: при переходе vendor bill в
+  `payment_state = paid` создаёт отдельную встречу для каждого связанного
+  требования на комплектацию.
+- Первый свободный час ищется по календарю снабженца в рабочих слотах
+  09:00–16:00 по часовому поясу компании, с пропуском обеда и выходных и
+  30-дневным горизонтом поиска.
+- Встреча связывается со счётом и требованием, показывает снабженца и прораба
+  участниками и доступна через смарт-кнопку «Встречи» в требовании.
+- Триггер учитывает вычисляемый характер `payment_state`: переход ставится в
+  дедуплицированную precommit-очередь, а статус повторно проверяется перед
+  созданием. Advisory lock и SQL UNIQUE защищают пару bill/requirement от
+  параллельных дублей.
+- Автотесты резолвера, поиска слотов и реальной оплаты через
+  `account.payment.register`.
+
+### Проверено
+- `docker exec odoo19-local python3 -m flake8 /mnt/extra-addons/object_request_calendar`.
+- `docker exec odoo19-local odoo -i object_request_calendar -d odoo19_local
+  --test-enable --test-tags /object_request_calendar --stop-after-init
+  --http-port=8092` — 22 post-tests, 0 failed, 0 errors.
+
 ## [2026-08-08] — fix(ai_assistant): сопоставление позиций счёта по артикулу поставщика
 
 ### Исправлено
