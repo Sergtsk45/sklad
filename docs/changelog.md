@@ -21,6 +21,10 @@
 - `docker exec odoo19-local odoo -i object_request_calendar -d odoo19_local
   --test-enable --test-tags /object_request_calendar --stop-after-init
   --http-port=8092` — 22 post-tests, 0 failed, 0 errors.
+- Prod deploy `d429771`: backup
+  `/opt/project_odoo/backups/object-request-calendar-20260808-113823/`,
+  `-i object_request_calendar`, restart; module `installed` 19.0.1.0.0;
+  `https://skladtsk.duckdns.org/web/login` HTTP 200.
 
 ## [2026-08-08] — fix(ai_assistant): сопоставление позиций счёта по артикулу поставщика
 
