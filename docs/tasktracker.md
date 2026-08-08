@@ -1,5 +1,5 @@
 ## Задача: ai_assistant — матчинг позиций счёта по артикулу поставщика
-- **Статус**: Завершена
+- **Статус**: Завершена и задеплоена на prod 2026-08-08
 - **Описание**: После загрузки счёта ассистент помечал существующие товары
   как «создать», потому что `InvoiceContextHelper` искал только по названию
   из PDF и игнорировал `article` / `product.supplierinfo.product_code`.
@@ -11,7 +11,7 @@
  - [x] Расширить AI-поиск товаров по vendor code.
  - [x] Тесты `TestInvoiceContextHelper` + `TestCustomProductSearch` (18 ok).
  - [x] Задеплоить `ai_assistant` + `custom_product_search` на VPS и
-   `-u` модули.
+   `-u` модули (prod `304b3e8`, 2026-08-08).
 - **Зависимости**: `product.supplierinfo`, `custom_product_search`.
 
 ## Задача: docs — инструкция пополнения Ос.ск / Расх
