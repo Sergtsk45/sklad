@@ -8,6 +8,9 @@
   торговое имя).
 - Если поставщик не указан — обычный поиск по нормализованным названиям.
 - Версия: `19.0.1.10.5`.
+- Prod deploy `9766686`: backup
+  `/opt/project_odoo/backups/or-vendor-product-search-20260810-145507/`,
+  `-u object_request` → `19.0.1.10.5`, restart; health `pass`.
 
 ## [2026-08-10] — fix(object_request): запрет создания товара из закупки
 
