@@ -12,6 +12,9 @@
   в состояние сопоставления, пользователь получает предупреждение.
 - Автоподстановка поставщика учитывает вариант товара и компанию.
 - Добавлены regression-тесты OBR-038; версия `19.0.1.10.6`.
+- Prod deploy `5c84aa9`: backup
+  `/opt/project_odoo/backups/or-vendor-search-hardening-20260810-222014/`,
+  `-u object_request` → `19.0.1.10.6`, restart; health `pass`.
 
 ## [2026-08-10] — feat(object_request): поиск товара по прайсу поставщика в OR
 
