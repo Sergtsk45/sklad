@@ -5,6 +5,10 @@
   (`confirm_stock_guard_override` / «Оставить закупку») предупреждение
   `stock_match_warning` на строках требования сбрасывается; решение
   по-прежнему фиксируется в chatter. Версия модуля: `19.0.1.10.3`.
+- Prod deploy `86145c4`: backup
+  `/opt/project_odoo/backups/stock-match-clear-20260810-112717/`,
+  `-u object_request` → `19.0.1.10.3`, restart; health `pass`.
+  На OR/2026/08/0032 сняты 6 устаревших `stock_match_warning`.
 
 ## [2026-08-10] — TD-010: tooltips кнопок комплектации объектов
 
