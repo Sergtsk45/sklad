@@ -7,6 +7,9 @@
 - `product.product` / `product.template`: `name_create` и `create` с этим
   флагом поднимают `UserError` — карточки только через нормализованный
   каталог. Версия: `19.0.1.10.4`.
+- Prod deploy `ec4e948`: backup
+  `/opt/project_odoo/backups/purchase-create-guard-20260810-131418/`,
+  `-u object_request` → `19.0.1.10.4`, restart; health `pass`.
 
 ## [2026-08-10] — Нормализация гофры ПВХ Ду16/Ду20 в метрах
 
