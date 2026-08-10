@@ -92,6 +92,7 @@
                     string="Обозначение"
                     optional="show"
                 />
+                <field name="company_id" invisible="1"/>
                 <field name="preferred_vendor_id" string="Поставщик" optional="show"/>
                 <field
                     name="product_id"
@@ -99,8 +100,8 @@
                     context="{
                         'display_default_code': True,
                         'object_request_preferred_vendor_id': preferred_vendor_id,
+                        'object_request_company_id': company_id,
                     }"
-                    domain="preferred_vendor_id and [['seller_ids.partner_id', '=', preferred_vendor_id]] or []"
                 />
                 <field name="uom_id" string="Ед. изм." optional="show"/>
                 <field name="capture_id" string="Захватка" optional="show"/>

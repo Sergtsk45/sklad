@@ -119,16 +119,22 @@ class ProductProduct(models.Model):
         search_domains = [
             Domain('default_code', operator, query),
             Domain('barcode', '=', query),
-            # Артикул поставщика (product.supplierinfo), точное совпадение
-            Domain(
-                'product_tmpl_id.seller_ids.product_code',
-                '=ilike',
-                query,
-            ),
             Domain('name', operator, query),
             Domain('x_search_name', 'ilike', normalized),
             Domain('product_tmpl_id.x_search_name', 'ilike', normalized),
         ]
+        skip_supplier_search = self.env.context.get(
+            'object_request_skip_global_supplier_search'
+        )
+        if not skip_supplier_search:
+            # Артикул поставщика (product.supplierinfo), точное совпадение
+            search_domains.append(
+                Domain(
+                    'product_tmpl_id.seller_ids.product_code',
+                    '=ilike',
+                    query,
+                )
+            )
 
         token_domain = self._get_normalized_token_search_domain(normalized)
         if not token_domain.is_false():

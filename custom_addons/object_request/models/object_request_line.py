@@ -439,8 +439,10 @@ class ObjectRequestLine(models.Model):
         if not self.product_id:
             return
         self.uom_id = self.product_id.uom_id
-        if not self.preferred_vendor_id and self.product_id.seller_ids:
-            self.preferred_vendor_id = self.product_id.seller_ids[0].partner_id
+        company = self.company_id or self.env.company
+        sellers = self.product_id.with_company(company)._prepare_sellers()
+        if not self.preferred_vendor_id and sellers:
+            self.preferred_vendor_id = sellers[0].partner_id
         if self.matching_required:
             self.matching_required = False
         self.matching_source = "manual"
@@ -459,8 +461,51 @@ class ObjectRequestLine(models.Model):
 
     @api.onchange("preferred_vendor_id")
     def _onchange_preferred_vendor_id(self):
-        if self.preferred_vendor_id and self.manual_vendor_required:
-            self.manual_vendor_required = False
+        cleared_lines = self.browse()
+        for line in self:
+            if line.preferred_vendor_id and line.manual_vendor_required:
+                line.manual_vendor_required = False
+            if (
+                line.preferred_vendor_id
+                and line.product_id
+                and not line._product_available_from_preferred_vendor()
+            ):
+                line.product_id = False
+                line.uom_id = False
+                line.matching_required = True
+                line.matching_state = "requires_mapping"
+                line.matching_source = "unknown"
+                cleared_lines |= line
+        if cleared_lines:
+            return {
+                "warning": {
+                    "title": "Товар очищен",
+                    "message": (
+                        "Выбранный товар отсутствует в прайсе нового "
+                        "поставщика. Выберите товар заново."
+                    ),
+                }
+            }
+
+    def _product_available_from_preferred_vendor(self):
+        """Check that the selected variant is covered by the vendor price."""
+        self.ensure_one()
+        if not self.product_id or not self.preferred_vendor_id:
+            return True
+        company = self.company_id or self.env.company
+        return bool(
+            self.env["product.supplierinfo"].search_count(
+                [
+                    ("partner_id", "=", self.preferred_vendor_id.id),
+                    ("company_id", "in", [False, company.id]),
+                    ("product_tmpl_id", "=", self.product_tmpl_id.id),
+                    "|",
+                    ("product_id", "=", False),
+                    ("product_id", "=", self.product_id.id),
+                ],
+                limit=1,
+            )
+        )
 
     def _check_supply_manager_matching_action(self):
         if not self.env.user.has_group("object_request.group_supply_manager"):

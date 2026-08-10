@@ -3,11 +3,13 @@
 OBR-038: поиск товара в OR с учётом preferred_vendor_id.
 """
 
+from odoo import Command, fields
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
 from odoo.addons.object_request.models.product_vendor_search import (
     CTX_PREFERRED_VENDOR,
+    CTX_REQUEST_COMPANY,
 )
 
 
@@ -61,6 +63,60 @@ class TestObr038VendorProductSearch(TransactionCase):
             }
         )
 
+    def _create_variant_template(self, suffix):
+        attribute = self.env["product.attribute"].create(
+            {"name": f"Цвет OR038 {suffix}"}
+        )
+        values = self.env["product.attribute.value"].create(
+            [
+                {
+                    "name": f"Красный {suffix}",
+                    "attribute_id": attribute.id,
+                },
+                {
+                    "name": f"Синий {suffix}",
+                    "attribute_id": attribute.id,
+                },
+            ]
+        )
+        template = self.env["product.template"].create(
+            {
+                "name": f"Краска огнестойкая OR038 {suffix}",
+                "type": "consu",
+                "attribute_line_ids": [
+                    Command.create(
+                        {
+                            "attribute_id": attribute.id,
+                            "value_ids": [Command.set(values.ids)],
+                        }
+                    )
+                ],
+            }
+        )
+        self.assertEqual(len(template.product_variant_ids), 2)
+        return template, template.product_variant_ids.sorted("id")
+
+    def _create_request_line(self, product, vendor):
+        project = self.env["object.request.project"].create(
+            {"name": f"Проект onchange OR038 {product.id}"}
+        )
+        request = self.env["object.request"].create(
+            {
+                "project_id": project.id,
+                "foreman_user_id": self.env.user.id,
+                "need_date": fields.Date.today(),
+            }
+        )
+        vals = {
+            "request_id": request.id,
+            "name_raw": "Материал onchange OR038",
+            "qty_requested": 1.0,
+            "product_id": product.id,
+        }
+        if vendor:
+            vals["preferred_vendor_id"] = vendor.id
+        return self.env["object.request.line"].create(vals)
+
     def test_without_vendor_searches_normalized_name(self):
         ids = [
             pid
@@ -102,3 +158,184 @@ class TestObr038VendorProductSearch(TransactionCase):
             )
         ]
         self.assertIn(self.product_a.id, ids)
+
+    def test_supplier_code_from_another_vendor_does_not_leak(self):
+        self.env["product.supplierinfo"].create(
+            {
+                "product_tmpl_id": self.product_a.product_tmpl_id.id,
+                "partner_id": self.vendor_b.id,
+                "product_code": "ONLY-VENDOR-B-OR038",
+                "price": 900.0,
+            }
+        )
+        Product = self.env["product.product"].with_context(
+            **{CTX_PREFERRED_VENDOR: self.vendor_a.id}
+        )
+        ids = [
+            product_id
+            for product_id, _label in Product.name_search(
+                "ONLY-VENDOR-B-OR038", limit=20
+            )
+        ]
+        self.assertNotIn(self.product_a.id, ids)
+
+    def test_zero_limit_keeps_odoo_unlimited_semantics(self):
+        Product = self.env["product.product"].with_context(
+            **{CTX_PREFERRED_VENDOR: self.vendor_a.id}
+        )
+        ids = [
+            product_id
+            for product_id, _label in Product.name_search("пена", limit=0)
+        ]
+        self.assertIn(self.product_a.id, ids)
+        self.assertNotIn(self.product_b.id, ids)
+
+    def test_variant_price_returns_only_its_variant(self):
+        template, variants = self._create_variant_template("specific")
+        vendor = self.env["res.partner"].create(
+            {"name": "Variant Vendor OR038", "supplier_rank": 1}
+        )
+        self.env["product.supplierinfo"].create(
+            {
+                "product_tmpl_id": template.id,
+                "product_id": variants[0].id,
+                "partner_id": vendor.id,
+                "product_name": "Торговая краска VARIANT-OR038",
+                "price": 10.0,
+            }
+        )
+        Product = self.env["product.product"].with_context(
+            **{CTX_PREFERRED_VENDOR: vendor.id}
+        )
+
+        trade_ids = [
+            product_id
+            for product_id, _label in Product.name_search(
+                "VARIANT-OR038", limit=20
+            )
+        ]
+        normal_ids = [
+            product_id
+            for product_id, _label in Product.name_search(
+                "Краска огнестойкая", limit=20
+            )
+        ]
+
+        self.assertEqual(trade_ids, variants[0].ids)
+        self.assertEqual(normal_ids, variants[0].ids)
+
+    def test_template_price_returns_all_variants(self):
+        template, variants = self._create_variant_template("global")
+        vendor = self.env["res.partner"].create(
+            {"name": "Global Vendor OR038", "supplier_rank": 1}
+        )
+        self.env["product.supplierinfo"].create(
+            {
+                "product_tmpl_id": template.id,
+                "partner_id": vendor.id,
+                "product_name": "Торговая краска GLOBAL-OR038",
+                "price": 10.0,
+            }
+        )
+        Product = self.env["product.product"].with_context(
+            **{CTX_PREFERRED_VENDOR: vendor.id}
+        )
+        ids = {
+            product_id
+            for product_id, _label in Product.name_search(
+                "GLOBAL-OR038", limit=20
+            )
+        }
+        self.assertEqual(ids, set(variants.ids))
+
+    def test_supplierinfo_from_other_company_is_ignored(self):
+        other_company = self.env["res.company"].create(
+            {"name": "Other Company OR038"}
+        )
+        product = self.env["product.product"].create(
+            {"name": "Изоляция межфирменная OR038", "type": "consu"}
+        )
+        self.env["product.supplierinfo"].sudo().create(
+            {
+                "product_tmpl_id": product.product_tmpl_id.id,
+                "partner_id": self.vendor_a.id,
+                "company_id": other_company.id,
+                "product_name": "Чужая компания COMPANY-OR038",
+                "price": 10.0,
+            }
+        )
+        Product = self.env["product.product"].with_context(
+            allowed_company_ids=[self.env.company.id, other_company.id],
+            **{
+                CTX_PREFERRED_VENDOR: self.vendor_a.id,
+                CTX_REQUEST_COMPANY: self.env.company.id,
+            },
+        )
+        ids = [
+            product_id
+            for product_id, _label in Product.name_search(
+                "COMPANY-OR038", limit=20
+            )
+        ]
+        self.assertNotIn(product.id, ids)
+
+    def test_vendor_onchange_clears_incompatible_product(self):
+        line = self._create_request_line(self.product_a, self.vendor_b)
+        line.uom_id = self.product_a.uom_id
+        line.matching_required = False
+        line.matching_state = "matched"
+        line.matching_source = "manual"
+        result = line._onchange_preferred_vendor_id()
+        self.assertFalse(line.product_id)
+        self.assertFalse(line.uom_id)
+        self.assertTrue(line.matching_required)
+        self.assertEqual(line.matching_state, "requires_mapping")
+        self.assertEqual(line.matching_source, "unknown")
+        self.assertEqual(result["warning"]["title"], "Товар очищен")
+        self.assertIn("отсутствует в прайсе", result["warning"]["message"])
+
+    def test_vendor_onchange_keeps_compatible_product(self):
+        line = self._create_request_line(self.product_a, self.vendor_a)
+        line._onchange_preferred_vendor_id()
+        self.assertEqual(line.product_id, self.product_a)
+
+    def test_vendor_onchange_respects_variant_specific_price(self):
+        template, variants = self._create_variant_template("onchange")
+        vendor = self.env["res.partner"].create(
+            {"name": "Onchange Vendor OR038", "supplier_rank": 1}
+        )
+        self.env["product.supplierinfo"].create(
+            {
+                "product_tmpl_id": template.id,
+                "product_id": variants[0].id,
+                "partner_id": vendor.id,
+                "price": 10.0,
+            }
+        )
+        matching_line = self._create_request_line(variants[0], vendor)
+        other_line = self._create_request_line(variants[1], vendor)
+
+        matching_line._onchange_preferred_vendor_id()
+        other_line._onchange_preferred_vendor_id()
+
+        self.assertEqual(matching_line.product_id, variants[0])
+        self.assertFalse(other_line.product_id)
+
+    def test_product_onchange_does_not_suggest_other_variant_vendor(self):
+        template, variants = self._create_variant_template("suggest")
+        vendor = self.env["res.partner"].create(
+            {"name": "Suggest Vendor OR038", "supplier_rank": 1}
+        )
+        self.env["product.supplierinfo"].create(
+            {
+                "product_tmpl_id": template.id,
+                "product_id": variants[0].id,
+                "partner_id": vendor.id,
+                "price": 10.0,
+            }
+        )
+        line = self._create_request_line(variants[1], False)
+
+        line._onchange_product_id()
+
+        self.assertFalse(line.preferred_vendor_id)
