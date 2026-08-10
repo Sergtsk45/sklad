@@ -489,11 +489,18 @@
                                         string="Обозначение"
                                         optional="show"
                                     />
+                                    <!-- Поставщик до Товара: при выборе сужает поиск номенклатуры -->
+                                    <field name="supplier_raw" string="Поставщик (файл)" optional="show"/>
+                                    <field name="preferred_vendor_id" string="Поставщик" optional="show"/>
                                     <field
                                         name="product_id"
                                         string="Товар"
                                         optional="show"
-                                        context="{'display_default_code': True}"
+                                        context="{
+                                            'display_default_code': True,
+                                            'object_request_preferred_vendor_id': preferred_vendor_id,
+                                        }"
+                                        domain="preferred_vendor_id and [['seller_ids.partner_id', '=', preferred_vendor_id]] or []"
                                     />
                                     <!-- Ед. изм. из файла → выбранная ед. изм. -->
                                     <field name="uom_raw" string="Ед. изм. (файл)" optional="show"/>
@@ -531,9 +538,6 @@
                                         readonly="1"
                                         title="Сумма остатков по всем складам проверки (обновляется кнопкой «Рассчитать наличие»)"
                                     />
-                                    <!-- Оригинальные данные из файла → поле выбора (Поставщик) -->
-                                    <field name="supplier_raw" string="Поставщик (файл)" optional="show"/>
-                                    <field name="preferred_vendor_id" string="Поставщик" optional="show"/>
                                     <field
                                         name="stock_match_candidate_id"
                                         string="Складской кандидат"
