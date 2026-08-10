@@ -16,7 +16,7 @@ alwaysApply: false
 2. **Дубликат закупки** — `search_records` `purchase.order` по `partner_ref` = номер счёта. Если есть — сообщи, не дублируй.
 3. **Поставщик** — по ИНН (`res.partner`, `vat`). Нет → скилл `odoo-supplier-from-invoice`.
 4. **Склад** — пользователь указывает явно; иначе спроси. Найти `stock.warehouse` → взять `in_type_id` как `picking_type_id`.
-5. **Товары** — искать по `default_code` (артикул), затем по `name ilike`. Нет → `product.template` (`purchase_ok: true`, `uom_id: 31` шт.).
+5. **Товары** — искать по `product.supplierinfo.product_code` / `default_code`, затем по типоразмеру (`name ilike`). Есть нормализованная карточка → не дублировать, добавить vendor. Нет → создать по правилу **odoo-product-catalog** (имя без бренда, `purchase_ok: true`, **`is_storable: true`**, UoM шт./м, сразу `supplierinfo`).
 6. **Стоп-флаги OCR** — если парсер вернул `needs_review: true`, `items_empty` или `sum_mismatch`, не создавай PO без отдельного подтверждения пользователя.
 7. **Закупка** — один `purchase.order` на один счёт; строки с `price_unit`, `product_qty`, `discount` (см. скилл).
 8. **Проверка** — обычные счета: `amount_total` заказа = «Итого»; Амурстрой: `Σ price_subtotal` = «на сумму … руб» / `subtotal_wo_vat`.

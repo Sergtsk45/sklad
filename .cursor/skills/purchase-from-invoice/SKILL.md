@@ -79,6 +79,7 @@ create_record(
     "uom_id": 31,                      # шт.; для труб пог. м — uom_id метра
     "purchase_ok": true,
     "sale_ok": false,
+    "is_storable": true,               # складской учёт — обязательно для материалов
     "standard_price": <цена>,
     "list_price": <цена>
   }

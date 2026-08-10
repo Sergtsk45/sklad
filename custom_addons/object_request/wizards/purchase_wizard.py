@@ -144,6 +144,12 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             return self._purchase_guard_warning_action()
         if stock_warnings:
             self._log_stock_guard_override(stock_warnings)
+            # Решение «Оставить закупку» принято — жёлтое предупреждение
+            # на строках больше не актуально (история остаётся в chatter).
+            for item in stock_warnings:
+                item["line"].write(
+                    item["line"]._stock_match_warning_clear_vals()
+                )
         elif self.show_stock_guard_override or self.stock_guard_warning_text:
             self.write(
                 {

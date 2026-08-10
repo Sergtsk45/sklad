@@ -663,6 +663,13 @@ class TestOBR021Purchase(TransactionCase):
         result = wizard.action_create_purchase()
 
         self.assertEqual(result["res_model"], "purchase.order")
+        line.invalidate_recordset()
+        self.assertFalse(
+            line.stock_match_warning,
+            "После «Оставить закупку» предупреждение на строке "
+            "должно сбрасываться",
+        )
+        self.assertFalse(line.stock_match_candidate_id)
         messages = request.message_ids.mapped("body")
         self.assertTrue(
             any(stock_product.display_name in body for body in messages)
