@@ -14,4 +14,5 @@ from . import object_request_line  # noqa: F401
 from . import object_request_line_stock  # noqa: F401
 from . import stock_picking_inherit  # noqa: F401
 from . import purchase_order_ext  # noqa: F401
+from . import product_purchase_create_guard  # noqa: F401
 from . import ir_actions_report  # noqa: F401
