@@ -172,6 +172,8 @@ class CreatePurchaseOrderDraftTool(AbstractWriteTool):
                         },
                         'product_uom': {'type': 'integer'},
                         'price_unit': {'type': 'number'},
+                        'discount': {'type': 'number'},
+                        'supplierinfo_id': {'type': 'integer'},
                         'name': {'type': ['string', 'null']},
                     },
                     'required': [
@@ -188,7 +190,6 @@ class CreatePurchaseOrderDraftTool(AbstractWriteTool):
             'partner_id',
             'picking_type_id',
             'origin',
-            'partner_ref',
             'lines',
         ],
         'additionalProperties': False,
@@ -203,8 +204,9 @@ class CreatePurchaseOrderDraftTool(AbstractWriteTool):
             'partner_id': args['partner_id'],
             'picking_type_id': args['picking_type_id'],
             'origin': args['origin'],
-            'partner_ref': args['partner_ref'],
         }
+        if args.get('partner_ref'):
+            po_vals['partner_ref'] = args['partner_ref']
         if args.get('date_planned'):
             po_vals['date_planned'] = args['date_planned']
 
@@ -221,17 +223,27 @@ class CreatePurchaseOrderDraftTool(AbstractWriteTool):
             warning = validate_uom_is_meter(env, line['product_id'])
             if warning:
                 warnings.append(warning)
-            env['purchase.order.line'].create({
+            po_line = env['purchase.order.line'].create({
                 'order_id': po.id,
                 'product_id': line['product_id'],
                 'product_qty': line['product_qty'],
                 'product_uom_id': line['product_uom'],
                 'price_unit': line['price_unit'],
+                'discount': line.get('discount', 0.0),
                 'name': line.get('name') or self._product_name(
                     env, line['product_id']
                 ),
                 'date_planned': date_planned,
             })
+            supplierinfo_id = line.get('supplierinfo_id')
+            if (
+                supplierinfo_id
+                and po_line.selected_seller_id.id != supplierinfo_id
+            ):
+                raise ValidationError(
+                    'Выбранное предложение поставщика изменилось. '
+                    'Обновите план пополнения.'
+                )
 
         po.message_post(
             body=(
@@ -260,6 +272,8 @@ class CreatePurchaseOrderDraftTool(AbstractWriteTool):
                     item.get('product_qty') or 0,
                     item.get('product_uom') or 0,
                     item.get('price_unit') or 0,
+                    item.get('discount') or 0,
+                    item.get('supplierinfo_id') or 0,
                     item.get('name') or '',
                 ),
             ),

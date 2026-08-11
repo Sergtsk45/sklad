@@ -4,7 +4,7 @@ import { registry } from "@web/core/registry";
 import { needsScreenshot } from "./screenshot_trigger";
 
 const SESSION_KEY = "odoo_ai_assistant_session_v1";
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const MAX_MESSAGES = 50;
 const MAX_BYTES = 100 * 1024; // 100 KB (без скриншотов — они не сохраняются)
 const MAX_SCREENSHOT_BYTES = 500 * 1024; // 500 KB base64
@@ -18,7 +18,13 @@ export const aiChatService = {
                     return {};
                 }
                 const data = JSON.parse(raw);
-                if (!data || !Array.isArray(data.messages)) {
+                const version = Number(data && data.version ? data.version : 1);
+                if (
+                    !data ||
+                    !Array.isArray(data.messages) ||
+                    version < 1 ||
+                    version > SCHEMA_VERSION
+                ) {
                     sessionStorage.removeItem(SESSION_KEY);
                     return {};
                 }
@@ -36,6 +42,8 @@ export const aiChatService = {
                 extractionToken: data.extraction_token || null,
                 awaitingPoWarehouse: data.awaiting_po_warehouse === true,
                 purchaseFlow: data.purchase_flow || null,
+                activeReplenishmentToken:
+                    data.active_replenishment_token || null,
             };
         }
 
@@ -85,6 +93,10 @@ export const aiChatService = {
                         state.purchaseFlow !== undefined
                             ? state.purchaseFlow
                             : previous.purchaseFlow,
+                    active_replenishment_token:
+                        state.activeReplenishmentToken !== undefined
+                            ? state.activeReplenishmentToken
+                            : previous.activeReplenishmentToken,
                 });
 
                 while (trimmed.length > 1 && serialized.length > MAX_BYTES) {
@@ -104,6 +116,10 @@ export const aiChatService = {
                             state.purchaseFlow !== undefined
                                 ? state.purchaseFlow
                                 : previous.purchaseFlow,
+                        active_replenishment_token:
+                            state.activeReplenishmentToken !== undefined
+                                ? state.activeReplenishmentToken
+                                : previous.activeReplenishmentToken,
                     });
                 }
 
@@ -319,7 +335,79 @@ export const aiChatService = {
             if (data.error) {
                 throw new Error(data.error.message || "Backend error");
             }
-            return data.result || {};
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Invoice workflow failed");
+            }
+            return result;
+        }
+
+        async function replenishmentWorkflowAction(
+            replenishmentToken,
+            action,
+            payload = {}
+        ) {
+            const response = await fetch("/ai_assistant/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        message: "",
+                        history: [],
+                        replenishment_token: replenishmentToken,
+                        replenishment_action: action,
+                        replenishment_payload: payload || {},
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Replenishment workflow failed");
+            }
+            return result;
+        }
+
+        async function callPoAction(replenishmentToken, action, poId) {
+            const response = await fetch("/ai_assistant/po_action", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        replenishment_token: replenishmentToken,
+                        action,
+                        po_id: poId,
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Purchase order action failed");
+            }
+            return result;
         }
 
         async function confirmAction(pendingKey, decision) {
@@ -360,6 +448,8 @@ export const aiChatService = {
             maybeCapture,
             confirmAction,
             workflowAction,
+            replenishmentWorkflowAction,
+            callPoAction,
             uploadInvoice,
             needsScreenshot,
         };

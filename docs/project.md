@@ -399,6 +399,32 @@ AI Assistant v3 добавляет ограниченный tool layer для с
 rate limits и audit. AI создаёт только черновики и заметки; Confirm/Validate
 остаются ручными действиями пользователя в Odoo UI.
 
+### Пополнение товара через чат
+
+`ReplenishmentIntentExtractor` выполняет отдельный structured LLM-вызов без
+tools и возвращает только текстовые поля запроса. `ReplenishmentWorkflow`
+детерминированно резолвит товар, количество/UoM, применимое предложение
+`product.supplierinfo` и склад. Для каждого поставщика предложение выбирается
+штатным `_select_seller()`, количество округляется в purchase UoM, а скидки и
+валюты проверяются до итоговой карточки.
+
+Состояние хранится в process-local `ReplenishmentSessionStore` с TTL. До создания
+PO frontend использует active token; после выполнения token остаётся только в
+ResultCard для четырёх whitelist-действий `/ai_assistant/po_action`. Цель действия
+всегда берётся из server-side session, а не из присланного frontend `po_id`.
+
+```mermaid
+flowchart LR
+    Text[Свободная фраза] --> Extract[Structured extractor]
+    Extract --> Product[Товар]
+    Product --> Qty[Количество и UoM]
+    Qty --> Seller[_select_seller по поставщикам]
+    Seller --> Warehouse[Склад]
+    Warehouse --> Plan[Итоговый план]
+    Plan --> Draft[Черновик PO]
+    Draft --> Actions[Send / Confirm / Print / Cancel]
+```
+
 ### Закупка по загруженному счёту
 
 После загрузки PDF-счёта чат ведёт отдельную детерминированную state machine в

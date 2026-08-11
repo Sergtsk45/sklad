@@ -118,6 +118,9 @@ export class ResultCard extends Component {
         nextHint: { type: String, optional: true },
         steps: { type: Array, optional: true },
         details: { type: Array, optional: true },
+        replenishmentToken: { type: String, optional: true },
+        actions: { type: Array, optional: true },
+        onAction: { type: Function, optional: true },
     };
 
     get isSuccess() {
@@ -146,5 +149,21 @@ export class ResultCard extends Component {
             return "Контрагент готов";
         }
         return this.isSuccess ? "Черновик создан" : "Действие не выполнено";
+    }
+
+    onActionClick(action) {
+        if (
+            !action ||
+            action.disabled ||
+            !this.props.replenishmentToken ||
+            !this.props.onAction
+        ) {
+            return;
+        }
+        this.props.onAction(
+            this.props.replenishmentToken,
+            action.action,
+            action.po_id
+        );
     }
 }

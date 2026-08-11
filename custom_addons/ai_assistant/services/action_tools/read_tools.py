@@ -1,12 +1,27 @@
 import re
 from urllib.parse import urlencode
 
+from odoo import fields
 from odoo.exceptions import AccessError
 
 from .base import AbstractReadTool
 from .navigation_catalog import NAVIGATION_CATALOG
 from .registry import default_registry
 from .validators import LEGACY_OBJECT_WAREHOUSE_ALIASES
+
+
+def _uom_root(uom):
+    """Odoo 19 models UoM compatibility as a reference-unit tree."""
+    current = uom
+    seen = set()
+    while current and current.relative_uom_id and current.id not in seen:
+        seen.add(current.id)
+        current = current.relative_uom_id
+    return current
+
+
+def uoms_are_compatible(left, right):
+    return bool(left and right and _uom_root(left) == _uom_root(right))
 
 
 class SearchProductsTool(AbstractReadTool):
@@ -85,6 +100,133 @@ class FindProductByIdTool(AbstractReadTool):
             'seller_ids',
         ])[0]
         return {'product': data}
+
+
+class GetProductSupplierInfoTool(AbstractReadTool):
+    """One standard Odoo-selected offer per vendor, normalized for display."""
+
+    name = 'get_product_supplier_info'
+    description = (
+        'Получить применимые закупочные предложения поставщиков товара '
+        'для количества и единицы измерения.'
+    )
+    required_groups = ['ai_assistant.group_ai_assistant_supply']
+    parameters_schema = {
+        'type': 'object',
+        'properties': {
+            'product_id': {'type': 'integer'},
+            'quantity': {'type': 'number', 'exclusiveMinimum': 0},
+            'uom_id': {'type': 'integer'},
+            'date': {'type': ['string', 'null'], 'format': 'date'},
+        },
+        'required': ['product_id', 'quantity', 'uom_id'],
+        'additionalProperties': False,
+    }
+
+    def execute(self, env, args):
+        if not env.user.has_group(self.required_groups[0]):
+            raise AccessError('Недостаточно прав для просмотра закупочных цен.')
+        product = env['product.product'].browse(args['product_id']).exists()
+        requested_uom = env['uom.uom'].browse(args['uom_id']).exists()
+        if not product:
+            raise ValueError('Товар не найден.')
+        if not requested_uom:
+            raise ValueError('Единица измерения не найдена.')
+        if not uoms_are_compatible(requested_uom, product.uom_id):
+            raise ValueError('Единица измерения несовместима с товаром.')
+        quantity = float(args['quantity'])
+        offer_date = fields.Date.to_date(
+            args.get('date') or fields.Date.context_today(product)
+        )
+        offers = []
+        excluded = []
+        seen_seller_ids = set()
+        # _select_seller is authoritative for dates, min_qty, variant and discount.
+        for partner in product._prepare_sellers().mapped('partner_id'):
+            seller = product._select_seller(
+                partner_id=partner,
+                quantity=quantity,
+                date=offer_date,
+                uom_id=requested_uom,
+            )
+            if not seller:
+                continue
+            if seller.id in seen_seller_ids:
+                continue
+            seen_seller_ids.add(seller.id)
+            if not uoms_are_compatible(seller.product_uom_id, requested_uom):
+                excluded.append(self._excluded(seller, 'incompatible_uom'))
+                continue
+            po_currency = (
+                seller.partner_id.with_company(
+                    env.company
+                ).property_purchase_currency_id
+                or env.company.currency_id
+            )
+            if seller.currency_id != po_currency:
+                excluded.append(self._excluded(seller, 'currency_mismatch'))
+                continue
+            raw_purchase_qty = requested_uom._compute_quantity(
+                quantity, seller.product_uom_id, round=False
+            )
+            # Match _get_filtered_sellers: default UP rounding is the quantity
+            # that must actually be ordered and shown to the user.
+            purchase_qty = requested_uom._compute_quantity(
+                quantity, seller.product_uom_id
+            )
+            discounted_price = seller.price * (1.0 - seller.discount / 100.0)
+            normalized = seller.product_uom_id._compute_price(
+                discounted_price, requested_uom
+            )
+            comparison_price = seller.currency_id._convert(
+                normalized,
+                env.company.currency_id,
+                env.company,
+                offer_date,
+                round=False,
+            )
+            offers.append({
+                'supplierinfo_id': seller.id,
+                'partner_id': seller.partner_id.id,
+                'partner_name': seller.partner_id.display_name,
+                'product_name': seller.product_name or product.display_name,
+                'product_code': seller.product_code or product.default_code or '',
+                'price': seller.price,
+                'discount': seller.discount,
+                'price_discounted': discounted_price,
+                'currency_id': {
+                    'id': seller.currency_id.id,
+                    'name': seller.currency_id.name,
+                    'symbol': seller.currency_id.symbol,
+                },
+                'product_uom_id': seller.product_uom_id.id,
+                'product_uom_name': seller.product_uom_id.display_name,
+                'requested_uom_id': requested_uom.id,
+                'requested_uom_name': requested_uom.display_name,
+                'requested_qty': quantity,
+                'purchase_qty': purchase_qty,
+                'purchase_qty_unrounded': raw_purchase_qty,
+                'rounding_adjusted': purchase_qty != raw_purchase_qty,
+                'normalized_price_discounted': normalized,
+                'normalized_price': normalized,
+                'comparison_price': comparison_price,
+                'comparison_currency': env.company.currency_id.name,
+                'min_qty': seller.min_qty,
+                'delay': seller.delay,
+                'sequence': seller.sequence,
+            })
+        offers.sort(key=lambda item: (
+            item['comparison_price'], item['sequence'], item['supplierinfo_id']
+        ))
+        return {'offers': offers, 'excluded': excluded}
+
+    def _excluded(self, seller, reason):
+        return {
+            'supplierinfo_id': seller.id,
+            'partner_id': seller.partner_id.id,
+            'partner_name': seller.partner_id.display_name,
+            'reason': reason,
+        }
 
 
 class FindPartnerTool(AbstractReadTool):
@@ -635,6 +777,7 @@ class GetNavigationLinkTool(AbstractReadTool):
 
 
 default_registry.register(SearchProductsTool())
+default_registry.register(GetProductSupplierInfoTool())
 default_registry.register(FindProductByIdTool())
 default_registry.register(FindPartnerTool())
 default_registry.register(SearchStockQuantsTool())

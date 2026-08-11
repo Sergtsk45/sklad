@@ -1,6 +1,6 @@
 {
     'name': 'AI Assistant',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.1.0',
     'summary': 'Floating AI chat assistant for Odoo users',
     'description': """
         AI-консультант для Odoo 19.
@@ -41,6 +41,10 @@
             'ai_assistant/static/src/js/ai_chat_boot.js',
         ],
     },
+    # jsonschema is used when available and has an in-module validation
+    # fallback. Do not list it here: the runtime image provides the importable
+    # Debian package without Python distribution metadata, which makes Odoo's
+    # manifest dependency check reject an otherwise valid installation.
     'external_dependencies': {'python': ['pdfplumber']},
     'installable': True,
     'application': False,

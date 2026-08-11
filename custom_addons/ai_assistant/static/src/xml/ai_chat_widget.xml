@@ -102,6 +102,9 @@
                                             nextHint="card.next_hint"
                                             steps="card.steps"
                                             details="card.details"
+                                            replenishmentToken="card.replenishmentToken || card.replenishment_token"
+                                            actions="card.actions"
+                                            onAction.bind="onPoAction"
                                         />
                                     </t>
                                 </t>
@@ -268,6 +271,21 @@
                     <t t-esc="props.nextHint"/>
                 </div>
             </t>
+            <div
+                t-if="isSuccess and props.actions and props.actions.length"
+                class="o_ai_result_actions"
+            >
+                <button
+                    t-foreach="props.actions"
+                    t-as="action"
+                    t-key="action.action"
+                    t-att-class="'o_ai_card_btn ' + (action.action === 'confirm' ? 'o_ai_card_btn_primary' : 'o_ai_card_btn_secondary')"
+                    t-att-disabled="action.disabled"
+                    t-on-click="() => this.onActionClick(action)"
+                >
+                    <t t-esc="action.label"/>
+                </button>
+            </div>
         </div>
     </t>
 </templates>

@@ -24,6 +24,7 @@ export class AiChatWidget extends Component {
 
     setup() {
         this.chatService = useService("ai_chat");
+        this.actionService = useService("action");
         const savedSession = this.chatService.loadSession();
         this.state = useState({
             isOpen: false,
@@ -35,6 +36,8 @@ export class AiChatWidget extends Component {
             extractionToken: savedSession.extractionToken,
             awaitingPoWarehouse: savedSession.awaitingPoWarehouse,
             purchaseFlow: savedSession.purchaseFlow,
+            activeReplenishmentToken:
+                savedSession.activeReplenishmentToken,
             status: "online",
             hasAccess: false,
             hasSupply: false,     // AIA-056: группа снабжение
@@ -120,11 +123,27 @@ export class AiChatWidget extends Component {
         if (!suggestion || this.state.isLoading) {
             return;
         }
-        if (suggestion.action) {
+        if (
+            typeof suggestion.action === "string" &&
+            suggestion.action.startsWith("replenishment_")
+        ) {
+            this._runReplenishmentWorkflowAction(
+                suggestion.action,
+                suggestion.payload || {}
+            );
+            return;
+        }
+        if (
+            typeof suggestion.action === "string" &&
+            suggestion.action.startsWith("invoice_")
+        ) {
             this._runInvoiceWorkflowAction(
                 suggestion.action,
                 suggestion.payload || {}
             );
+            return;
+        }
+        if (suggestion.action) {
             return;
         }
         if (suggestion.label) {
@@ -222,6 +241,7 @@ export class AiChatWidget extends Component {
         this.state.extractionToken = null;
         this.state.awaitingPoWarehouse = false;
         this.state.purchaseFlow = null;
+        this.state.activeReplenishmentToken = null;
         this._saveSessionState();
     }
 
@@ -241,6 +261,51 @@ export class AiChatWidget extends Component {
 
     async onCancelPending(pendingKey) {
         await this._confirmPending(pendingKey, "cancel");
+    }
+
+    async onPoAction(replenishmentToken, action, poId) {
+        if (
+            this.state.isLoading ||
+            !replenishmentToken ||
+            !action
+        ) {
+            return;
+        }
+        this.state.isLoading = true;
+        this.state.isCapturing = false;
+        try {
+            const result = await this.chatService.callPoAction(
+                replenishmentToken,
+                action,
+                poId
+            );
+            this._replaceResultCard(
+                replenishmentToken,
+                poId,
+                result.card,
+                result.po
+            );
+            if (result.action_to_run) {
+                try {
+                    await this.actionService.doAction(result.action_to_run);
+                } catch (_actionError) {
+                    this._addMessage(
+                        "assistant",
+                        "Заказ не изменён, но окно Odoo не удалось открыть. Повторите действие из карточки."
+                    );
+                    return;
+                }
+            }
+            this.state.status = "online";
+        } catch (_err) {
+            this._addMessage(
+                "assistant",
+                "Не удалось выполнить действие с заказом. Возможно, сессия истекла."
+            );
+            this.state.status = "error";
+        } finally {
+            this.state.isLoading = false;
+        }
     }
 
     _addMessage(role, content, extra = {}) {
@@ -350,6 +415,10 @@ export class AiChatWidget extends Component {
         if (this.state.awaitingPoWarehouse) {
             params.awaiting_po_warehouse = true;
         }
+        if (this.state.activeReplenishmentToken) {
+            params.replenishment_token =
+                this.state.activeReplenishmentToken;
+        }
 
         // Добавить скриншот в payload только если захват удался
         if (screenshot) {
@@ -451,6 +520,58 @@ export class AiChatWidget extends Component {
         this.state.messages = this.chatService.saveHistory(messages);
     }
 
+    _replaceResultCard(replenishmentToken, poId, replacementCard, po) {
+        const messages = this.state.messages.map((message) => {
+            if (!Array.isArray(message.cards)) {
+                return message;
+            }
+            const cards = message.cards.map((card) => {
+                const cardToken =
+                    card.replenishmentToken || card.replenishment_token;
+                const cardPoId =
+                    card.record?.id ||
+                    (card.actions || []).find((item) => item.po_id)?.po_id;
+                if (
+                    card.type !== "result" ||
+                    cardToken !== replenishmentToken ||
+                    (poId &&
+                        cardPoId &&
+                        String(cardPoId) !== String(poId))
+                ) {
+                    return card;
+                }
+                if (replacementCard) {
+                    return {
+                        ...card,
+                        ...replacementCard,
+                        record: {
+                            ...(card.record || {}),
+                            ...(replacementCard.record || {}),
+                        },
+                        replenishmentToken:
+                            replacementCard.replenishmentToken ||
+                            replacementCard.replenishment_token ||
+                            cardToken,
+                    };
+                }
+                if (po) {
+                    return {
+                        ...card,
+                        record: {
+                            ...(card.record || {}),
+                            id: po.id || cardPoId,
+                        },
+                        actions: po.actions || card.actions || [],
+                    };
+                }
+                return card;
+            });
+            return { ...message, cards };
+        });
+        this.state.messages = this.chatService.saveHistory(messages);
+        this._saveSessionState();
+    }
+
     _buildHistory() {
         // AIA-023: исключаем скриншоты из истории
         return this.state.messages.slice(-10).map((m) => ({
@@ -473,6 +594,13 @@ export class AiChatWidget extends Component {
         if (meta.purchase_flow !== undefined) {
             this.state.purchaseFlow = meta.purchase_flow;
         }
+        if (meta.replenishment_token) {
+            this.state.activeReplenishmentToken =
+                meta.replenishment_token;
+        }
+        if (meta.replenishment_terminal === true) {
+            this.state.activeReplenishmentToken = null;
+        }
         this._saveSessionState();
     }
 
@@ -481,6 +609,8 @@ export class AiChatWidget extends Component {
             extractionToken: this.state.extractionToken,
             awaitingPoWarehouse: this.state.awaitingPoWarehouse,
             purchaseFlow: this.state.purchaseFlow,
+            activeReplenishmentToken:
+                this.state.activeReplenishmentToken,
         });
     }
 
@@ -508,6 +638,41 @@ export class AiChatWidget extends Component {
             this._addMessage(
                 "assistant",
                 "Не удалось выполнить действие. Попробуйте повторить запрос."
+            );
+            this.state.status = "error";
+        } finally {
+            this.state.isLoading = false;
+        }
+    }
+
+    async _runReplenishmentWorkflowAction(action, payload = {}) {
+        if (
+            this.state.isLoading ||
+            !this.state.activeReplenishmentToken
+        ) {
+            return;
+        }
+        this.state.isLoading = true;
+        this.state.isCapturing = false;
+        try {
+            const result =
+                await this.chatService.replenishmentWorkflowAction(
+                    this.state.activeReplenishmentToken,
+                    action,
+                    payload
+                );
+            this._applyResponseMeta(result);
+            this._addMessage("assistant", result.answer || "", {
+                cards: this._extractCards(result),
+                links: this._extractLinks(result),
+                suggestions: result.suggestions || [],
+                meta: result.meta || {},
+            });
+            this.state.status = "online";
+        } catch (_err) {
+            this._addMessage(
+                "assistant",
+                "Не удалось продолжить сценарий пополнения. Попробуйте повторить запрос."
             );
             this.state.status = "error";
         } finally {

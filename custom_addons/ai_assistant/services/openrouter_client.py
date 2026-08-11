@@ -147,6 +147,122 @@ class OpenRouterClient:
         self._raise_for_http_error(resp, model)
         return self._parse_tools_response(self._json_or_error(resp))
 
+    def send_structured_chat(
+        self, messages, json_schema, max_tokens=500, timeout=None,
+        model_override=None,
+    ):
+        """Send a strict JSON request without exposing action tools."""
+        if not self._api_key:
+            raise ValueError('OpenRouter API key не настроен')
+        model = model_override or self._text_model
+        schema_envelope = json_schema
+        if 'schema' not in schema_envelope:
+            schema_envelope = {
+                'name': 'structured_response',
+                'strict': True,
+                'schema': json_schema,
+            }
+        payload = {
+            'model': model,
+            'messages': messages,
+            'max_tokens': max_tokens,
+            'response_format': {
+                'type': 'json_schema',
+                'json_schema': schema_envelope,
+            },
+        }
+        try:
+            resp = requests.post(
+                self._base_url.rstrip('/') + '/chat/completions',
+                json=payload,
+                headers=self._request_headers(),
+                timeout=timeout if timeout is not None else self._timeout,
+            )
+        except requests.Timeout:
+            raise ConnectionError('OpenRouter: таймаут structured-запроса')
+        self._raise_for_http_error(resp, model)
+        content = (
+            self._parse_response(self._json_or_error(resp)).get('answer') or ''
+        ).strip()
+        if content.startswith('```') and content.endswith('```'):
+            content = content[3:-3].strip()
+            if content.lower().startswith('json'):
+                content = content[4:].lstrip()
+        try:
+            result = json.loads(content)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                'OpenRouter: structured-ответ не является JSON'
+            ) from exc
+        schema = schema_envelope['schema']
+        try:
+            from jsonschema import Draft202012Validator
+        except ImportError:
+            self._validate_structured_subset(result, schema)
+        else:
+            errors = sorted(
+                Draft202012Validator(schema).iter_errors(result),
+                key=lambda error: list(error.path),
+            )
+            if errors:
+                raise ValueError(
+                    'OpenRouter: structured-ответ не соответствует схеме: %s'
+                    % errors[0].message
+                )
+        return result
+
+    def _validate_structured_subset(self, value, schema, path='$'):
+        """Validate the JSON-Schema subset used by extractor contracts."""
+        expected = schema.get('type')
+        types = expected if isinstance(expected, list) else [expected]
+        matches = {
+            'object': lambda item: isinstance(item, dict),
+            'array': lambda item: isinstance(item, list),
+            'string': lambda item: isinstance(item, str),
+            'number': lambda item: isinstance(item, (int, float))
+                                   and not isinstance(item, bool),
+            'integer': lambda item: isinstance(item, int)
+                                    and not isinstance(item, bool),
+            'boolean': lambda item: isinstance(item, bool),
+            'null': lambda item: item is None,
+        }
+        if expected and not any(matches[item](value) for item in types):
+            raise ValueError(
+                'OpenRouter: structured-ответ не соответствует схеме: '
+                '%s имеет неверный тип' % path
+            )
+        if 'enum' in schema and value not in schema['enum']:
+            raise ValueError(
+                'OpenRouter: structured-ответ не соответствует схеме: '
+                '%s имеет недопустимое значение' % path
+            )
+        if isinstance(value, dict):
+            properties = schema.get('properties') or {}
+            missing = [name for name in schema.get('required', [])
+                       if name not in value]
+            extras = set(value) - set(properties)
+            if missing or (schema.get('additionalProperties') is False and extras):
+                raise ValueError(
+                    'OpenRouter: structured-ответ не соответствует схеме: %s'
+                    % path
+                )
+            for name, item in value.items():
+                if name in properties:
+                    self._validate_structured_subset(
+                        item, properties[name], '%s.%s' % (path, name)
+                    )
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if 'minimum' in schema and value < schema['minimum']:
+                raise ValueError(
+                    'OpenRouter: structured-ответ не соответствует схеме: %s'
+                    % path
+                )
+            if 'maximum' in schema and value > schema['maximum']:
+                raise ValueError(
+                    'OpenRouter: structured-ответ не соответствует схеме: %s'
+                    % path
+                )
+
     def _json_or_error(self, resp):
         try:
             return resp.json()

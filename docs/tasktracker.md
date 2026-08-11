@@ -1,5 +1,5 @@
-## Задача: AI-ассистент — пополнение товара через чат (дизайн)
-- **Статус**: Дизайн готов к реализации (round 3), реализация не начата
+## Задача: AI-ассистент — пополнение товара через чат
+- **Статус**: Реализовано локально; полный backend-suite пройден (401 post-tests / 473 tests stats, 0 ошибок)
 - **Детальный трекер**: `docs/tasktrecker-assistent-replenishment.md` (AR-001…AR-027)
 - **Описание**: Исследована текущая архитектура `ai_assistant` (tools, ConfirmationCard/ResultCard,
   `InvoiceWorkflow` как эталон state-machine, denylist executor) и спроектирован сценарий
@@ -21,7 +21,7 @@
   Третье техревью закрыло остаточные блокеры: active token отделён от post-PO token в ResultCard;
   валюта seller сравнивается с будущей валютой PO партнёра; qty/UoM конвертируются стандартными
   `_compute_quantity`/`_compute_price`, несовместимые категории блокируются; seller-tier выбирается
-  после qty через `_get_filtered_sellers`; описан старт workflow, приоритет invoice/replenishment и
+  после qty через `_select_seller` отдельно для каждого поставщика; описан старт workflow, приоритет invoice/replenishment и
   проверки Supply/enabled/actions; RFQ/печать вызывают стандартные методы Odoo; `partner_ref`
   сделан необязательным для replenishment.
 - **Шаги выполнения**:
@@ -30,10 +30,13 @@
   - [x] Ревью подхода к intent-детекции → решение D7 (LLM-extractor + fallback).
   - [x] Второе техревью → закрыты 6 блокеров + доп. противоречия (D8–D10, AR-003, AR-015, AR-017).
   - [x] Третье техревью → закрыты token lifetime, валюта PO, UoM, стартовая маршрутизация и локальные замечания (D11).
-  - [ ] Реализация backend (AR-001…AR-013, AR-017…AR-020).
-  - [ ] Реализация frontend (AR-014…AR-016).
-  - [ ] Тесты и документация (AR-021…AR-027).
+  - [x] Реализация backend (AR-001…AR-013, AR-017…AR-020).
+  - [x] Реализация frontend (AR-014…AR-016).
+  - [x] Документация (AR-027).
+  - [x] Финальный полный прогон backend-тестов: 401 post-tests / 473 tests stats, 0 ошибок.
+  - [ ] Расширенное QUnit/HttpCase-покрытие всех acceptance-пунктов AR-021…AR-026 (не блокирует текущую реализацию).
 - **Зависимости**: `ai_assistant`, `custom_product_search`, `purchase`, `stock`.
+- **Техдолг**: [`TD-011`](technical-debt.md#td-011-production-hardening-ассистента-пополнения-товара) — multi-worker сессии, коррекции шагов, расширенные acceptance/UI-тесты и наблюдаемость.
 
 ## Задача: OR — поиск товара с учётом поставщика (OBR-038)
 - **Статус**: Завершена и задеплоена на prod 2026-08-11 (`5c84aa9`, `19.0.1.10.6`)

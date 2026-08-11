@@ -457,6 +457,18 @@
     gap: 4px;
 }
 
+.o_ai_result_actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+
+    .o_ai_card_btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+    }
+}
+
 // ─── Footer ──────────────────────────────────────────────────────────────────
 
 .o_ai_assistant_footer {

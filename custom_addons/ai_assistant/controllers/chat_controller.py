@@ -3,7 +3,7 @@ import logging
 import time
 
 from odoo import http
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.http import request
 from odoo.addons.ai_assistant.services.openrouter_client import (
     OpenRouterClient,
@@ -47,6 +47,19 @@ from odoo.addons.ai_assistant.services.invoice_parsing import (
 from odoo.addons.ai_assistant.services.invoice_workflow import (
     InvoiceWorkflow,
 )
+from odoo.addons.ai_assistant.services.purchase_order_actions import (
+    PurchaseOrderActionsService,
+)
+from odoo.addons.ai_assistant.services.replenishment_intent import (
+    ReplenishmentIntentExtractor,
+    keyword_replenishment_fallback,
+)
+from odoo.addons.ai_assistant.services.replenishment_session_store import (
+    replenishment_session_store,
+)
+from odoo.addons.ai_assistant.services.replenishment_workflow import (
+    ReplenishmentWorkflow,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -67,6 +80,7 @@ _GROUP_USER = 'ai_assistant.group_ai_assistant_user'
 _GROUP_SUPPLY = 'ai_assistant.group_ai_assistant_supply'
 _pending_actions = PendingActionStore()
 _invoice_store = InvoiceExtractionStore()
+_replenishment_store = replenishment_session_store
 
 _MODULE_FROM_MODEL = {
     'stock': 'stock', 'purchase': 'purchase', 'sale': 'sale',
@@ -287,10 +301,31 @@ class AiAssistantController(http.Controller):
              screenshot=None, extraction_token=None,
              invoice_workflow_action=None, invoice_po_warehouse=None,
              awaiting_po_warehouse=None, invoice_workflow_payload=None,
+             replenishment_token=None, replenishment_action=None,
+             replenishment_payload=None,
              **kwargs):
         try:
             if not request.env.user.has_group(_GROUP_USER):
                 return {'error': 'Доступ запрещён'}
+
+            params = request.env['ir.config_parameter'].sudo()
+            enabled = params.get_param('ai_assistant.enabled', '1')
+            if enabled not in ('1', 'True', 'true', ''):
+                return {
+                    'answer': 'AI-ассистент отключён администратором.',
+                    'suggestions': [],
+                    'meta': {},
+                }
+
+            if replenishment_token or replenishment_action:
+                workflow_result = self._dispatch_replenishment_workflow(
+                    replenishment_token=replenishment_token,
+                    replenishment_action=replenishment_action,
+                    replenishment_payload=replenishment_payload,
+                    message=message,
+                    params=params,
+                )
+                return self._guard_workflow_response(workflow_result)
 
             workflow_result = self._dispatch_invoice_workflow(
                 extraction_token=extraction_token,
@@ -301,27 +336,18 @@ class AiAssistantController(http.Controller):
                 message=message,
             )
             if workflow_result is not None:
-                if 'answer' in workflow_result:
-                    workflow_result['answer'] = (
-                        ResponseGuard().filter_response(
-                            workflow_result['answer']
-                        )
-                    )
-                return workflow_result
+                return self._guard_workflow_response(workflow_result)
 
             guard = ResponseGuard()
             is_valid, error = guard.validate_request(message, history)
             if not is_valid:
                 return {'error': error}
 
-            params = request.env['ir.config_parameter'].sudo()
-            enabled = params.get_param('ai_assistant.enabled', '1')
-            if enabled not in ('1', 'True', 'true', ''):
-                return {
-                    'answer': 'AI-ассистент отключён администратором.',
-                    'suggestions': [],
-                    'meta': {},
-                }
+            workflow_result = self._start_replenishment_workflow(
+                message, params
+            )
+            if workflow_result is not None:
+                return self._guard_workflow_response(workflow_result)
 
             history = self._trim_history(history)
             _logger.info(
@@ -370,6 +396,33 @@ class AiAssistantController(http.Controller):
         except Exception:
             _logger.exception('Error in /ai_assistant/chat')
             return {'error': 'Сервис временно недоступен. Попробуйте позже.'}
+
+    @http.route('/ai_assistant/po_action', type='jsonrpc', auth='user',
+                methods=['POST'])
+    def po_action(self, replenishment_token=None, action=None, po_id=None,
+                  **kwargs):
+        try:
+            if not request.env.user.has_group(_GROUP_SUPPLY):
+                return {'ok': False, 'error': 'Доступ запрещён'}
+            if action not in ('send_rfq', 'confirm', 'print', 'cancel'):
+                return {'ok': False, 'error': 'Некорректное действие'}
+            return PurchaseOrderActionsService(
+                request.env
+            ).dispatch_for_session(
+                _replenishment_store,
+                request.env.uid,
+                replenishment_token,
+                action,
+                advisory_po_id=po_id,
+            )
+        except (AccessError, UserError, ValidationError, ValueError) as err:
+            return {'ok': False, 'error': str(err)}
+        except Exception:
+            _logger.exception('Error in /ai_assistant/po_action')
+            return {
+                'ok': False,
+                'error': 'Сервис временно недоступен. Попробуйте позже.',
+            }
 
     @http.route('/ai_assistant/confirm', type='jsonrpc', auth='user',
                 methods=['POST'])
@@ -1145,6 +1198,117 @@ class AiAssistantController(http.Controller):
                     action, module
                 )
         return module
+
+    def _guard_workflow_response(self, result):
+        result = result or {
+            'answer': 'Не удалось продолжить сценарий.',
+            'suggestions': [],
+            'cards': [],
+            'meta': {'status': 'error'},
+        }
+        if 'answer' in result:
+            result['answer'] = ResponseGuard().filter_response(
+                result.get('answer') or ''
+            )
+        return result
+
+    def _replenishment_enabled(self, params):
+        if not request.env.user.has_group(_GROUP_SUPPLY):
+            return False
+        enabled = params.get_param('ai_assistant.enabled', '1')
+        actions_enabled = params.get_param(
+            'ai_assistant.actions_enabled', '0'
+        )
+        return (
+            enabled in ('1', 'True', 'true', '') and
+            actions_enabled in ('1', 'True', 'true', True)
+        )
+
+    def _start_replenishment_workflow(self, message, params):
+        if not message or not self._replenishment_enabled(params):
+            return None
+        # Do not spend a second LLM request (or consume an actions-mode
+        # failure/fallback response) for every ordinary chat message.
+        # The deterministic detector is only a candidate gate; the structured
+        # extractor remains authoritative for all extracted fields.
+        fallback = keyword_replenishment_fallback(message)
+        if not fallback:
+            return None
+        extracted = None
+        try:
+            extracted = ReplenishmentIntentExtractor(
+                request.env
+            ).extract(message)
+        except (ConnectionError, ValueError) as err:
+            _logger.info(
+                'Replenishment extractor unavailable, using fallback: %s',
+                err,
+            )
+            extracted = fallback
+        if not extracted or not extracted.get('intent'):
+            return None
+        if (
+            not extracted.get('fallback') and
+            float(extracted.get('confidence') or 0) <
+            ReplenishmentIntentExtractor.CONFIDENCE_THRESHOLD
+        ):
+            return None
+        workflow = ReplenishmentWorkflow(request.env, _replenishment_store)
+        _token, result = workflow.begin(request.env.uid, extracted)
+        return result
+
+    def _dispatch_replenishment_workflow(
+        self,
+        replenishment_token=None,
+        replenishment_action=None,
+        replenishment_payload=None,
+        message=None,
+        params=None,
+    ):
+        params = params or request.env['ir.config_parameter'].sudo()
+        if not self._replenishment_enabled(params):
+            return {
+                'answer': 'Сценарий пополнения недоступен.',
+                'suggestions': [],
+                'cards': [],
+                'meta': {'replenishment_terminal': True},
+                'error': 'Доступ запрещён или actions отключены.',
+            }
+        if not replenishment_token:
+            return {
+                'answer': 'Сессия пополнения не найдена. Начните заново.',
+                'suggestions': [],
+                'cards': [],
+                'meta': {'replenishment_terminal': True},
+                'error': 'Сессия пополнения не найдена.',
+            }
+        extracted = {}
+        if message:
+            try:
+                extracted = ReplenishmentIntentExtractor(
+                    request.env
+                ).extract(message)
+            except (ConnectionError, ValueError):
+                extracted = {}
+        workflow = ReplenishmentWorkflow(request.env, _replenishment_store)
+        try:
+            return workflow.dispatch(
+                request.env.uid,
+                replenishment_token,
+                action=replenishment_action,
+                payload=(replenishment_payload
+                         if isinstance(replenishment_payload, dict) else {}),
+                message=message,
+                extracted=extracted,
+            )
+        except (AccessError, UserError, ValidationError, ValueError) as err:
+            return {
+                'answer': str(err),
+                'suggestions': [],
+                'cards': [],
+                'meta': {'status': 'error'},
+                'error': str(err),
+            }
 
     def _dispatch_invoice_workflow(
         self,
