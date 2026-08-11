@@ -431,6 +431,46 @@ flowchart LR
     Draft --> Actions[Send / Confirm / Print / Cancel]
 ```
 
+### Перемещение товара между складами через чат
+
+Сценарий moving использует ту же гибридную границу ответственности: structured
+LLM-extractor распознаёт дословные параметры исходной фразы, а
+детерминированный workflow резолвит товар и склады, конвертирует UoM, считает
+доступный остаток и управляет переходами. LLM не получает record ID и не
+создаёт складские документы через общий ToolRegistry.
+
+Диалог построен по принципу button-first. Каждый нетерминальный ответ показывает
+короткое пояснение и полный набор допустимых кнопок текущего состояния.
+Свободный текст заполняет только ожидаемое поле; непонятный ответ не изменяет
+server-side session и повторно показывает текущий вопрос с теми же кнопками.
+Создание документа запускает только action `moving_execute_plan`, а не текстовое
+«да» или «создавай».
+
+Перед Execute backend повторно проверяет ACL, текущую компанию, товар, UoM,
+локации и доступный остаток в `lot_stock_id` источника вместе с его внутренними
+дочерними локациями. Результат — один draft `stock.picking` внутреннего типа.
+Из ResultCard разрешены только явные server-authoritative действия Reserve,
+Open, Print и Cancel. Validate, фактическое количество, партии/серийные номера и
+backorder остаются в стандартном интерфейсе Odoo.
+
+```mermaid
+flowchart LR
+    Text[Фраза о перемещении] --> Extract[Structured extractor]
+    Extract --> Product[Товар и UoM]
+    Product --> Source[Источник и available]
+    Source --> Destination[Назначение]
+    Destination --> Plan[Итоговый план]
+    Plan --> Draft[Черновик picking]
+    Draft --> UI[Reserve / Open / Print / Cancel]
+    UI --> Validate[Validate только в Odoo UI]
+```
+
+Workflow включается отдельным параметром `ai_assistant.moving_enabled` поверх
+глобальных `ai_assistant.enabled` и `ai_assistant.actions_enabled` и требует
+группы «AI Assistant / Снабжение» и Stock User. Текущее TTL-хранилище сессий и
+execute-lock является process-local; переход на DB/Redis и распределённый
+execute-once отслеживается в [TD-011](technical-debt.md#td-011-production-hardening-многошаговых-workflow-ai-ассистента).
+
 ### Закупка по загруженному счёту
 
 После загрузки PDF-счёта чат ведёт отдельную детерминированную state machine в

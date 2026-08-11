@@ -38,6 +38,8 @@ export class AiChatWidget extends Component {
             purchaseFlow: savedSession.purchaseFlow,
             activeReplenishmentToken:
                 savedSession.activeReplenishmentToken,
+            activeMovingToken: savedSession.activeMovingToken,
+            activeWorkflowKind: savedSession.activeWorkflowKind,
             status: "online",
             hasAccess: false,
             hasSupply: false,     // AIA-056: группа снабжение
@@ -121,6 +123,26 @@ export class AiChatWidget extends Component {
 
     onMessageSuggestion(suggestion) {
         if (!suggestion || this.state.isLoading) {
+            return;
+        }
+        if (
+            typeof suggestion.action === "string" &&
+            suggestion.action.startsWith("workflow_start_")
+        ) {
+            this._startChosenWorkflow(
+                suggestion.action.replace("workflow_start_", ""),
+                (suggestion.payload || {}).message || ""
+            );
+            return;
+        }
+        if (
+            typeof suggestion.action === "string" &&
+            suggestion.action.startsWith("moving_")
+        ) {
+            this._runMovingWorkflowAction(
+                suggestion.action,
+                suggestion.payload || {}
+            );
             return;
         }
         if (
@@ -242,6 +264,8 @@ export class AiChatWidget extends Component {
         this.state.awaitingPoWarehouse = false;
         this.state.purchaseFlow = null;
         this.state.activeReplenishmentToken = null;
+        this.state.activeMovingToken = null;
+        this.state.activeWorkflowKind = null;
         this._saveSessionState();
     }
 
@@ -263,10 +287,11 @@ export class AiChatWidget extends Component {
         await this._confirmPending(pendingKey, "cancel");
     }
 
-    async onPoAction(replenishmentToken, action, poId) {
+    async onResultAction(workflow, action, record, actionItem = {}) {
         if (
             this.state.isLoading ||
-            !replenishmentToken ||
+            !workflow ||
+            !workflow.token ||
             !action
         ) {
             return;
@@ -274,33 +299,50 @@ export class AiChatWidget extends Component {
         this.state.isLoading = true;
         this.state.isCapturing = false;
         try {
-            const result = await this.chatService.callPoAction(
-                replenishmentToken,
-                action,
-                poId
-            );
-            this._replaceResultCard(
-                replenishmentToken,
-                poId,
+            const recordId = record && record.id;
+            const result = workflow.type === "moving"
+                ? await this.chatService.callPickingAction(
+                    workflow, action, recordId
+                )
+                : await this.chatService.callPoAction(
+                    workflow.token,
+                    action,
+                    actionItem.po_id || recordId
+                );
+            this._replaceWorkflowResultCard(
+                workflow,
+                record || {},
                 result.card,
-                result.po
+                result.po || result.record
             );
             if (result.action_to_run) {
                 try {
                     await this.actionService.doAction(result.action_to_run);
                 } catch (_actionError) {
+                    this._markWorkflowCardError(
+                        workflow,
+                        result.record || record || {},
+                        "Окно Odoo не удалось открыть. Повторите действие из карточки."
+                    );
                     this._addMessage(
                         "assistant",
-                        "Заказ не изменён, но окно Odoo не удалось открыть. Повторите действие из карточки."
+                        "Запись не изменена, но окно Odoo не удалось открыть. Повторите действие из карточки."
                     );
                     return;
                 }
             }
             this.state.status = "online";
         } catch (_err) {
+            this._markWorkflowCardError(
+                workflow,
+                record || {},
+                _err && _err.message
+                    ? _err.message
+                    : "Действие не выполнено. Повторите попытку."
+            );
             this._addMessage(
                 "assistant",
-                "Не удалось выполнить действие с заказом. Возможно, сессия истекла."
+                "Не удалось выполнить действие с записью. Возможно, сессия истекла."
             );
             this.state.status = "error";
         } finally {
@@ -419,6 +461,12 @@ export class AiChatWidget extends Component {
             params.replenishment_token =
                 this.state.activeReplenishmentToken;
         }
+        if (this.state.activeMovingToken) {
+            params.moving_token = this.state.activeMovingToken;
+        }
+        if (this.state.activeWorkflowKind) {
+            params.active_workflow_kind = this.state.activeWorkflowKind;
+        }
 
         // Добавить скриншот в payload только если захват удался
         if (screenshot) {
@@ -520,23 +568,25 @@ export class AiChatWidget extends Component {
         this.state.messages = this.chatService.saveHistory(messages);
     }
 
-    _replaceResultCard(replenishmentToken, poId, replacementCard, po) {
+    _replaceWorkflowResultCard(workflow, record, replacementCard, updatedRecord) {
         const messages = this.state.messages.map((message) => {
             if (!Array.isArray(message.cards)) {
                 return message;
             }
             const cards = message.cards.map((card) => {
-                const cardToken =
-                    card.replenishmentToken || card.replenishment_token;
-                const cardPoId =
-                    card.record?.id ||
-                    (card.actions || []).find((item) => item.po_id)?.po_id;
+                const cardWorkflow = card.workflow || {
+                    type: "replenishment",
+                    token: card.replenishmentToken || card.replenishment_token,
+                };
+                const cardRecord = card.record || {};
                 if (
                     card.type !== "result" ||
-                    cardToken !== replenishmentToken ||
-                    (poId &&
-                        cardPoId &&
-                        String(cardPoId) !== String(poId))
+                    cardWorkflow.type !== workflow.type ||
+                    cardWorkflow.token !== workflow.token ||
+                    (record.id && cardRecord.id &&
+                        String(cardRecord.id) !== String(record.id)) ||
+                    (record.model && cardRecord.model &&
+                        cardRecord.model !== record.model)
                 ) {
                     return card;
                 }
@@ -548,20 +598,17 @@ export class AiChatWidget extends Component {
                             ...(card.record || {}),
                             ...(replacementCard.record || {}),
                         },
-                        replenishmentToken:
-                            replacementCard.replenishmentToken ||
-                            replacementCard.replenishment_token ||
-                            cardToken,
+                        workflow: replacementCard.workflow || cardWorkflow,
                     };
                 }
-                if (po) {
+                if (updatedRecord) {
                     return {
                         ...card,
                         record: {
                             ...(card.record || {}),
-                            id: po.id || cardPoId,
+                            id: updatedRecord.id || cardRecord.id,
                         },
-                        actions: po.actions || card.actions || [],
+                        actions: updatedRecord.actions || card.actions || [],
                     };
                 }
                 return card;
@@ -570,6 +617,15 @@ export class AiChatWidget extends Component {
         });
         this.state.messages = this.chatService.saveHistory(messages);
         this._saveSessionState();
+    }
+
+    _markWorkflowCardError(workflow, record, message) {
+        this._replaceWorkflowResultCard(workflow, record, {
+            status: "error",
+            error: { message },
+            workflow,
+            record,
+        });
     }
 
     _buildHistory() {
@@ -597,9 +653,23 @@ export class AiChatWidget extends Component {
         if (meta.replenishment_token) {
             this.state.activeReplenishmentToken =
                 meta.replenishment_token;
+            this.state.activeWorkflowKind = "replenishment";
         }
         if (meta.replenishment_terminal === true) {
             this.state.activeReplenishmentToken = null;
+            if (this.state.activeWorkflowKind === "replenishment") {
+                this.state.activeWorkflowKind = null;
+            }
+        }
+        if (meta.moving_token) {
+            this.state.activeMovingToken = meta.moving_token;
+            this.state.activeWorkflowKind = "moving";
+        }
+        if (meta.moving_terminal === true) {
+            this.state.activeMovingToken = null;
+            if (this.state.activeWorkflowKind === "moving") {
+                this.state.activeWorkflowKind = null;
+            }
         }
         this._saveSessionState();
     }
@@ -611,6 +681,8 @@ export class AiChatWidget extends Component {
             purchaseFlow: this.state.purchaseFlow,
             activeReplenishmentToken:
                 this.state.activeReplenishmentToken,
+            activeMovingToken: this.state.activeMovingToken,
+            activeWorkflowKind: this.state.activeWorkflowKind,
         });
     }
 
@@ -673,6 +745,63 @@ export class AiChatWidget extends Component {
             this._addMessage(
                 "assistant",
                 "Не удалось продолжить сценарий пополнения. Попробуйте повторить запрос."
+            );
+            this.state.status = "error";
+        } finally {
+            this.state.isLoading = false;
+        }
+    }
+
+    async _runMovingWorkflowAction(action, payload = {}) {
+        if (this.state.isLoading || !this.state.activeMovingToken) {
+            return;
+        }
+        this.state.isLoading = true;
+        this.state.isCapturing = false;
+        try {
+            const result = await this.chatService.movingWorkflowAction(
+                this.state.activeMovingToken,
+                action,
+                payload
+            );
+            this._applyResponseMeta(result);
+            this._addMessage("assistant", result.answer || "", {
+                cards: this._extractCards(result),
+                links: this._extractLinks(result),
+                suggestions: result.suggestions || [],
+                meta: result.meta || {},
+            });
+            this.state.status = "online";
+        } catch (_err) {
+            this._addMessage(
+                "assistant",
+                "Не удалось продолжить сценарий перемещения. Попробуйте повторить запрос."
+            );
+            this.state.status = "error";
+        } finally {
+            this.state.isLoading = false;
+        }
+    }
+
+    async _startChosenWorkflow(kind, message) {
+        if (this.state.isLoading || !kind || !message) {
+            return;
+        }
+        this.state.isLoading = true;
+        try {
+            const result = await this.chatService.startWorkflow(kind, message);
+            this._applyResponseMeta(result);
+            this._addMessage("assistant", result.answer || "", {
+                cards: this._extractCards(result),
+                links: this._extractLinks(result),
+                suggestions: result.suggestions || [],
+                meta: result.meta || {},
+            });
+            this.state.status = "online";
+        } catch (_err) {
+            this._addMessage(
+                "assistant",
+                "Не удалось запустить выбранный сценарий. Повторите запрос."
             );
             this.state.status = "error";
         } finally {

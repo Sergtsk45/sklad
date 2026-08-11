@@ -118,6 +118,7 @@ export class ResultCard extends Component {
         nextHint: { type: String, optional: true },
         steps: { type: Array, optional: true },
         details: { type: Array, optional: true },
+        workflow: { type: Object, optional: true },
         replenishmentToken: { type: String, optional: true },
         actions: { type: Array, optional: true },
         onAction: { type: Function, optional: true },
@@ -152,18 +153,31 @@ export class ResultCard extends Component {
     }
 
     onActionClick(action) {
+        const workflow = this.props.workflow || (
+            this.props.replenishmentToken
+                ? { type: "replenishment", token: this.props.replenishmentToken }
+                : null
+        );
         if (
             !action ||
             action.disabled ||
-            !this.props.replenishmentToken ||
+            !workflow ||
+            !workflow.token ||
             !this.props.onAction
         ) {
             return;
         }
+        if (
+            action.confirm &&
+            !window.confirm(action.confirm_message || "Подтвердите действие")
+        ) {
+            return;
+        }
         this.props.onAction(
-            this.props.replenishmentToken,
+            workflow,
             action.action,
-            action.po_id
+            this.props.record || {},
+            action
         );
     }
 }

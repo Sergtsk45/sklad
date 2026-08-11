@@ -10,3 +10,9 @@ from . import replenishment_session_store  # noqa: F401
 from . import replenishment_intent  # noqa: F401
 from . import purchase_order_actions  # noqa: F401
 from . import replenishment_workflow  # noqa: F401
+from . import moving_session_store  # noqa: F401
+from . import moving_intent  # noqa: F401
+from . import moving_stock  # noqa: F401
+from . import moving_draft  # noqa: F401
+from . import moving_picking_actions  # noqa: F401
+from . import moving_workflow  # noqa: F401

@@ -60,6 +60,17 @@ from odoo.addons.ai_assistant.services.replenishment_session_store import (
 from odoo.addons.ai_assistant.services.replenishment_workflow import (
     ReplenishmentWorkflow,
 )
+from odoo.addons.ai_assistant.services.moving_intent import (
+    MovingIntentExtractor,
+    is_moving_candidate,
+)
+from odoo.addons.ai_assistant.services.moving_session_store import (
+    moving_session_store,
+)
+from odoo.addons.ai_assistant.services.moving_workflow import MovingWorkflow
+from odoo.addons.ai_assistant.services.moving_picking_actions import (
+    MovingPickingActionsService,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -81,6 +92,7 @@ _GROUP_SUPPLY = 'ai_assistant.group_ai_assistant_supply'
 _pending_actions = PendingActionStore()
 _invoice_store = InvoiceExtractionStore()
 _replenishment_store = replenishment_session_store
+_moving_store = moving_session_store
 
 _MODULE_FROM_MODEL = {
     'stock': 'stock', 'purchase': 'purchase', 'sale': 'sale',
@@ -303,6 +315,9 @@ class AiAssistantController(http.Controller):
              awaiting_po_warehouse=None, invoice_workflow_payload=None,
              replenishment_token=None, replenishment_action=None,
              replenishment_payload=None,
+             moving_token=None, moving_action=None, moving_payload=None,
+             active_workflow_kind=None,
+             workflow_choice=None, workflow_message=None,
              **kwargs):
         try:
             if not request.env.user.has_group(_GROUP_USER):
@@ -317,7 +332,56 @@ class AiAssistantController(http.Controller):
                     'meta': {},
                 }
 
+            action_namespaces = sum(bool(value) for value in (
+                invoice_workflow_action, replenishment_action, moving_action,
+            ))
+            if action_namespaces > 1:
+                return self._workflow_conflict_response()
+            if moving_token and replenishment_token:
+                if moving_action or active_workflow_kind == 'moving':
+                    replenishment_token = None
+                elif (replenishment_action or
+                      active_workflow_kind == 'replenishment'):
+                    moving_token = None
+                else:
+                    return self._workflow_conflict_response()
+            elif moving_token and replenishment_action:
+                moving_token = None
+            elif replenishment_token and moving_action:
+                replenishment_token = None
+
+            if workflow_choice:
+                choice_message = workflow_message or message or ''
+                if workflow_choice == 'moving':
+                    result = self._start_moving_workflow(choice_message, params)
+                elif workflow_choice == 'replenishment':
+                    result = self._start_replenishment_workflow(
+                        choice_message, params
+                    )
+                else:
+                    result = None
+                if result is None:
+                    return {
+                        'answer': 'Не удалось запустить выбранный сценарий.',
+                        'suggestions': [], 'cards': [],
+                        'meta': {'status': 'workflow_choice_invalid'},
+                    }
+                return self._guard_workflow_response(result)
+            if moving_token or moving_action:
+                if active_workflow_kind not in (None, '', 'moving'):
+                    return self._workflow_conflict_response()
+                workflow_result = self._dispatch_moving_workflow(
+                    moving_token=moving_token,
+                    moving_action=moving_action,
+                    moving_payload=moving_payload,
+                    message=message,
+                    params=params,
+                )
+                return self._guard_workflow_response(workflow_result)
+
             if replenishment_token or replenishment_action:
+                if active_workflow_kind not in (None, '', 'replenishment'):
+                    return self._workflow_conflict_response()
                 workflow_result = self._dispatch_replenishment_workflow(
                     replenishment_token=replenishment_token,
                     replenishment_action=replenishment_action,
@@ -342,6 +406,22 @@ class AiAssistantController(http.Controller):
             is_valid, error = guard.validate_request(message, history)
             if not is_valid:
                 return {'error': error}
+
+            moving_candidate = (
+                self._moving_enabled(params) and is_moving_candidate(message)
+            )
+            replenishment_candidate = (
+                self._replenishment_enabled(params) and
+                bool(keyword_replenishment_fallback(message))
+            )
+            if moving_candidate and replenishment_candidate:
+                return self._guard_workflow_response(
+                    self._workflow_conflict_response(message)
+                )
+
+            workflow_result = self._start_moving_workflow(message, params)
+            if workflow_result is not None:
+                return self._guard_workflow_response(workflow_result)
 
             workflow_result = self._start_replenishment_workflow(
                 message, params
@@ -419,6 +499,34 @@ class AiAssistantController(http.Controller):
             return {'ok': False, 'error': str(err)}
         except Exception:
             _logger.exception('Error in /ai_assistant/po_action')
+            return {
+                'ok': False,
+                'error': 'Сервис временно недоступен. Попробуйте позже.',
+            }
+
+    @http.route('/ai_assistant/picking_action', type='jsonrpc', auth='user',
+                methods=['POST'])
+    def picking_action(self, moving_token=None, action=None, picking_id=None,
+                       **kwargs):
+        try:
+            params = request.env['ir.config_parameter'].sudo()
+            if not self._moving_enabled(params):
+                return {'ok': False, 'error': 'Доступ запрещён'}
+            if action not in ('reserve', 'open', 'print', 'cancel'):
+                return {'ok': False, 'error': 'Некорректное действие'}
+            return MovingPickingActionsService(
+                request.env
+            ).dispatch_for_session(
+                _moving_store,
+                request.env.uid,
+                moving_token,
+                action,
+                advisory_picking_id=picking_id,
+            )
+        except (AccessError, UserError, ValidationError, ValueError) as err:
+            return {'ok': False, 'error': str(err)}
+        except Exception:
+            _logger.exception('Error in /ai_assistant/picking_action')
             return {
                 'ok': False,
                 'error': 'Сервис временно недоступен. Попробуйте позже.',
@@ -1211,6 +1319,100 @@ class AiAssistantController(http.Controller):
                 result.get('answer') or ''
             )
         return result
+
+    def _workflow_conflict_response(self, message=None):
+        suggestions = []
+        if message:
+            suggestions = [
+                {'label': 'Перемещение',
+                 'action': 'workflow_start_moving',
+                 'payload': {'message': message}},
+                {'label': 'Пополнение',
+                 'action': 'workflow_start_replenishment',
+                 'payload': {'message': message}},
+            ]
+        return {
+            'answer': (
+                'Одновременно переданы действия разных сценариев. '
+                'Завершите или отмените текущий сценарий и повторите запрос.'
+            ),
+            'suggestions': suggestions,
+            'cards': [],
+            'meta': {'status': 'workflow_conflict'},
+            'error_code': 'workflow_conflict',
+        }
+
+    def _moving_enabled(self, params):
+        user = request.env.user
+        if not (
+            user.has_group(_GROUP_SUPPLY) and
+            user.has_group('stock.group_stock_user')
+        ):
+            return False
+        truthy = ('1', 'True', 'true', '', True)
+        return (
+            params.get_param('ai_assistant.enabled', '1') in truthy and
+            params.get_param('ai_assistant.actions_enabled', '0') in truthy and
+            params.get_param('ai_assistant.moving_enabled', '0') in truthy
+        )
+
+    def _start_moving_workflow(self, message, params):
+        if not message or not self._moving_enabled(params):
+            return None
+        if not is_moving_candidate(message):
+            return None
+        extracted = MovingIntentExtractor(request.env).extract(message)
+        if not extracted or not extracted.get('intent'):
+            return None
+        if (
+            not extracted.get('fallback') and
+            float(extracted.get('confidence') or 0) < 0.65
+        ):
+            return None
+        _token, result = MovingWorkflow(
+            request.env, _moving_store
+        ).begin(request.env.uid, extracted)
+        return result
+
+    def _dispatch_moving_workflow(
+        self, moving_token=None, moving_action=None, moving_payload=None,
+        message=None, params=None,
+    ):
+        params = params or request.env['ir.config_parameter'].sudo()
+        if not self._moving_enabled(params):
+            return {
+                'answer': 'Сценарий перемещения недоступен.',
+                'suggestions': [], 'cards': [],
+                'meta': {'moving_terminal': True},
+                'error': 'Доступ запрещён или сценарий отключён.',
+            }
+        if not moving_token:
+            return {
+                'answer': 'Сессия перемещения не найдена. Начните заново.',
+                'suggestions': [], 'cards': [],
+                'meta': {'moving_terminal': True},
+                'error': 'Сессия перемещения не найдена.',
+            }
+        extracted = {}
+        if message:
+            extracted = MovingIntentExtractor(request.env).extract(message) or {}
+        try:
+            return MovingWorkflow(request.env, _moving_store).dispatch(
+                request.env.uid,
+                moving_token,
+                action=moving_action,
+                payload=(moving_payload
+                         if isinstance(moving_payload, dict) else {}),
+                message=message,
+                extracted=extracted,
+            )
+        except (AccessError, UserError, ValidationError, ValueError) as err:
+            return {
+                'answer': str(err), 'suggestions': [], 'cards': [],
+                'meta': {'moving_token': moving_token,
+                         'moving_state': 'error'},
+                'error': str(err),
+            }
 
     def _replenishment_enabled(self, params):
         if not request.env.user.has_group(_GROUP_SUPPLY):

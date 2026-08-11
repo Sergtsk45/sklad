@@ -60,5 +60,7 @@ class TestAiAssistantInstall(TransactionCase):
     def test_actions_feature_flag_default_off(self):
         params = self.env['ir.config_parameter']
         self.assertFalse(params.get_param('ai_assistant.actions_enabled'))
+        self.assertFalse(params.get_param('ai_assistant.moving_enabled'))
         settings = self.env['res.config.settings'].create({})
         self.assertFalse(settings.ai_assistant_actions_enabled)
+        self.assertFalse(settings.ai_assistant_moving_enabled)

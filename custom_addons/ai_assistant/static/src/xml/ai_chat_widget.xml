@@ -102,9 +102,10 @@
                                             nextHint="card.next_hint"
                                             steps="card.steps"
                                             details="card.details"
+                                            workflow="card.workflow"
                                             replenishmentToken="card.replenishmentToken || card.replenishment_token"
                                             actions="card.actions"
-                                            onAction.bind="onPoAction"
+                                            onAction.bind="onResultAction"
                                         />
                                     </t>
                                 </t>
@@ -281,6 +282,7 @@
                     t-key="action.action"
                     t-att-class="'o_ai_card_btn ' + (action.action === 'confirm' ? 'o_ai_card_btn_primary' : 'o_ai_card_btn_secondary')"
                     t-att-disabled="action.disabled"
+                    t-att-aria-disabled="action.disabled ? 'true' : 'false'"
                     t-on-click="() => this.onActionClick(action)"
                 >
                     <t t-esc="action.label"/>

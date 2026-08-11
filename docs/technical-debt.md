@@ -451,17 +451,20 @@
 
 ---
 
-## TD-011: Production-hardening ассистента пополнения товара
+## TD-011: Production-hardening многошаговых workflow AI-ассистента
 
 - **Статус**: открыто
-- **Краткое описание фичи**: пользователь просит пополнить товар в чате; LLM
-  извлекает только текстовые параметры, а детерминированный workflow выбирает
-  товар, количество/UoM, предложение поставщика и склад. После итогового
-  подтверждения ассистент создаёт один черновик PO и показывает защищённые
-  кнопки отправки RFQ, подтверждения, печати и отмены.
-- **Контекст**: рабочая реализация находится в `ai_assistant` и проходит полный
-  backend-suite. Ниже перечислены улучшения надёжности и сопровождения перед
-  масштабированием на несколько workers и более сложные закупочные сценарии.
+- **Краткое описание фичи**: replenishment и moving используют structured LLM
+  только для текстовых параметров, а детерминированные workflow выполняют
+  поиск записей, расчёты, state transitions и создание одного draft PO или
+  internal picking после явной кнопки.
+- **Контекст**: replenishment уже работает в `ai_assistant`, а moving реализуется
+  по тому же session/state-machine контракту. Ниже перечислены улучшения
+  надёжности и сопровождения перед масштабированием на несколько workers и
+  более сложные закупочные и складские сценарии. `ReplenishmentSessionStore` и
+  `MovingSessionStore` являются
+  process-local: токен может быть не виден другому worker, а локальный lock не
+  обеспечивает распределённый execute-once.
 - **Цель**: сделать workflow устойчивым в multi-worker production, удобным для
   исправления ранее введённых данных и полностью покрытым автоматизированными
   acceptance-тестами.
@@ -469,9 +472,9 @@
 ### Подзадачи
 
 1. **Общее хранилище сессий и блокировок**: заменить process-local
-   `ReplenishmentSessionStore` на DB/Redis-backed реализацию с TTL и атомарным
+   workflow stores на общую DB/Redis-backed реализацию с TTL и атомарным
    `execute once`, чтобы любой Odoo worker видел токен и два параллельных клика
-   не могли создать два PO.
+   не могли создать два PO или два picking.
 2. **Возврат к предыдущим шагам**: использовать поле `correction` extractor-а
    и добавить явные действия «Изменить товар/количество/поставщика/склад» с
    корректными переходами state-machine и повторным расчётом плана.
@@ -482,7 +485,7 @@
    variant/date/min_qty, ACL без Supply, совместимые и несовместимые UoM,
    округление упаковок, parent/child и разные валюты, истёкший токен,
    недопустимые состояния PO и конкурентный Execute.
-5. **Добавить HttpCase и QUnit/tour**: маршрутизация invoice/replenishment,
+5. **Добавить HttpCase и QUnit/tour**: маршрутизация invoice/replenishment/moving,
    LLM-timeout fallback, восстановление токена после reload, lifecycle
    ResultCard, очистка active-token и вызовы `actionService.doAction()` для
    composer/report.
@@ -496,8 +499,9 @@
 ### Критерии готовности (Definition of Done)
 
 - [ ] Сессия продолжается после попадания запроса на другой Odoo worker.
-- [ ] Конкурентный Execute в разных workers создаёт ровно один PO.
-- [ ] Пользователь может безопасно изменить любой параметр до создания заказа.
+- [ ] Конкурентный Execute в разных workers создаёт ровно один PO или picking.
+- [ ] Пользователь может безопасно изменить любой параметр до создания
+  заказа или перемещения.
 - [ ] Поведение parent/child-поставщиков зафиксировано и покрыто тестами.
 - [ ] Backend matrix, HttpCase и QUnit/tour проходят в CI.
 - [ ] Ошибки и fallback видны в технических метриках без утечки коммерческих
@@ -506,9 +510,11 @@
 ### Ссылки
 
 - Спецификация и статус: [`tasktrecker-assistent-replenishment.md`](tasktrecker-assistent-replenishment.md).
+- Moving-спецификация: [`tasktrecker-assistent-moving.md`](tasktrecker-assistent-moving.md).
 - Пользовательский сценарий: [`ai-assistant-user-guide.md`](ai-assistant-user-guide.md).
 - Реализация: `custom_addons/ai_assistant/services/replenishment_workflow.py`,
-  `replenishment_session_store.py`, `replenishment_intent.py`.
+  `replenishment_session_store.py`, `replenishment_intent.py`, а также
+  `moving_workflow.py`, `moving_session_store.py`, `moving_intent.py`.
 
 ---
 

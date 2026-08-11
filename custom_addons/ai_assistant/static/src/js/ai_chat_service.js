@@ -4,7 +4,7 @@ import { registry } from "@web/core/registry";
 import { needsScreenshot } from "./screenshot_trigger";
 
 const SESSION_KEY = "odoo_ai_assistant_session_v1";
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const MAX_MESSAGES = 50;
 const MAX_BYTES = 100 * 1024; // 100 KB (без скриншотов — они не сохраняются)
 const MAX_SCREENSHOT_BYTES = 500 * 1024; // 500 KB base64
@@ -44,6 +44,8 @@ export const aiChatService = {
                 purchaseFlow: data.purchase_flow || null,
                 activeReplenishmentToken:
                     data.active_replenishment_token || null,
+                activeMovingToken: data.active_moving_token || null,
+                activeWorkflowKind: data.active_workflow_kind || null,
             };
         }
 
@@ -97,6 +99,14 @@ export const aiChatService = {
                         state.activeReplenishmentToken !== undefined
                             ? state.activeReplenishmentToken
                             : previous.activeReplenishmentToken,
+                    active_moving_token:
+                        state.activeMovingToken !== undefined
+                            ? state.activeMovingToken
+                            : previous.activeMovingToken,
+                    active_workflow_kind:
+                        state.activeWorkflowKind !== undefined
+                            ? state.activeWorkflowKind
+                            : previous.activeWorkflowKind,
                 });
 
                 while (trimmed.length > 1 && serialized.length > MAX_BYTES) {
@@ -120,6 +130,14 @@ export const aiChatService = {
                             state.activeReplenishmentToken !== undefined
                                 ? state.activeReplenishmentToken
                                 : previous.activeReplenishmentToken,
+                        active_moving_token:
+                            state.activeMovingToken !== undefined
+                                ? state.activeMovingToken
+                                : previous.activeMovingToken,
+                        active_workflow_kind:
+                            state.activeWorkflowKind !== undefined
+                                ? state.activeWorkflowKind
+                                : previous.activeWorkflowKind,
                     });
                 }
 
@@ -410,6 +428,103 @@ export const aiChatService = {
             return result;
         }
 
+        async function movingWorkflowAction(movingToken, action, payload = {}) {
+            const response = await fetch("/ai_assistant/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        message: "",
+                        history: [],
+                        moving_token: movingToken,
+                        moving_action: action,
+                        moving_payload: payload || {},
+                        active_workflow_kind: "moving",
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Moving workflow failed");
+            }
+            return result;
+        }
+
+        async function startWorkflow(kind, message) {
+            const response = await fetch("/ai_assistant/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        message: "",
+                        history: [],
+                        workflow_choice: kind,
+                        workflow_message: message || "",
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Workflow start failed");
+            }
+            return result;
+        }
+
+        async function callPickingAction(workflow, action, recordId) {
+            const response = await fetch("/ai_assistant/picking_action", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        moving_token: workflow && workflow.token,
+                        action,
+                        picking_id: recordId,
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Picking action failed");
+            }
+            return result;
+        }
+
         async function confirmAction(pendingKey, decision) {
             const response = await fetch("/ai_assistant/confirm", {
                 method: "POST",
@@ -449,7 +564,10 @@ export const aiChatService = {
             confirmAction,
             workflowAction,
             replenishmentWorkflowAction,
+            movingWorkflowAction,
+            startWorkflow,
             callPoAction,
+            callPickingAction,
             uploadInvoice,
             needsScreenshot,
         };

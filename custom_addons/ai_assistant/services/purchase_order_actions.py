@@ -94,6 +94,10 @@ class PurchaseOrderActionsService:
             }],
             'next_hint': 'Проверьте заказ и выберите следующее действие.',
             'steps': [],
+            'workflow': {
+                'type': 'replenishment',
+                'token': replenishment_token,
+            },
             'replenishmentToken': replenishment_token,
             'replenishment_token': replenishment_token,
             'po': {'id': po.id, 'name': po.name, 'state': po.state},

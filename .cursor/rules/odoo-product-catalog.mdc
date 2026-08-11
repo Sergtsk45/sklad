@@ -35,6 +35,18 @@ alwaysApply: false
 | OSB-3 Kronospan 12мм | Плита OSB-3, 12 мм, 2500×1250 мм |
 | Кран Temper DN15 | Кран шаровой латунный … Ду15 Ру40, бабочка |
 
+### Язык name (ru_RU)
+
+`product.template.name` — `translate=True` (JSONB). UI на `ru_RU` ищет по русскому `name`; запись без `lang` обновляет только `en_US`/source → карточка «пропадает» из русского поиска.
+
+- Основной язык каталога — **ru_RU**.
+- create/write `name` — всегда `with_context(lang='ru_RU')` или явный `lang` в context API.
+- После переименования синхронизировать все используемые языки (минимум `ru_RU` и `en_US`) одним нормализованным значением.
+- Торговые имена поставщика — только в `product.supplierinfo.product_name`, не в переводах `name`.
+- MCP `update_record` не умеет задать `lang` — массовая нормализация через XML-RPC/shell с context `lang`, не через MCP для переводимых полей.
+- После нормализации: `get_field_translations` и/или поиск в UI на русском по ключевым словам нормализованного имени.
+- `x_search_name` зависит от `name` — после смены `name` на `ru_RU` пересчитать/пересохранить при необходимости.
+
 ## Перед созданием
 
 1. Поиск: `product_code` / `default_code` → `name ilike` по типу и размеру.

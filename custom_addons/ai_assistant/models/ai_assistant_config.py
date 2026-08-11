@@ -43,6 +43,11 @@ class AiAssistantConfig(models.TransientModel):
         config_parameter='ai_assistant.actions_enabled',
         default=False,
     )
+    ai_assistant_moving_enabled = fields.Boolean(
+        string='Перемещения между складами через чат',
+        config_parameter='ai_assistant.moving_enabled',
+        default=False,
+    )
     ai_assistant_system_prompt_override = fields.Char(
         string='Кастомный системный промпт (опционально)',
         config_parameter='ai_assistant.system_prompt_override',
