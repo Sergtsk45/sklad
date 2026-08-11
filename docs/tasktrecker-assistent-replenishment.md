@@ -1,7 +1,7 @@
 # Tasktracker: пополнение товара через чат AI-ассистента (`assistent-replenishment`)
 
-**Создано:** 2026-08-11 · **Обновлено:** 2026-08-11 (реализация и финальная проверка)
-**Статус:** Реализовано локально. Полный backend-suite `ai_assistant`: 401 post-tests / 473 tests stats, 0 ошибок; frontend проверен синтаксически и через XML-парсер. Детализированное QUnit/HttpCase-покрытие AR-021…AR-026 остаётся расширяемым набором acceptance-тестов.
+**Создано:** 2026-08-11 · **Обновлено:** 2026-08-11 (prod deploy `8bdb07b`)
+**Статус:** Задеплоено на prod (`ai_assistant` `19.0.1.1.0`). Полный backend-suite: 401 post-tests / 473 tests stats, 0 ошибок. QUnit/HttpCase AR-021…AR-026 — расширяемый tech-debt (TD-011).
 **Модуль:** `custom_addons/ai_assistant` (+ незначительные точки расширения `custom_product_search`, без изменений в `object_request`)
 **Связанные документы:**
 - [`tasktrecker-creat-partner-v2.md`](tasktrecker-creat-partner-v2.md) — образец формата и решений (ConfirmationCard, chips, denylist)

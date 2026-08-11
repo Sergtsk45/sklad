@@ -15,6 +15,12 @@
 - PO-действия не зарегистрированы в ToolRegistry и не вызываются LLM.
 - ID товара, supplierinfo, склада и PO проверяются по server-side состоянию.
 
+### Изменено
+- Prod deploy `8bdb07b`: backup
+  `/opt/project_odoo/backups/ai-assistant-replenishment-20260811-120028/`,
+  `-u ai_assistant` → `19.0.1.1.0`, restart; health `pass`, `/web/login` HTTP 200.
+  На VPS установлен `jsonschema` в volume `odoo-web-data` (`/var/lib/odoo/.local`).
+
 ## [2026-08-11] — Docs: частичная приёмка и бэкордер
 
 ### Добавлено

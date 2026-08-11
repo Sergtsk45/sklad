@@ -1,5 +1,5 @@
 ## Задача: AI-ассистент — пополнение товара через чат
-- **Статус**: Реализовано локально; полный backend-suite пройден (401 post-tests / 473 tests stats, 0 ошибок)
+- **Статус**: Завершена и задеплоена на prod 2026-08-11 (`8bdb07b`, `19.0.1.1.0`)
 - **Детальный трекер**: `docs/tasktrecker-assistent-replenishment.md` (AR-001…AR-027)
 - **Описание**: Исследована текущая архитектура `ai_assistant` (tools, ConfirmationCard/ResultCard,
   `InvoiceWorkflow` как эталон state-machine, denylist executor) и спроектирован сценарий
@@ -34,6 +34,7 @@
   - [x] Реализация frontend (AR-014…AR-016).
   - [x] Документация (AR-027).
   - [x] Финальный полный прогон backend-тестов: 401 post-tests / 473 tests stats, 0 ошибок.
+  - [x] Prod: backup, `git pull`, `-u ai_assistant` → `19.0.1.1.0`, restart, health `pass`.
   - [ ] Расширенное QUnit/HttpCase-покрытие всех acceptance-пунктов AR-021…AR-026 (не блокирует текущую реализацию).
 - **Зависимости**: `ai_assistant`, `custom_product_search`, `purchase`, `stock`.
 - **Техдолг**: [`TD-011`](technical-debt.md#td-011-production-hardening-ассистента-пополнения-товара) — multi-worker сессии, коррекции шагов, расширенные acceptance/UI-тесты и наблюдаемость.
