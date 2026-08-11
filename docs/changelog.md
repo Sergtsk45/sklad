@@ -6,6 +6,8 @@
 - Gate пополнения: `enabled` + `actions_enabled` + `replenishment_enabled`
   (если параметр ещё не создан — считается включённым, как до флага).
 - Версия: `19.0.1.2.2`.
+- Prod deploy `2636928`: `-u ai_assistant` → `19.0.1.2.2`; параметр
+  `replenishment_enabled=True` (как работало до флага).
 
 ## [2026-08-12] — fix(ai_assistant): флаг перемещений в меню Настройки
 
