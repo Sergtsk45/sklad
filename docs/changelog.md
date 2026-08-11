@@ -9,6 +9,10 @@
   основам слов. Морфологические совпадения помечаются как нечёткие и всегда
   требуют ручного выбора, даже при одном кандидате.
 - Версии: `ai_assistant` `19.0.1.1.1`, `custom_product_search` `19.0.1.1.0`.
+- Prod deploy `fb8cc98`: backup
+  `/opt/project_odoo/backups/ai-assistant-morph-search-20260811-125958/`,
+  `-u ai_assistant,custom_product_search` → `19.0.1.1.1` / `19.0.1.1.0`,
+  restart; health `pass`, `/web/login` HTTP 200.
 
 ## [2026-08-11] — AI Assistant: пополнение товара через чат
 
