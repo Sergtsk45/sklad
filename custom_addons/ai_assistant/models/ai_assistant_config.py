@@ -43,6 +43,11 @@ class AiAssistantConfig(models.TransientModel):
         config_parameter='ai_assistant.actions_enabled',
         default=False,
     )
+    ai_assistant_replenishment_enabled = fields.Boolean(
+        string='Пополнение товара через чат',
+        config_parameter='ai_assistant.replenishment_enabled',
+        default=True,
+    )
     ai_assistant_moving_enabled = fields.Boolean(
         string='Перемещения между складами через чат',
         config_parameter='ai_assistant.moving_enabled',

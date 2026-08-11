@@ -72,9 +72,16 @@
                             <field name="ai_assistant_actions_enabled"/>
                         </setting>
                         <setting
+                            id="ai_assistant_replenishment_setting"
+                            string="Пополнение товара через чат"
+                            help="Отдельный workflow пополнения (RFQ). Нужна группа «Снабжение». Требует включённых actions."
+                        >
+                            <field name="ai_assistant_replenishment_enabled"/>
+                        </setting>
+                        <setting
                             id="ai_assistant_moving_setting"
                             string="Перемещения между складами через чат"
-                            help="Отдельный workflow перемещения. Нужны группы «Снабжение» и Stock User. По умолчанию выключено."
+                            help="Отдельный workflow перемещения. Нужны группы «Снабжение» и Stock User. Требует включённых actions. По умолчанию выключено."
                         >
                             <field name="ai_assistant_moving_enabled"/>
                         </setting>

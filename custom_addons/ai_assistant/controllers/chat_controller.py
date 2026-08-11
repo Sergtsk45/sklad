@@ -1417,13 +1417,15 @@ class AiAssistantController(http.Controller):
     def _replenishment_enabled(self, params):
         if not request.env.user.has_group(_GROUP_SUPPLY):
             return False
-        enabled = params.get_param('ai_assistant.enabled', '1')
-        actions_enabled = params.get_param(
-            'ai_assistant.actions_enabled', '0'
-        )
+        truthy = ('1', 'True', 'true', '', True)
+        # Missing replenishment flag defaults to True: feature already rolled
+        # out under actions_enabled before the dedicated setting existed.
         return (
-            enabled in ('1', 'True', 'true', '') and
-            actions_enabled in ('1', 'True', 'true', True)
+            params.get_param('ai_assistant.enabled', '1') in truthy and
+            params.get_param('ai_assistant.actions_enabled', '0') in truthy and
+            params.get_param(
+                'ai_assistant.replenishment_enabled', 'True'
+            ) in truthy
         )
 
     def _start_replenishment_workflow(self, message, params):

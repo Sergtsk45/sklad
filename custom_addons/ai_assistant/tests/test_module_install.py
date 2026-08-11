@@ -64,3 +64,4 @@ class TestAiAssistantInstall(TransactionCase):
         settings = self.env['res.config.settings'].create({})
         self.assertFalse(settings.ai_assistant_actions_enabled)
         self.assertFalse(settings.ai_assistant_moving_enabled)
+        self.assertTrue(settings.ai_assistant_replenishment_enabled)
