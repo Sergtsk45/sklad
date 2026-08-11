@@ -3,7 +3,10 @@
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
-from ..models.product_search_utils import normalize_product_search_text
+from ..models.product_search_utils import (
+    normalize_product_search_text,
+    russian_morphology_search_tokens,
+)
 
 
 @tagged('post_install', '-at_install')
@@ -34,6 +37,16 @@ class TestCustomProductSearch(TransactionCase):
         self.assertEqual(
             normalize_product_search_text('Бобышка М20х1,5 L=40'),
             'бобышка м20x1.5 l=40',
+        )
+
+    def test_conservative_russian_morphology_tokens(self):
+        self.assertEqual(
+            russian_morphology_search_tokens('пену противопожарную'),
+            ['пен', 'противопожарн'],
+        )
+        self.assertEqual(
+            russian_morphology_search_tokens('кран Ду50'),
+            ['кран', 'ду50'],
         )
 
     def test_computed_search_fields(self):
@@ -89,6 +102,26 @@ class TestCustomProductSearch(TransactionCase):
     def test_ai_search_products(self):
         results = self.env['product.product'].ai_search_products('кран ду50')
         self.assertIn(self.product.id, [item['id'] for item in results])
+        self.assertTrue(all(item['match_type'] == 'exact' for item in results))
+
+    def test_ai_search_products_morphology_fallback_is_marked(self):
+        foam = self.env['product.product'].create({
+            'name': 'Пена монтажная противопожарная',
+            'type': 'consu',
+        })
+        results = self.env['product.product'].ai_search_products(
+            'пену противопожарную'
+        )
+        match = next(item for item in results if item['id'] == foam.id)
+        self.assertEqual(match['match_type'], 'morphology')
+
+        exact_results = self.env['product.product'].ai_search_products(
+            'пена противопожарная'
+        )
+        exact_match = next(
+            item for item in exact_results if item['id'] == foam.id
+        )
+        self.assertEqual(exact_match['match_type'], 'exact')
 
     def test_ai_search_products_by_supplier_article(self):
         vendor = self.env['res.partner'].create({

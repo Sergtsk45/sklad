@@ -35,12 +35,14 @@ class ReplenishmentIntentExtractor:
         self.client = client or OpenRouterClient(env)
 
     def extract(self, message):
-        return self.client.send_structured_chat(
+        result = self.client.send_structured_chat(
             [{
                 'role': 'system',
                 'content': (
                     'Извлеки намерение пополнить склад. Возвращай только JSON. '
-                    'Не выдумывай ID, цены или отсутствующие значения.'
+                    'Не выдумывай ID, цены или отсутствующие значения. '
+                    'product_query копируй дословно из сообщения пользователя: '
+                    'не склоняй, не исправляй и не перефразируй название товара.'
                 ),
             }, {'role': 'user', 'content': message or ''}],
             {'name': 'replenishment_intent', 'strict': True,
@@ -48,13 +50,26 @@ class ReplenishmentIntentExtractor:
             max_tokens=400,
             timeout=8,
         )
+        product_query = (result.get('product_query') or '').strip()
+        source = re.sub(r'\s+', ' ', message or '').casefold()
+        verbatim = re.sub(r'\s+', ' ', product_query).casefold()
+        if not product_query or verbatim not in source:
+            fallback = keyword_replenishment_fallback(message)
+            result['product_query'] = (
+                fallback.get('product_query') if fallback else None
+            )
+        return result
 
 
 _INTENT_RE = re.compile(
-    r'\b(?:пополни(?:ть|те)?|пополнение|дозакажи(?:те)?|закупи(?:ть|те)?)\b',
+    r'\b(?:пополни(?:ть|те)?|пополнени(?:е|я|ю|ем)|'
+    r'дозакажи(?:те)?|закупи(?:ть|те)?)\b',
     re.IGNORECASE,
 )
-_INTRO_RE = re.compile(r'\b(?:сделай(?:те)?|пожалуйста|нужно|надо)\b', re.I)
+_INTRO_RE = re.compile(
+    r'\b(?:сделай(?:те)?|создай(?:те)?|пожалуйста|нужно|надо)\b',
+    re.I,
+)
 _QTY_TAIL_RE = re.compile(
     r'\b\d+(?:[.,]\d+)?\s*'
     r'(?:шт(?:ук(?:и|а|ов)?)?|м(?:етр(?:а|ов)?)?|кг|килограмм(?:а|ов)?)\b',
@@ -71,6 +86,7 @@ def keyword_replenishment_fallback(message):
     if not _INTENT_RE.search(text):
         return None
     product_query = _INTRO_RE.sub(' ', _INTENT_RE.sub(' ', text))
+    product_query = re.sub(r'^\s*для\b', ' ', product_query, flags=re.I)
     product_query = _QTY_TAIL_RE.sub(' ', product_query)
     product_query = _VENDOR_TAIL_RE.sub(' ', product_query)
     product_query = _WAREHOUSE_TAIL_RE.sub(' ', product_query)

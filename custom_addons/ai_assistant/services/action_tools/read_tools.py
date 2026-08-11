@@ -28,7 +28,9 @@ class SearchProductsTool(AbstractReadTool):
     name = 'search_products'
     description = (
         'Поиск номенклатуры по названию, внутреннему артикулу '
-        'и артикулу поставщика (product.supplierinfo).'
+        'и артикулу поставщика (product.supplierinfo). Результат с '
+        'match_type=morphology является нечётким и требует явного выбора '
+        'пользователя, даже если кандидат один.'
     )
     parameters_schema = {
         'type': 'object',
@@ -71,6 +73,7 @@ class SearchProductsTool(AbstractReadTool):
             'display_name': raw_data.get('display_name'),
             'default_code': raw_data.get('default_code'),
             'uom_id': raw_data.get('uom_id'),
+            'match_type': raw_data.get('match_type', 'exact'),
             'is_storable': product.is_storable,
             'list_price': product.list_price,
         }

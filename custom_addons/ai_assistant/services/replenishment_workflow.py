@@ -139,9 +139,16 @@ class ReplenishmentWorkflow:
             return self._response(
                 token, session, 'Товар не найден — уточните наименование.'
             )
-        if len(products) > 1:
+        fuzzy = any(
+            item.get('match_type') == 'morphology' for item in products
+        )
+        if len(products) > 1 or fuzzy:
             session['last_options'] = products
-            return self._response(token, session, 'Выберите товар:', [
+            prompt = (
+                'Найдены похожие товары. Подтвердите нужный вариант:'
+                if fuzzy else 'Выберите товар:'
+            )
+            return self._response(token, session, prompt, [
                 self._suggestion(item['display_name'], self.ACTION_SELECT_PRODUCT,
                                  {'product_id': item['id']})
                 for item in products

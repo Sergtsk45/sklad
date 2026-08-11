@@ -4,6 +4,7 @@
 **Статус:** Задеплоено на prod (`ai_assistant` `19.0.1.1.0`). Полный backend-suite: 401 post-tests / 473 tests stats, 0 ошибок. QUnit/HttpCase AR-021…AR-026 — расширяемый tech-debt (TD-011).
 **Модуль:** `custom_addons/ai_assistant` (+ незначительные точки расширения `custom_product_search`, без изменений в `object_request`)
 **Связанные документы:**
+- [`.cursor/rules/ai-assistant-workflow-dialogs.mdc`](../.cursor/rules/ai-assistant-workflow-dialogs.mdc) — общее правило для проектирования новых многошаговых диалогов ассистента
 - [`tasktrecker-creat-partner-v2.md`](tasktrecker-creat-partner-v2.md) — образец формата и решений (ConfirmationCard, chips, denylist)
 - [`.cursor/skills/purchase-from-invoice/SKILL.md`](../.cursor/skills/purchase-from-invoice/SKILL.md) — аналогичный сценарий «закупка», но вне Odoo-чата (MCP-агент Cursor)
 - [`.cursor/rules/odoo-product-catalog.mdc`](../.cursor/rules/odoo-product-catalog.mdc) — правило «не создавать vendor-строку автоматически»

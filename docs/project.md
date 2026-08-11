@@ -399,6 +399,12 @@ AI Assistant v3 добавляет ограниченный tool layer для с
 rate limits и audit. AI создаёт только черновики и заметки; Confirm/Validate
 остаются ручными действиями пользователя в Odoo UI.
 
+Новые многошаговые рабочие диалоги проектируются по общему правилу
+[`ai-assistant-workflow-dialogs.mdc`](../.cursor/rules/ai-assistant-workflow-dialogs.mdc):
+structured LLM-extraction, детерминированная state-machine, server-authoritative
+сессия и ID, явное подтверждение, единый контракт карточек и обязательная
+матрица backend/frontend-тестов.
+
 ### Пополнение товара через чат
 
 `ReplenishmentIntentExtractor` выполняет отдельный structured LLM-вызов без

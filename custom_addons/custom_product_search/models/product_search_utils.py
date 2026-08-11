@@ -10,6 +10,14 @@ _TECH_SIZE_RE = re.compile(
 )
 _DIMENSION_RE = re.compile(r'(?<=\d)\s*[xх×]\s*(?=\d)', flags=re.IGNORECASE)
 _DECIMAL_COMMA_RE = re.compile(r'(?<=\d),(?=\d)')
+_CYRILLIC_WORD_RE = re.compile(r'^[а-я]+$')
+_RU_SEARCH_SUFFIXES = tuple(sorted({
+    'иями', 'ями', 'ами', 'ого', 'ему', 'ому', 'ыми', 'ими',
+    'ией', 'иям', 'ием', 'иях', 'ую', 'юю', 'ая', 'яя', 'ые', 'ие',
+    'ой', 'ей', 'ым', 'им', 'ых', 'их', 'ов', 'ев', 'ам', 'ям',
+    'ах', 'ях', 'ом', 'ем', 'ою', 'ею', 'ию', 'ия', 'ья', 'ью',
+    'ый', 'ий', 'а', 'я', 'у', 'ю', 'ы', 'и', 'е', 'о',
+}, key=len, reverse=True))
 
 
 def normalize_product_search_text(value):
@@ -24,3 +32,19 @@ def normalize_product_search_text(value):
     normalized = _DECIMAL_COMMA_RE.sub('.', normalized)
     normalized = _SPACES_RE.sub(' ', normalized).strip()
     return normalized
+
+
+def russian_morphology_search_tokens(value):
+    """Return conservative stems used only after exact search found nothing."""
+    normalized = normalize_product_search_text(value)
+    result = []
+    for token in normalized.split():
+        stem = token
+        if len(token) >= 4 and _CYRILLIC_WORD_RE.fullmatch(token):
+            for suffix in _RU_SEARCH_SUFFIXES:
+                candidate = token[:-len(suffix)]
+                if token.endswith(suffix) and len(candidate) >= 3:
+                    stem = candidate
+                    break
+        result.append(stem)
+    return result

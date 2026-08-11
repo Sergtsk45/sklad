@@ -11,6 +11,7 @@ from odoo.addons.ai_assistant.services.action_tools.read_tools import (
     GetProductSupplierInfoTool,
 )
 from odoo.addons.ai_assistant.services.replenishment_intent import (
+    ReplenishmentIntentExtractor,
     keyword_replenishment_fallback,
 )
 from odoo.addons.ai_assistant.services.replenishment_session_store import (
@@ -57,6 +58,44 @@ class TestReplenishmentServices(TransactionCase):
         self.assertIsNone(result['quantity'])
         self.assertIsNone(keyword_replenishment_fallback('что ты умеешь'))
 
+    def test_keyword_fallback_supports_replenishment_noun_forms(self):
+        for noun_form in ('пополнения', 'пополнению', 'пополнением'):
+            with self.subTest(noun_form=noun_form):
+                result = keyword_replenishment_fallback(
+                    'создай %s для пена противопожарная' % noun_form
+                )
+                self.assertTrue(result['intent'])
+                self.assertEqual(
+                    result['product_query'], 'пена противопожарная'
+                )
+        self.assertEqual(
+            keyword_replenishment_fallback(
+                'пополни средство для мытья'
+            )['product_query'],
+            'средство для мытья',
+        )
+
+    def test_extractor_restores_verbatim_product_query(self):
+        client = MagicMock()
+        client.send_structured_chat.return_value = {
+            'intent': True,
+            'product_query': 'пену противопожарную',
+            'quantity': None,
+            'uom_text': None,
+            'vendor_query': None,
+            'vendor_preference': None,
+            'warehouse_query': None,
+            'correction': False,
+            'selection_ordinal': None,
+            'confidence': 0.95,
+        }
+        result = ReplenishmentIntentExtractor(
+            self.env, client=client
+        ).extract('создай пополнения для пена противопожарная')
+        self.assertEqual(result['product_query'], 'пена противопожарная')
+        system_prompt = client.send_structured_chat.call_args.args[0][0]
+        self.assertIn('копируй дословно', system_prompt['content'])
+
     def test_session_store_is_uid_scoped_and_expires(self):
         store = ReplenishmentSessionStore(ttl_seconds=0.01)
         token = store.put(10, {'product_query': 'Отвод'})
@@ -74,6 +113,25 @@ class TestReplenishmentServices(TransactionCase):
         self.assertFalse(workflow._payload_is_allowlisted(
             session, workflow.ACTION_SELECT_PRODUCT, {'product_id': 13}
         ))
+
+    def test_single_morphology_match_requires_explicit_selection(self):
+        store = ReplenishmentSessionStore()
+        workflow = ReplenishmentWorkflow(self.env, store)
+        workflow.products.execute = MagicMock(return_value={
+            'products': [{
+                'id': self.product.id,
+                'display_name': self.product.display_name,
+                'match_type': 'morphology',
+            }],
+        })
+        token, result = workflow.begin(self.env.uid, {
+            'product_query': 'товару тестовому',
+        })
+        session = store.get_session(self.env.uid, token)
+        self.assertEqual(session['state'], workflow.AWAITING_PRODUCT)
+        self.assertFalse(session['product_id'])
+        self.assertIn('Подтвердите нужный вариант', result['answer'])
+        self.assertEqual(len(result['suggestions']), 1)
 
     def test_result_card_keeps_token_and_backend_actions(self):
         po = MagicMock()
