@@ -14,6 +14,12 @@
   `ai_assistant.moving_enabled`; доступ требует групп «AI Assistant /
   Снабжение» и Stock User.
 
+### Деплой
+- Prod `77c4b45`: backup
+  `/opt/project_odoo/backups/ai-moving-20260811-203912/`,
+  `-u ai_assistant` → `19.0.1.2.0`, restart; health `pass`.
+  Флаг `moving_enabled` по умолчанию выключен.
+
 ### Ограничения
 - TTL-сессии и execute-lock пока process-local. Для production с несколькими
   Odoo workers требуется общее DB/Redis-хранилище и распределённый execute-once;
