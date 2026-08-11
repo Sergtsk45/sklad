@@ -107,4 +107,5 @@
 
 - Полный цикл снабжения объекта: [`instruction-warehouse-supply-cycle.md`](instruction-warehouse-supply-cycle.md)
 - Пополнение базы Ос.ск / Расх: [`instruction-base-warehouse-replenish.md`](instruction-base-warehouse-replenish.md)
+- Частичная приёмка и бэкордер («ждём довоз»): [`instruction-partial-receipt-backorder.md`](instruction-partial-receipt-backorder.md)
 - Функциональная спецификация: [`functionalspecobjectrequest.md`](functionalspecobjectrequest.md) (раздел «Подготовить закупку»)

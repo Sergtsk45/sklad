@@ -1,3 +1,40 @@
+## Задача: AI-ассистент — пополнение товара через чат (дизайн)
+- **Статус**: Дизайн готов к реализации (round 3), реализация не начата
+- **Детальный трекер**: `docs/tasktrecker-assistent-replenishment.md` (AR-001…AR-027)
+- **Описание**: Исследована текущая архитектура `ai_assistant` (tools, ConfirmationCard/ResultCard,
+  `InvoiceWorkflow` как эталон state-machine, denylist executor) и спроектирован сценарий
+  «пополнение товара»: определение товара → остаток → количество/UoM → применимые предложения
+  поставщиков (`product.supplierinfo`) → склад → итоговое подтверждение → черновик PO (переиспользуется
+  `CreatePurchaseOrderDraftTool`) → кнопки в чате «Отправить запрос/Подтвердить/Печать/Отменить»
+  (вне `ToolRegistry`, только по клику, с ACL и state-проверками). D7: гибридный intent-extractor —
+  один LLM-вызов извлекает только текстовые поля, резолвинг в Odoo-записи и весь workflow —
+  детерминированный код; keyword-детекция — fallback при недоступности LLM.
+  По итогам второго техревью (проверка построчно кода `ai_chat_boot.js`/`chat_controller.py`/
+  `openrouter_client.py`) закрыты 6 блокеров: противоречие подтверждения количества (D9),
+  отсутствие ACTION_SELECT_PRODUCT и таблицы состояний (AR-003), отсутствие frontend-контракта
+  `replenishment_token` (AR-015 — обнаружено, что клики по чужим action без токена сейчас молча
+  игнорируются), отсутствие `OpenRouterClient.send_structured_chat` (AR-017), keyword fallback
+  передававший сырое сообщение как поисковый запрос (AR-019), отсутствие `vendor_preference` в
+  схеме извлечения (AR-018). Плюс более мелкие: ACL read tool в consult-режиме (D8), валюта
+  supplierinfo (D10), origin/partner_ref, конкурентные клики «Выполнить» (лок в AR-002/AR-010),
+  тип action для печати vs отправки, po_id как advisory-параметр (AR-012).
+  Третье техревью закрыло остаточные блокеры: active token отделён от post-PO token в ResultCard;
+  валюта seller сравнивается с будущей валютой PO партнёра; qty/UoM конвертируются стандартными
+  `_compute_quantity`/`_compute_price`, несовместимые категории блокируются; seller-tier выбирается
+  после qty через `_get_filtered_sellers`; описан старт workflow, приоритет invoice/replenishment и
+  проверки Supply/enabled/actions; RFQ/печать вызывают стандартные методы Odoo; `partner_ref`
+  сделан необязательным для replenishment.
+- **Шаги выполнения**:
+  - [x] Исследование архитектуры (controllers/services/action_tools/frontend).
+  - [x] Согласование 6 неоднозначных бизнес-правил с пользователем (D1–D6).
+  - [x] Ревью подхода к intent-детекции → решение D7 (LLM-extractor + fallback).
+  - [x] Второе техревью → закрыты 6 блокеров + доп. противоречия (D8–D10, AR-003, AR-015, AR-017).
+  - [x] Третье техревью → закрыты token lifetime, валюта PO, UoM, стартовая маршрутизация и локальные замечания (D11).
+  - [ ] Реализация backend (AR-001…AR-013, AR-017…AR-020).
+  - [ ] Реализация frontend (AR-014…AR-016).
+  - [ ] Тесты и документация (AR-021…AR-027).
+- **Зависимости**: `ai_assistant`, `custom_product_search`, `purchase`, `stock`.
+
 ## Задача: OR — поиск товара с учётом поставщика (OBR-038)
 - **Статус**: Завершена и задеплоена на prod 2026-08-11 (`5c84aa9`, `19.0.1.10.6`)
 - **Описание**: При заполненном «Поставщик» в строке OR поиск в «Товар»
@@ -41,6 +78,17 @@
  - [x] Задеплоить `ai_assistant` + `custom_product_search` на VPS и
    `-u` модули (prod `304b3e8`, 2026-08-08).
 - **Зависимости**: `product.supplierinfo`, `custom_product_search`.
+
+## Задача: docs — частичная приёмка и бэкордер
+- **Статус**: Завершена
+- **Описание**: UI-инструкция со скриншотами: заказ/счёт на N, привезли M,
+  ждём довоз — частичная Validate + Create Backorder, счёт не трогать.
+- **Шаги выполнения**:
+ - [x] Снять скриншоты prod (`P00090`, `Офис/IN/00015`, `Офис/IN/00016`).
+ - [x] Написать `docs/instruction-partial-receipt-backorder.md`.
+ - [x] Сохранить изображения в `docs/screenshots/partial-receipt-backorder/`.
+ - [x] Обновить changelog и ссылки из смежных инструкций.
+- **Зависимости**: стандартный Purchase/Stock.
 
 ## Задача: docs — инструкция пополнения Ос.ск / Расх
 - **Статус**: Завершена

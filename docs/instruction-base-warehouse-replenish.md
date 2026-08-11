@@ -120,6 +120,9 @@ Odoo создаст связанное **Поступление** (`…/IN/…`)
 [`instruction-warehouse-supply-cycle.md`](instruction-warehouse-supply-cycle.md),  
 [`instruction-purchase-split-vendors.md`](instruction-purchase-split-vendors.md).
 
+Частичная приёмка и бэкордер («ждём довоз»):  
+[`instruction-partial-receipt-backorder.md`](instruction-partial-receipt-backorder.md).
+
 ---
 
 ## 6. Чек-лист
