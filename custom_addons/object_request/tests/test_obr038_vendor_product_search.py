@@ -127,7 +127,7 @@ class TestObr038VendorProductSearch(TransactionCase):
         self.assertIn(self.product_b.id, ids)
         labels = {pid: label for pid, label in results}
         self.assertFalse(
-            labels[self.product_a.id].startswith("[Vendor A OR038] ")
+            labels[self.product_a.id].endswith(" — Vendor A OR038")
         )
 
     def test_with_vendor_filters_to_seller_catalog(self):
@@ -139,9 +139,9 @@ class TestObr038VendorProductSearch(TransactionCase):
         self.assertIn(self.product_a.id, ids)
         self.assertNotIn(self.product_b.id, ids)
         labels = {pid: label for pid, label in results}
-        self.assertTrue(
-            labels[self.product_a.id].startswith("[Vendor A OR038] ")
-        )
+        self.assertTrue(labels[self.product_a.id].endswith(
+            " — Vendor A OR038"
+        ))
 
     def test_with_vendor_finds_trade_name(self):
         Product = self.env["product.product"].with_context(
@@ -151,15 +151,15 @@ class TestObr038VendorProductSearch(TransactionCase):
         ids = [pid for pid, _label in results]
         self.assertIn(self.product_a.id, ids)
         labels = {pid: label for pid, label in results}
-        self.assertTrue(
-            labels[self.product_a.id].startswith("[Vendor A OR038] ")
-        )
+        self.assertTrue(labels[self.product_a.id].endswith(
+            " — Vendor A OR038"
+        ))
         self.assertIn(
             " — Пена монтажная проф. ПРОТИВОПОЖАРНАЯ B1 65 ",
             labels[self.product_a.id],
         )
 
-    def test_web_name_search_keeps_vendor_prefix_and_trade_name(self):
+    def test_web_name_search_keeps_vendor_suffix_and_trade_name(self):
         self.product_a.default_code = "DEFAULT-CODE-OR038"
         Product = self.env["product.product"].with_context(
             **{CTX_PREFERRED_VENDOR: self.vendor_a.id}
@@ -176,9 +176,9 @@ class TestObr038VendorProductSearch(TransactionCase):
             "[DEFAULT-CODE-OR038] "
             "Пена монтажная огнестойкая B1, 750 мл OR038",
         )
-        self.assertTrue(
-            row["__formatted_display_name"].startswith("[Vendor A OR038] ")
-        )
+        self.assertTrue(row["__formatted_display_name"].endswith(
+            " — Vendor A OR038"
+        ))
         self.assertIn(
             "\t--DEFAULT-CODE-OR038--",
             row["__formatted_display_name"],
@@ -187,7 +187,9 @@ class TestObr038VendorProductSearch(TransactionCase):
             " — Пена монтажная проф. ПРОТИВОПОЖАРНАЯ B1 65 ",
             row["__formatted_display_name"],
         )
-        self.assertFalse(row["display_name"].startswith("[Vendor A OR038] "))
+        self.assertFalse(row["display_name"].endswith(
+            " — Vendor A OR038"
+        ))
 
     def test_web_name_search_extended_specification_is_decorated(self):
         self.product_a.default_code = "EXTENDED-CODE-OR038"
@@ -202,10 +204,12 @@ class TestObr038VendorProductSearch(TransactionCase):
 
         row = next(item for item in rows if item["id"] == self.product_a.id)
         self.assertEqual(row["default_code"], "EXTENDED-CODE-OR038")
-        self.assertFalse(row["display_name"].startswith("[Vendor A OR038] "))
-        self.assertTrue(
-            row["__formatted_display_name"].startswith("[Vendor A OR038] ")
-        )
+        self.assertFalse(row["display_name"].endswith(
+            " — Vendor A OR038"
+        ))
+        self.assertTrue(row["__formatted_display_name"].endswith(
+            " — Vendor A OR038"
+        ))
         self.assertIn(
             "\t--EXTENDED-CODE-OR038--",
             row["__formatted_display_name"],
@@ -241,10 +245,12 @@ class TestObr038VendorProductSearch(TransactionCase):
         )
 
         row = next(item for item in rows if item["id"] == self.product_a.id)
-        self.assertFalse(row["display_name"].startswith("[Vendor A OR038] "))
-        self.assertTrue(
-            row["__formatted_display_name"].startswith("[Vendor A OR038] ")
-        )
+        self.assertFalse(row["display_name"].endswith(
+            " — Vendor A OR038"
+        ))
+        self.assertTrue(row["__formatted_display_name"].endswith(
+            " — Vendor A OR038"
+        ))
         self.assertIn(
             "\t--PRIMARY-SELLER-OR038--",
             row["__formatted_display_name"],
@@ -259,7 +265,7 @@ class TestObr038VendorProductSearch(TransactionCase):
 
         row = next(item for item in rows if item["id"] == self.product_a.id)
         self.assertFalse(
-            row["__formatted_display_name"].startswith("[Vendor A OR038] ")
+            row["__formatted_display_name"].endswith(" — Vendor A OR038")
         )
 
     def test_web_name_search_without_seller_is_unchanged(self):
@@ -304,12 +310,12 @@ class TestObr038VendorProductSearch(TransactionCase):
 
         row = next(item for item in rows if item["id"] == self.product_a.id)
         self.assertTrue(
-            row["__formatted_display_name"].startswith(
-                f"[{expected_vendor.display_name}] "
+            row["__formatted_display_name"].endswith(
+                f" — {expected_vendor.display_name}"
             )
         )
 
-    def test_with_vendor_empty_search_prefixes_all_results(self):
+    def test_with_vendor_empty_search_suffixes_all_results(self):
         Product = self.env["product.product"].with_context(
             **{CTX_PREFERRED_VENDOR: self.vendor_a.id}
         )
@@ -317,11 +323,11 @@ class TestObr038VendorProductSearch(TransactionCase):
 
         labels = {pid: label for pid, label in results}
         self.assertIn(self.product_a.id, labels)
-        self.assertTrue(
-            labels[self.product_a.id].startswith("[Vendor A OR038] ")
-        )
+        self.assertTrue(labels[self.product_a.id].endswith(
+            " — Vendor A OR038"
+        ))
 
-    def test_with_vendor_limit_early_return_prefixes_results_once(self):
+    def test_with_vendor_limit_early_return_suffixes_results_once(self):
         Product = self.env["product.product"].with_context(
             **{CTX_PREFERRED_VENDOR: self.vendor_a.id}
         )
@@ -329,10 +335,8 @@ class TestObr038VendorProductSearch(TransactionCase):
 
         self.assertEqual(len(results), 1)
         _product_id, label = results[0]
-        self.assertTrue(label.startswith("[Vendor A OR038] "))
-        self.assertFalse(
-            label.startswith("[Vendor A OR038] [Vendor A OR038] ")
-        )
+        self.assertTrue(label.endswith(" — Vendor A OR038"))
+        self.assertEqual(label.count(" — Vendor A OR038"), 1)
 
     def test_with_vendor_finds_supplier_code(self):
         Product = self.env["product.product"].with_context(

@@ -10,6 +10,15 @@
   `/opt/project_odoo/backups/or-primary-seller-web-search-20260812-083027/`,
   `-u object_request` → `19.0.1.10.8`, restart; health `pass`, `/web/login` HTTP 200.
 
+## [2026-08-12] — OR: суффикс поставщика в web_name_search (OBR-038)
+
+### Исправлено
+- При выбранном поставщике в OR формирование `__formatted_display_name`
+  использует суффикс `— {vendor}` без дублирования; `display_name` остаётся
+  чистым.
+- Обновлены regression-тесты Odoo 19 web_name_search под новый формат.
+- Версия: `object_request` `19.0.1.10.9`.
+
 ## [2026-08-12] — OR: префикс поставщика в поиске товара (OBR-038)
 
 ### Исправлено

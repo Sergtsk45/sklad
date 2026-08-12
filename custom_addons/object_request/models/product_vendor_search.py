@@ -83,19 +83,20 @@ class ProductProduct(models.Model):
                     formatted_display_name=True
                 ).browse(product_ids)
             }
-        prefix = f"[{vendor.display_name}] "
+        vendor_suffix = f" — {vendor.display_name}"
         for row in rows:
             product_id = row["id"]
             clean_name = clean_names[product_id]
             search_label = search_labels.get(product_id, "")
-            if search_label.startswith(prefix):
-                search_label = search_label[len(prefix):]
+            if search_label.endswith(vendor_suffix):
+                search_label = search_label[:-len(vendor_suffix)]
             trade_suffix = search_label.removeprefix(clean_name)
             if not trade_suffix.startswith(" — "):
                 trade_suffix = ""
             row["display_name"] = clean_name
             row["__formatted_display_name"] = (
-                f"{prefix}{formatted_names[product_id]}{trade_suffix}"
+                f"{formatted_names[product_id]}{trade_suffix}"
+                f"{vendor_suffix}"
             )
         return rows
 
@@ -115,8 +116,8 @@ class ProductProduct(models.Model):
             if not sellers:
                 continue
             row["__formatted_display_name"] = (
-                f"[{sellers[0].partner_id.display_name}] "
-                f"{formatted_names[product.id]}"
+                f"{formatted_names[product.id]} — "
+                f"{sellers[0].partner_id.display_name}"
             )
         return rows
 
@@ -158,9 +159,9 @@ class ProductProduct(models.Model):
         vendor = self.env["res.partner"].browse(vendor_id).exists()
         if not vendor:
             return results
-        prefix = f"[{vendor.display_name}] "
+        vendor_suffix = f" — {vendor.display_name}"
         return [
-            (product_id, f"{prefix}{label}")
+            (product_id, f"{label}{vendor_suffix}")
             for product_id, label in results
         ]
 
