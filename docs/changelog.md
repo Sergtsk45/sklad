@@ -6,6 +6,9 @@
 - `web_name_search` (Odoo 19) декорирует `__formatted_display_name` без
   дублирования префикса; пустой поиск и ранний limit тоже получают префикс.
 - Версия: `object_request` `19.0.1.10.7`.
+- Prod deploy `6a14505`: backup
+  `/opt/project_odoo/backups/or-vendor-web-name-search-20260812-080448/`,
+  `-u object_request` → `19.0.1.10.7`, restart; health `pass`, `/web/login` HTTP 200.
 
 ## [2026-08-12] — feat(ai_assistant): флаг пополнения в Настройки
 
