@@ -229,6 +229,86 @@ class TestObr038VendorProductSearch(TransactionCase):
         self.assertNotIn("display_name", row)
         self.assertNotIn("__formatted_display_name", row)
 
+    def test_web_name_search_uses_primary_seller_without_vendor(self):
+        self.product_a.default_code = "PRIMARY-SELLER-OR038"
+        Product = self.env["product.product"].with_context(
+            **{CTX_REQUEST_COMPANY: self.env.company.id}
+        )
+        rows = Product.web_name_search(
+            "пена монтажная огнестойкая B1",
+            {"display_name": {}},
+            limit=20,
+        )
+
+        row = next(item for item in rows if item["id"] == self.product_a.id)
+        self.assertFalse(row["display_name"].startswith("[Vendor A OR038] "))
+        self.assertTrue(
+            row["__formatted_display_name"].startswith("[Vendor A OR038] ")
+        )
+        self.assertIn(
+            "\t--PRIMARY-SELLER-OR038--",
+            row["__formatted_display_name"],
+        )
+
+    def test_web_name_search_without_request_company_is_unchanged(self):
+        rows = self.env["product.product"].web_name_search(
+            "пена монтажная огнестойкая B1",
+            {"display_name": {}},
+            limit=20,
+        )
+
+        row = next(item for item in rows if item["id"] == self.product_a.id)
+        self.assertFalse(
+            row["__formatted_display_name"].startswith("[Vendor A OR038] ")
+        )
+
+    def test_web_name_search_without_seller_is_unchanged(self):
+        product = self.env["product.product"].create(
+            {"name": "Без поставщика NO-SELLER-OR038", "type": "consu"}
+        )
+        Product = self.env["product.product"].with_context(
+            **{CTX_REQUEST_COMPANY: self.env.company.id}
+        )
+        rows = Product.web_name_search(
+            "NO-SELLER-OR038",
+            {"display_name": {}},
+            limit=20,
+        )
+
+        row = next(item for item in rows if item["id"] == product.id)
+        self.assertEqual(
+            row["__formatted_display_name"],
+            product.with_context(formatted_display_name=True).display_name,
+        )
+
+    def test_web_name_search_primary_seller_matches_onchange_order(self):
+        self.env["product.supplierinfo"].create(
+            {
+                "product_tmpl_id": self.product_a.product_tmpl_id.id,
+                "partner_id": self.vendor_b.id,
+                "sequence": 0,
+                "price": 700.0,
+            }
+        )
+        company = self.env.company
+        sellers = self.product_a.with_company(company)._prepare_sellers()
+        expected_vendor = sellers[0].partner_id
+        Product = self.env["product.product"].with_context(
+            **{CTX_REQUEST_COMPANY: company.id}
+        )
+        rows = Product.web_name_search(
+            "пена монтажная огнестойкая B1",
+            {"display_name": {}},
+            limit=20,
+        )
+
+        row = next(item for item in rows if item["id"] == self.product_a.id)
+        self.assertTrue(
+            row["__formatted_display_name"].startswith(
+                f"[{expected_vendor.display_name}] "
+            )
+        )
+
     def test_with_vendor_empty_search_prefixes_all_results(self):
         Product = self.env["product.product"].with_context(
             **{CTX_PREFERRED_VENDOR: self.vendor_a.id}

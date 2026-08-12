@@ -32,13 +32,17 @@ class ProductProduct(models.Model):
         vendor_id = self._or_preferred_vendor_id_from_context()
         vendor = self.env["res.partner"].browse(vendor_id).exists()
         if not vendor:
-            return super().web_name_search(
+            rows = super().web_name_search(
                 name,
                 specification,
                 domain=domain,
                 operator=operator,
                 limit=limit,
             )
+            company = self._or_request_company_from_context()
+            if not company or "display_name" not in specification:
+                return rows
+            return self._or_add_primary_seller_to_web_labels(rows, company)
 
         id_name_pairs = self.name_search(name, domain, operator, limit)
         search_labels = dict(id_name_pairs)
@@ -92,6 +96,27 @@ class ProductProduct(models.Model):
             row["display_name"] = clean_name
             row["__formatted_display_name"] = (
                 f"{prefix}{formatted_names[product_id]}{trade_suffix}"
+            )
+        return rows
+
+    @api.model
+    def _or_add_primary_seller_to_web_labels(self, rows, company):
+        products = self.browse([row["id"] for row in rows])
+        formatted_names = {
+            product.id: product.display_name
+            for product in self.with_context(
+                formatted_display_name=True
+            ).browse(products.ids)
+        }
+        products_by_id = {product.id: product for product in products}
+        for row in rows:
+            product = products_by_id[row["id"]]
+            sellers = product.with_company(company)._prepare_sellers()
+            if not sellers:
+                continue
+            row["__formatted_display_name"] = (
+                f"[{sellers[0].partner_id.display_name}] "
+                f"{formatted_names[product.id]}"
             )
         return rows
 
@@ -150,6 +175,19 @@ class ProductProduct(models.Model):
             return int(raw)
         except (TypeError, ValueError):
             return False
+
+    @api.model
+    def _or_request_company_from_context(self):
+        raw = self.env.context.get(CTX_REQUEST_COMPANY)
+        if not raw:
+            return self.env["res.company"]
+        if isinstance(raw, (list, tuple)):
+            raw = raw[0] if raw else False
+        try:
+            company_id = int(raw)
+        except (TypeError, ValueError):
+            return self.env["res.company"]
+        return self.env["res.company"].browse(company_id).exists()
 
     @api.model
     def _or_remaining_name_search_limit(self, limit, results):
