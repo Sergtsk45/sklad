@@ -6,6 +6,9 @@
   требования (тот же порядок, что в onchange).
 - Без `CTX_REQUEST_COMPANY` или без seller у товара поведение не меняется.
 - Версия: `object_request` `19.0.1.10.8`.
+- Prod deploy `b5b9e58`: backup
+  `/opt/project_odoo/backups/or-primary-seller-web-search-20260812-083027/`,
+  `-u object_request` → `19.0.1.10.8`, restart; health `pass`, `/web/login` HTTP 200.
 
 ## [2026-08-12] — OR: префикс поставщика в поиске товара (OBR-038)
 
