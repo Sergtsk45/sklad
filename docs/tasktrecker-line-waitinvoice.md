@@ -521,7 +521,7 @@ decoration-info="line_state == 'awaiting_supplier_invoice'"
 - [x] Обновить модуль в локальной БД.
 - [x] Перезапустить основной Odoo-процесс после изменения Python.
 - [ ] Выполнить ручной тест под снабженцем, прорабом и кладовщиком.
-- [ ] Перед production-деплоем сделать штатный backup и действовать по
+- [x] Перед production-деплоем сделать штатный backup и действовать по
   отдельному разрешению пользователя; этот tasktracker сам по себе не
   разрешает production deploy, commit или push.
 
@@ -815,5 +815,6 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
   счёта, блокировка PO — см. раздел «Будущее расширение»
 - [x] сведения о локальном обновлении: `-u object_request` на `odoo19_local`,
   `docker restart odoo19-local`, `/web/login` HTTP 200 (follow redirects)
-- [x] сведения о production deploy: **не выполнялся** (нет отдельного
-  разрешения)
+- [x] сведения о production deploy: `a42e2f3`, backup
+  `/opt/project_odoo/backups/or-obr039-line-wait-invoice-20260812-233620/`,
+  `-u object_request` → `19.0.1.10.12`, health `pass`, `/web/login` HTTP 200

@@ -10,6 +10,10 @@
 
 ### Изменено
 - Версия: `object_request` `19.0.1.10.12`.
+- Prod deploy `a42e2f3`: backup
+  `/opt/project_odoo/backups/or-obr039-line-wait-invoice-20260812-233620/`,
+  `-u object_request` → `19.0.1.10.12`, restart; health `pass`, `/web/login`
+  HTTP 200.
 
 ## [2026-08-13] — OR: фиксация состава строк в статусе «В работе»
 
