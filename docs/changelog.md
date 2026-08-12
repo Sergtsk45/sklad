@@ -18,6 +18,10 @@
   чистым.
 - Обновлены regression-тесты Odoo 19 web_name_search под новый формат.
 - Версия: `object_request` `19.0.1.10.9`.
+- Prod deploy `9941895`: backup
+  `/opt/project_odoo/backups/or-suffix-vendor-web-name-search-20260812-085716/`,
+  `-u object_request` → `19.0.1.10.9`, restart; health `pass`, `/web/login`
+  HTTP 200.
 
 ## [2026-08-12] — OR: префикс поставщика в поиске товара (OBR-038)
 
