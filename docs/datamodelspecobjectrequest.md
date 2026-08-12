@@ -326,6 +326,16 @@ scope: Odoo 19, models, fields, relations, constraints
 
 лучше сделать readonly, чтобы документ не менял смысл по ходу обработки.
 
+Состав строк после перехода в `in_progress` (и далее в `closed`/`cancelled`)
+фиксируется на сервере и в UI:
+
+- нельзя создавать и удалять `object.request.line`;
+- нельзя менять `qty_requested`;
+- сопоставление, `qty_to_issue` и `qty_to_buy` остаются доступны в `in_progress`.
+
+Поле `state` не копируется (`copy=False`): дубликат документа всегда стартует
+как черновик.
+
 ### Python constraints
 
 - документ должен содержать хотя бы одну строку перед переводом в `in_progress`

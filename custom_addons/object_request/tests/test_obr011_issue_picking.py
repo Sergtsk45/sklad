@@ -164,6 +164,7 @@ class TestObr011IssuePicking(TransactionCase):
                 "type": "consu",
             }
         )
+        self.request.write({"state": "draft"})
         line2 = self.env["object.request.line"].create(
             {
                 "request_id": self.request.id,
@@ -174,6 +175,7 @@ class TestObr011IssuePicking(TransactionCase):
             }
         )
         self._add_stock_distribution(line2, 15.0)
+        self.request.write({"state": "in_progress"})
         _result, picking = self._create_issue()
         self.assertEqual(len(picking.move_ids), 2)
 

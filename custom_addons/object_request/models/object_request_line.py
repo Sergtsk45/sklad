@@ -1,7 +1,13 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools.float_utils import float_compare
 
 from .excel_parser import _SKIP_ARTICLES
+
+_COMPOSITION_LOCK_MSG = (
+    "Состав строк и запрошенное количество можно менять "
+    "только в черновике."
+)
 
 
 class ObjectRequestLine(models.Model):
@@ -245,6 +251,16 @@ class ObjectRequestLine(models.Model):
         default=False,
         index=True,
     )
+    supplier_invoice_requested = fields.Boolean(
+        string="Счёт запрошен",
+        default=False,
+        copy=False,
+        index=True,
+        help=(
+            "Снабженец запросил счёт у выбранного поставщика. "
+            "Товар в каталоге может быть ещё не сопоставлен."
+        ),
+    )
     line_state = fields.Selection(
         [
             ("draft", "Черновик"),
@@ -252,6 +268,7 @@ class ObjectRequestLine(models.Model):
             ("ready", "Готово к обработке"),
             ("partially_issued", "Частично обеспечено"),
             ("fully_supplied", "Полностью обеспечено"),
+            ("awaiting_supplier_invoice", "Ожидает счёт от поставщика"),
             ("cancelled", "Отменено"),
         ],
         string="Статус строки",
@@ -357,15 +374,21 @@ class ObjectRequestLine(models.Model):
         "qty_issued",
         "qty_requested",
         "is_cancelled",
+        "supplier_invoice_requested",
     )
     def _compute_line_state(self):
         for line in self:
             if line.is_cancelled:
                 line.line_state = "cancelled"
-            elif not line.product_id or line.matching_required:
+            elif (
+                (not line.product_id or line.matching_required)
+                and not line.supplier_invoice_requested
+            ):
                 line.line_state = "requires_mapping"
             elif line.qty_issued >= line.qty_requested:
                 line.line_state = "fully_supplied"
+            elif line.supplier_invoice_requested:
+                line.line_state = "awaiting_supplier_invoice"
             elif line.qty_issued > 0:
                 line.line_state = "partially_issued"
             elif line.product_id:
@@ -392,17 +415,64 @@ class ObjectRequestLine(models.Model):
         for line in self:
             line.has_substitutes = bool(line.allowed_substitute_ids)
 
+    def _is_composition_locked(self, request=None):
+        records = request if request is not None else self.mapped("request_id")
+        return any(rec.state != "draft" for rec in records)
+
+    def _check_composition_unlocked(self, request=None):
+        if self._is_composition_locked(request):
+            raise UserError(_COMPOSITION_LOCK_MSG)
+
+    def _check_qty_requested_change(self, new_qty):
+        locked = self.filtered(lambda ln: ln.request_id.state != "draft")
+        if not locked:
+            return
+        precision = self.env["decimal.precision"].precision_get(
+            "Product Unit of Measure"
+        )
+        for line in locked:
+            if float_compare(
+                new_qty,
+                line.qty_requested,
+                precision_digits=precision,
+            ):
+                raise UserError(_COMPOSITION_LOCK_MSG)
+
     @api.model_create_multi
     def create(self, vals_list):
+        self.check_access("create")
         for vals in vals_list:
             if vals.get("allowed_substitute_ids"):
                 self._check_supply_manager_substitution_action()
+            request_id = vals.get("request_id")
+            if request_id:
+                request = self.env["object.request"].browse(request_id)
+                self._check_composition_unlocked(request)
+            if vals.get("supplier_invoice_requested"):
+                self._check_supply_manager_invoice_request_action()
+                self.new(vals)._validate_supplier_invoice_request({})
         return super().create(vals_list)
 
     def write(self, vals):
         if "allowed_substitute_ids" in vals:
             self._check_supply_manager_substitution_action()
-        return super().write(vals)
+        if "qty_requested" in vals:
+            self._check_qty_requested_change(vals["qty_requested"])
+        self._check_explicit_invoice_request_write(vals)
+        return self._write_with_invoice_request_reset(vals)
+
+    def unlink(self):
+        self.check_access("unlink")
+        self._check_composition_unlocked()
+        return super().unlink()
+
+    def _unlink_from_parent_request(self):
+        """Cascade from ``object.request.unlink``.
+
+        Private on purpose: unlike a user-controlled context flag, ``_``
+        methods are not exposed via RPC.
+        """
+        return super().unlink()
 
     def _check_supply_manager_substitution_action(self):
         if not self.env.user.has_group("object_request.group_supply_manager"):
@@ -410,6 +480,106 @@ class ObjectRequestLine(models.Model):
                 return
             raise UserError(
                 "Подтверждение и ведение замен доступно только снабженцу."
+            )
+
+    def _check_supply_manager_invoice_request_action(self):
+        if not self.env.user.has_group("object_request.group_supply_manager"):
+            if self.env.user.has_group("base.group_system"):
+                return
+            raise UserError(
+                "Отметку запроса счёта может менять только снабженец."
+            )
+
+    def _check_explicit_invoice_request_write(self, vals):
+        if "supplier_invoice_requested" not in vals:
+            return
+        new_flag = bool(vals.get("supplier_invoice_requested"))
+        changing = self.filtered(
+            lambda ln: bool(ln.supplier_invoice_requested) != new_flag
+        )
+        context_change = any(
+            key in vals for key in ("product_id", "preferred_vendor_id")
+        )
+        if changing:
+            changing._check_supply_manager_invoice_request_action()
+            if new_flag:
+                changing._validate_supplier_invoice_request(vals)
+            return
+        if new_flag and context_change:
+            self._check_supply_manager_invoice_request_action()
+            self._validate_supplier_invoice_request(vals)
+
+    def _write_with_invoice_request_reset(self, vals):
+        keep_true = (
+            "supplier_invoice_requested" in vals
+            and vals.get("supplier_invoice_requested")
+        )
+        if keep_true:
+            return super().write(vals)
+        to_reset = self._invoice_request_reset_lines(vals)
+        if not to_reset:
+            return super().write(vals)
+        keep = self - to_reset
+        result = True
+        if keep:
+            result = super(ObjectRequestLine, keep).write(vals)
+        reset_vals = dict(vals, supplier_invoice_requested=False)
+        return super(ObjectRequestLine, to_reset).write(reset_vals) and result
+
+    def _invoice_request_reset_lines(self, vals):
+        to_reset = self.browse()
+        if "product_id" in vals:
+            to_reset |= self._lines_replacing_m2o("product_id", vals)
+        if "preferred_vendor_id" in vals:
+            to_reset |= self._lines_replacing_m2o(
+                "preferred_vendor_id", vals
+            )
+        return to_reset.filtered("supplier_invoice_requested")
+
+    def _lines_replacing_m2o(self, field_name, vals):
+        new_id = self._m2o_id(vals.get(field_name))
+        replaced = self.browse()
+        for line in self:
+            old = line[field_name]
+            old_id = old.id if old else False
+            if old_id and old_id != new_id:
+                replaced |= line
+        return replaced
+
+    def _m2o_id(self, value):
+        if isinstance(value, models.BaseModel):
+            return value.id
+        return value or False
+
+    def _validate_supplier_invoice_request(self, vals):
+        for line in self:
+            vendor_id = (
+                self._m2o_id(vals["preferred_vendor_id"])
+                if "preferred_vendor_id" in vals
+                else line.preferred_vendor_id.id
+            )
+            if not vendor_id:
+                raise UserError(
+                    "Выберите поставщика перед отметкой запроса счёта"
+                )
+            line._validate_invoice_request_line_state(vals)
+
+    def _validate_invoice_request_line_state(self, vals):
+        self.ensure_one()
+        cancelled = vals.get("is_cancelled", self.is_cancelled)
+        qty_issued = vals.get("qty_issued", self.qty_issued)
+        qty_requested = vals.get("qty_requested", self.qty_requested)
+        request = self.request_id
+        if "request_id" in vals:
+            request = self.env["object.request"].browse(vals["request_id"])
+        if cancelled or qty_issued >= qty_requested:
+            raise UserError(
+                "Нельзя запросить счёт для отменённой или "
+                "полностью обеспеченной строки"
+            )
+        if request.state not in ("draft", "in_progress"):
+            raise UserError(
+                "Изменять отметку можно только в черновике или в работе"
             )
 
     @api.depends("product_id", "matching_required")
@@ -434,8 +604,15 @@ class ObjectRequestLine(models.Model):
                 base and line.qty_to_buy > 0 and bool(line.preferred_vendor_id)
             )
 
+    def _onchange_reset_invoice_request_on_replace(self, field_name):
+        origin = self._origin
+        old = origin[field_name] if origin else False
+        if old and old != self[field_name]:
+            self.supplier_invoice_requested = False
+
     @api.onchange("product_id")
     def _onchange_product_id(self):
+        self._onchange_reset_invoice_request_on_replace("product_id")
         if not self.product_id:
             return
         self.uom_id = self.product_id.uom_id
@@ -463,6 +640,9 @@ class ObjectRequestLine(models.Model):
     def _onchange_preferred_vendor_id(self):
         cleared_lines = self.browse()
         for line in self:
+            line._onchange_reset_invoice_request_on_replace(
+                "preferred_vendor_id"
+            )
             if line.preferred_vendor_id and line.manual_vendor_required:
                 line.manual_vendor_required = False
             if (

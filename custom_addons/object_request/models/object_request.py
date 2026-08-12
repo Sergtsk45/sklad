@@ -69,6 +69,7 @@ class ObjectRequest(models.Model):
         required=True,
         tracking=True,
         index=True,
+        copy=False,
     )
     active = fields.Boolean(default=True)
 
@@ -315,6 +316,10 @@ class ObjectRequest(models.Model):
             self.invalidate_recordset(["line_stock_ids"])
         return res
 
+    def unlink(self):
+        self.mapped("line_ids")._unlink_from_parent_request()
+        return super().unlink()
+
     @api.onchange("issue_warehouse_ids")
     def _onchange_issue_warehouse_ids(self):
         self._clear_invalid_stock_distribution_filter()
@@ -498,6 +503,7 @@ class ObjectRequest(models.Model):
         "line_ids.matching_state",
         "line_ids.manual_vendor_required",
         "line_ids.stock_match_warning",
+        "line_ids.supplier_invoice_requested",
         "line_ids.qty_to_issue",
         "line_ids.qty_to_buy",
     )
@@ -508,9 +514,12 @@ class ObjectRequest(models.Model):
                 1
                 for ln in lns
                 if (
-                    ln._requires_nomenclature_review()
-                    or ln.manual_vendor_required
-                    or ln.stock_match_warning
+                    not ln.supplier_invoice_requested
+                    and (
+                        ln._requires_nomenclature_review()
+                        or ln.manual_vendor_required
+                        or ln.stock_match_warning
+                    )
                 )
             )
             rec.line_matched_count = sum(
@@ -725,6 +734,7 @@ class ObjectRequest(models.Model):
             "view_mode": "list",
             "domain": [
                 ("request_id", "=", self.id),
+                ("supplier_invoice_requested", "=", False),
                 "|",
                 "|",
                 ("matching_required", "=", True),

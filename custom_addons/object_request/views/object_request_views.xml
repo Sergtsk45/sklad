@@ -426,9 +426,10 @@
                                 groups="object_request.group_foreman"
                             >
                                 <list
-                                    decoration-danger="matching_required == True"
-                                    decoration-warning="(manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued'"
+                                    decoration-danger="matching_required == True and line_state != 'awaiting_supplier_invoice'"
+                                    decoration-warning="((manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued') and line_state != 'awaiting_supplier_invoice'"
                                     decoration-success="line_state == 'fully_supplied'"
+                                    decoration-info="line_state == 'awaiting_supplier_invoice'"
                                     create="0"
                                     delete="0"
                                 >
@@ -458,6 +459,7 @@
                                         decoration-danger="line_state == 'requires_mapping'"
                                         decoration-warning="line_state == 'partially_issued'"
                                         decoration-success="line_state == 'fully_supplied'"
+                                        decoration-info="line_state == 'awaiting_supplier_invoice'"
                                     />
                                     <field name="matching_required" column_invisible="1"/>
                                     <field name="manual_vendor_required" column_invisible="1"/>
@@ -467,6 +469,7 @@
                                 name="line_ids"
                                 class="o_object_request_line_ids"
                                 readonly="state in ('closed', 'cancelled')"
+                                options="{'create': [('state', '=', 'draft')], 'delete': [('state', '=', 'draft')]}"
                                 context="{
                                     'default_request_id': id,
                                     'object_request_column_layout_scope': 'request_form_lines',
@@ -475,9 +478,10 @@
                             >
                                 <list
                                     editable="bottom"
-                                    decoration-danger="matching_required == True"
-                                    decoration-warning="stock_match_warning == True or (manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued'"
+                                    decoration-danger="matching_required == True and line_state != 'awaiting_supplier_invoice'"
+                                    decoration-warning="(stock_match_warning == True or (manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued') and line_state != 'awaiting_supplier_invoice'"
                                     decoration-success="line_state == 'fully_supplied'"
+                                    decoration-info="line_state == 'awaiting_supplier_invoice'"
                                 >
                                     <field name="sequence" widget="handle"/>
                                     <field name="source_row_no" string="Excel №" optional="hide"/>
@@ -502,6 +506,14 @@
                                             'object_request_company_id': parent.company_id,
                                         }"
                                     />
+                                    <field
+                                        name="supplier_invoice_requested"
+                                        string="Счёт запрошен"
+                                        optional="show"
+                                        groups="object_request.group_supply_manager"
+                                        readonly="parent.state in ('closed', 'cancelled')"
+                                        help="Снабженец запросил счёт у выбранного поставщика. Товар в каталоге может быть ещё не сопоставлен."
+                                    />
                                     <!-- Ед. изм. из файла → выбранная ед. изм. -->
                                     <field name="uom_raw" string="Ед. изм. (файл)" optional="show"/>
                                     <field name="uom_id" string="Ед. изм." optional="show"/>
@@ -513,7 +525,12 @@
                                     <field name="floor" string="Этаж (старое)" optional="hide"/>
                                     <field name="section" string="Участок (старое)" optional="hide"/>
                                     <!-- Количества -->
-                                    <field name="qty_requested" string="Запрошено" optional="show"/>
+                                    <field
+                                        name="qty_requested"
+                                        string="Запрошено"
+                                        optional="show"
+                                        readonly="parent.state != 'draft'"
+                                    />
                                     <field
                                         name="qty_to_issue"
                                         string="К выдаче (план)"
@@ -616,6 +633,7 @@
                                         decoration-danger="line_state == 'requires_mapping'"
                                         decoration-warning="line_state == 'partially_issued'"
                                         decoration-success="line_state == 'fully_supplied'"
+                                        decoration-info="line_state == 'awaiting_supplier_invoice'"
                                         optional="show"
                                     />
                                     <field name="matching_required" column_invisible="1"/>

@@ -121,7 +121,7 @@ class TestOBR020Reservation(TransactionCase):
 
         self.assertEqual(request.qty_total_reserved, 7.0)
 
-        # Добавим вторую строку с резервом
+        request.write({"state": "draft"})
         line2 = self.env["object.request.line"].create(
             {
                 "request_id": request.id,
@@ -133,6 +133,7 @@ class TestOBR020Reservation(TransactionCase):
                 "qty_reserved": 3.0,
             }
         )
+        request.write({"state": "in_progress"})
         request.invalidate_recordset()
         self.assertEqual(request.qty_total_reserved, 10.0)
 

@@ -443,7 +443,7 @@
     - [x] Из `closed` и `cancelled` — переходов нет (финальные статусы)
   - [x] Реализовать правила редактируемости формы по статусам:
     - [x] `Черновик`: полное редактирование шапки и строк
-    - [x] `В работе`: ограниченное — project_id, foreman_user_id, need_date, priority readonly; редактируются только comment и строки (qty_to_issue/qty_to_buy)
+    - [x] `В работе`: ограниченное — project_id, foreman_user_id, need_date, priority readonly; нельзя добавлять/удалять строки и менять qty_requested; редактируются comment, сопоставление, qty_to_issue/qty_to_buy
     - [x] `Закрыто` и `Отменено`: только чтение
   - [x] Реализовать warning-диалоги (`wizards/confirm_state_wizard.py`):
     - [x] Предупреждение при переводе в работу с несопоставленными строками (wizard, не блокирует)
