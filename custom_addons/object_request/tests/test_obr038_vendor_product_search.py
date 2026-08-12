@@ -118,23 +118,30 @@ class TestObr038VendorProductSearch(TransactionCase):
         return self.env["object.request.line"].create(vals)
 
     def test_without_vendor_searches_normalized_name(self):
-        ids = [
-            pid
-            for pid, _label in self.env["product.product"].name_search(
-                "пена монтажная",
-                limit=50,
-            )
-        ]
+        results = self.env["product.product"].name_search(
+            "пена монтажная",
+            limit=50,
+        )
+        ids = [pid for pid, _label in results]
         self.assertIn(self.product_a.id, ids)
         self.assertIn(self.product_b.id, ids)
+        labels = {pid: label for pid, label in results}
+        self.assertFalse(
+            labels[self.product_a.id].startswith("[Vendor A OR038] ")
+        )
 
     def test_with_vendor_filters_to_seller_catalog(self):
         Product = self.env["product.product"].with_context(
             **{CTX_PREFERRED_VENDOR: self.vendor_a.id}
         )
-        ids = [pid for pid, _label in Product.name_search("пена", limit=50)]
+        results = Product.name_search("пена", limit=50)
+        ids = [pid for pid, _label in results]
         self.assertIn(self.product_a.id, ids)
         self.assertNotIn(self.product_b.id, ids)
+        labels = {pid: label for pid, label in results}
+        self.assertTrue(
+            labels[self.product_a.id].startswith("[Vendor A OR038] ")
+        )
 
     def test_with_vendor_finds_trade_name(self):
         Product = self.env["product.product"].with_context(
@@ -144,7 +151,108 @@ class TestObr038VendorProductSearch(TransactionCase):
         ids = [pid for pid, _label in results]
         self.assertIn(self.product_a.id, ids)
         labels = {pid: label for pid, label in results}
-        self.assertIn("ПРОТИВОПОЖАРНАЯ", labels[self.product_a.id])
+        self.assertTrue(
+            labels[self.product_a.id].startswith("[Vendor A OR038] ")
+        )
+        self.assertIn(
+            " — Пена монтажная проф. ПРОТИВОПОЖАРНАЯ B1 65 ",
+            labels[self.product_a.id],
+        )
+
+    def test_web_name_search_keeps_vendor_prefix_and_trade_name(self):
+        self.product_a.default_code = "DEFAULT-CODE-OR038"
+        Product = self.env["product.product"].with_context(
+            **{CTX_PREFERRED_VENDOR: self.vendor_a.id}
+        )
+        rows = Product.web_name_search(
+            "ПРОТИВОПОЖАРНАЯ",
+            {"display_name": {}},
+            limit=20,
+        )
+
+        row = next(item for item in rows if item["id"] == self.product_a.id)
+        self.assertEqual(
+            row["display_name"],
+            "[DEFAULT-CODE-OR038] "
+            "Пена монтажная огнестойкая B1, 750 мл OR038",
+        )
+        self.assertTrue(
+            row["__formatted_display_name"].startswith("[Vendor A OR038] ")
+        )
+        self.assertIn(
+            "\t--DEFAULT-CODE-OR038--",
+            row["__formatted_display_name"],
+        )
+        self.assertIn(
+            " — Пена монтажная проф. ПРОТИВОПОЖАРНАЯ B1 65 ",
+            row["__formatted_display_name"],
+        )
+        self.assertFalse(row["display_name"].startswith("[Vendor A OR038] "))
+
+    def test_web_name_search_extended_specification_is_decorated(self):
+        self.product_a.default_code = "EXTENDED-CODE-OR038"
+        Product = self.env["product.product"].with_context(
+            **{CTX_PREFERRED_VENDOR: self.vendor_a.id}
+        )
+        rows = Product.web_name_search(
+            "ПРОТИВОПОЖАРНАЯ",
+            {"display_name": {}, "default_code": {}},
+            limit=20,
+        )
+
+        row = next(item for item in rows if item["id"] == self.product_a.id)
+        self.assertEqual(row["default_code"], "EXTENDED-CODE-OR038")
+        self.assertFalse(row["display_name"].startswith("[Vendor A OR038] "))
+        self.assertTrue(
+            row["__formatted_display_name"].startswith("[Vendor A OR038] ")
+        )
+        self.assertIn(
+            "\t--EXTENDED-CODE-OR038--",
+            row["__formatted_display_name"],
+        )
+        self.assertIn(
+            " — Пена монтажная проф. ПРОТИВОПОЖАРНАЯ B1 65 ",
+            row["__formatted_display_name"],
+        )
+
+    def test_web_name_search_without_display_name_does_not_decorate(self):
+        Product = self.env["product.product"].with_context(
+            **{CTX_PREFERRED_VENDOR: self.vendor_a.id}
+        )
+        rows = Product.web_name_search(
+            "ПРОТИВОПОЖАРНАЯ",
+            {"default_code": {}},
+            limit=20,
+        )
+
+        row = next(item for item in rows if item["id"] == self.product_a.id)
+        self.assertNotIn("display_name", row)
+        self.assertNotIn("__formatted_display_name", row)
+
+    def test_with_vendor_empty_search_prefixes_all_results(self):
+        Product = self.env["product.product"].with_context(
+            **{CTX_PREFERRED_VENDOR: self.vendor_a.id}
+        )
+        results = Product.name_search("", limit=50)
+
+        labels = {pid: label for pid, label in results}
+        self.assertIn(self.product_a.id, labels)
+        self.assertTrue(
+            labels[self.product_a.id].startswith("[Vendor A OR038] ")
+        )
+
+    def test_with_vendor_limit_early_return_prefixes_results_once(self):
+        Product = self.env["product.product"].with_context(
+            **{CTX_PREFERRED_VENDOR: self.vendor_a.id}
+        )
+        results = Product.name_search("пена", limit=1)
+
+        self.assertEqual(len(results), 1)
+        _product_id, label = results[0]
+        self.assertTrue(label.startswith("[Vendor A OR038] "))
+        self.assertFalse(
+            label.startswith("[Vendor A OR038] [Vendor A OR038] ")
+        )
 
     def test_with_vendor_finds_supplier_code(self):
         Product = self.env["product.product"].with_context(

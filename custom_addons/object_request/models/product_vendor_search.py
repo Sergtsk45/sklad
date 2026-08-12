@@ -20,6 +20,82 @@ class ProductProduct(models.Model):
     _inherit = "product.product"
 
     @api.model
+    @api.readonly
+    def web_name_search(
+        self,
+        name,
+        specification,
+        domain=None,
+        operator="ilike",
+        limit=100,
+    ):
+        vendor_id = self._or_preferred_vendor_id_from_context()
+        vendor = self.env["res.partner"].browse(vendor_id).exists()
+        if not vendor:
+            return super().web_name_search(
+                name,
+                specification,
+                domain=domain,
+                operator=operator,
+                limit=limit,
+            )
+
+        id_name_pairs = self.name_search(name, domain, operator, limit)
+        search_labels = dict(id_name_pairs)
+        if len(specification) == 1 and "display_name" in specification:
+            formatted_products = self.with_context(
+                formatted_display_name=True
+            ).browse([product_id for product_id, _label in id_name_pairs])
+            formatted_names = {
+                product.id: product.display_name
+                for product in formatted_products
+            }
+            rows = [
+                {
+                    "id": product_id,
+                    "display_name": label,
+                    "__formatted_display_name": formatted_names[product_id],
+                }
+                for product_id, label in id_name_pairs
+            ]
+        else:
+            records = self.browse(
+                [product_id for product_id, _label in id_name_pairs]
+            )
+            rows = records.web_read(specification)
+
+        if "display_name" not in specification:
+            return rows
+
+        product_ids = [row["id"] for row in rows]
+        clean_names = {
+            product.id: product.display_name
+            for product in self.browse(product_ids)
+        }
+        if len(specification) != 1:
+            formatted_names = {
+                product.id: product.display_name
+                for product in self.with_context(
+                    formatted_display_name=True
+                ).browse(product_ids)
+            }
+        prefix = f"[{vendor.display_name}] "
+        for row in rows:
+            product_id = row["id"]
+            clean_name = clean_names[product_id]
+            search_label = search_labels.get(product_id, "")
+            if search_label.startswith(prefix):
+                search_label = search_label[len(prefix):]
+            trade_suffix = search_label.removeprefix(clean_name)
+            if not trade_suffix.startswith(" — "):
+                trade_suffix = ""
+            row["display_name"] = clean_name
+            row["__formatted_display_name"] = (
+                f"{prefix}{formatted_names[product_id]}{trade_suffix}"
+            )
+        return rows
+
+    @api.model
     def name_search(self, name="", domain=None, operator="ilike", limit=100):
         vendor_id = self._or_preferred_vendor_id_from_context()
         if not vendor_id:
@@ -37,22 +113,31 @@ class ProductProduct(models.Model):
             limit,
         )
 
-        if not name or operator not in POSITIVE_OPS:
-            return results
+        if name and operator in POSITIVE_OPS:
+            remaining = self._or_remaining_name_search_limit(limit, results)
+            if remaining != 0:
+                vendor_hits = self._or_search_by_vendor_trade_name(
+                    name,
+                    operator,
+                    vendor_id,
+                    domain=domain,
+                    exclude_ids=[row[0] for row in results],
+                    limit=remaining,
+                )
+                results += vendor_hits
 
-        remaining = self._or_remaining_name_search_limit(limit, results)
-        if remaining == 0:
-            return results
+        return self._or_add_vendor_to_labels(results, vendor_id)
 
-        vendor_hits = self._or_search_by_vendor_trade_name(
-            name,
-            operator,
-            vendor_id,
-            domain=domain,
-            exclude_ids=[row[0] for row in results],
-            limit=remaining,
-        )
-        return results + vendor_hits
+    @api.model
+    def _or_add_vendor_to_labels(self, results, vendor_id):
+        vendor = self.env["res.partner"].browse(vendor_id).exists()
+        if not vendor:
+            return results
+        prefix = f"[{vendor.display_name}] "
+        return [
+            (product_id, f"{prefix}{label}")
+            for product_id, label in results
+        ]
 
     @api.model
     def _or_preferred_vendor_id_from_context(self):
