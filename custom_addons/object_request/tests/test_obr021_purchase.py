@@ -232,6 +232,70 @@ class TestOBR021Purchase(TransactionCase):
         )
         self.assertEqual(po._get_transfer_report_filename(), expected)
 
+    def test_transfer_delivery_address_uses_project_address(self):
+        """Адрес доставки в передаточной ведомости берётся из объекта."""
+        self.project.write({"address": "Ломоносова, 164"})
+        po = self.env["purchase.order"].create(
+            {
+                "partner_id": self.vendor1.id,
+                "is_object_request_purchase": True,
+                "object_request_project_id": self.project.id,
+                "picking_type_id": self.project.warehouse_id.in_type_id.id,
+            }
+        )
+        self.assertEqual(
+            po.get_transfer_delivery_address_display(),
+            "Ломоносова, 164",
+        )
+
+    def test_transfer_delivery_address_falls_back_to_project_name(self):
+        """Без address у объекта используется его наименование."""
+        self.project.write({"address": False, "name": "Ломоносова 164"})
+        po = self.env["purchase.order"].create(
+            {
+                "partner_id": self.vendor1.id,
+                "is_object_request_purchase": True,
+                "object_request_project_id": self.project.id,
+                "picking_type_id": self.project.warehouse_id.in_type_id.id,
+            }
+        )
+        self.assertEqual(
+            po.get_transfer_delivery_address_display(),
+            "Ломоносова 164",
+        )
+
+    def test_purchase_report_shows_project_delivery_address(self):
+        """PDF передаточной ведомости показывает адрес объекта."""
+        self.project.write({"address": False, "name": "Ломоносова 164"})
+        po = self.env["purchase.order"].create(
+            {
+                "partner_id": self.vendor1.id,
+                "is_object_request_purchase": True,
+                "object_request_project_id": self.project.id,
+                "picking_type_id": self.project.warehouse_id.in_type_id.id,
+                "order_line": [
+                    (
+                        0,
+                        0,
+                        {
+                            "product_id": self.product1.id,
+                            "name": self.product1.display_name,
+                            "product_qty": 1.0,
+                            "product_uom_id": self.product1.uom_id.id,
+                            "price_unit": 10.0,
+                        },
+                    )
+                ],
+            }
+        )
+        html, _ = self.env["ir.actions.report"]._render_qweb_html(
+            "purchase.action_report_purchase_order",
+            [po.id],
+        )
+        html = html.decode() if isinstance(html, bytes) else html
+        self.assertIn("Адрес доставки", html)
+        self.assertIn("Ломоносова 164", html)
+
     def test_purchase_report_renders_compact_template(self):
         """Кнопка печати закупки использует компактный шаблон."""
         po = self.env["purchase.order"].create(

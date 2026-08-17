@@ -52,6 +52,19 @@ class PurchaseOrderExt(models.Model):
             " %s" % suffix if suffix else "",
         )
 
+    def get_transfer_delivery_address_display(self):
+        """Текст адреса доставки для передаточной ведомости."""
+        self.ensure_one()
+        if self.dest_address_id:
+            partner = self.dest_address_id
+            return partner.contact_address or partner.display_name
+        project = self.object_request_project_id
+        if not project and self.object_request_ids:
+            project = self.object_request_ids[:1].project_id
+        if not project:
+            return False
+        return (project.address or project.name or "").strip() or False
+
     def action_open_object_requests(self):
         self.ensure_one()
         if len(self.object_request_ids) == 1:
