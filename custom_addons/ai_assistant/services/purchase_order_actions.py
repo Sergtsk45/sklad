@@ -110,7 +110,7 @@ class PurchaseOrderActionsService:
                        self.ALLOWED['send_rfq']),
             self._item('Подтвердить заказ', 'confirm', po,
                        self.ALLOWED['confirm']),
-            self._item('Печать', 'print', po, None),
+            self._item('Печать передаточной ведомости', 'print', po, None),
             self._item('Отменить', 'cancel', po, self.ALLOWED['cancel']),
         ]
 

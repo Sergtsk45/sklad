@@ -31,8 +31,8 @@
                 <attribute name="help">Утвердить заказ, если включено двойное согласование (лимит суммы закупки).</attribute>
             </xpath>
             <xpath expr="//button[@name='print_quotation']" position="attributes">
-                <attribute name="string">Печать</attribute>
-                <attribute name="help">Распечатать или сохранить PDF запроса котировки. При печати черновик может перейти в статус «Отправлен».</attribute>
+                <attribute name="string">Печать передаточной ведомости</attribute>
+                <attribute name="help">Распечатать или сохранить PDF передаточной ведомости по запросу котировки. При печати черновик может перейти в статус «Отправлен».</attribute>
             </xpath>
 
             <!-- === Заказ на закупку (PO) === -->
@@ -48,8 +48,8 @@
                 <attribute name="help">Отметить, что поставщик подтвердил получение заказа. Не оприходует товар — для прихода на склад нажмите «Получить».</attribute>
             </xpath>
             <xpath expr="//button[@type='action'][@invisible=&quot;state != 'purchase'&quot;]" position="attributes">
-                <attribute name="string">Печать</attribute>
-                <attribute name="help">Распечатать или сохранить PDF заказа на закупку.</attribute>
+                <attribute name="string">Печать передаточной ведомости</attribute>
+                <attribute name="help">Распечатать или сохранить PDF передаточной ведомости по заказу на закупку.</attribute>
             </xpath>
             <xpath expr="//button[@name='button_lock']" position="attributes">
                 <attribute name="string">Заблокировать</attribute>
