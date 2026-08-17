@@ -14,6 +14,11 @@ class PurchaseOrderExt(models.Model):
         string="Объект требования",
         index=True,
     )
+    dest_warehouse_id = fields.Many2one(
+        related="picking_type_id.warehouse_id",
+        string="Склад",
+        readonly=True,
+    )
     # Reverse side of object.request.purchase_order_ids many2many
     object_request_ids = fields.Many2many(
         "object.request",

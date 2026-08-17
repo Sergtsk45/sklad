@@ -153,4 +153,54 @@
         </field>
     </record>
 
+    <!-- Список RFQ / PO: объект и склад поступления без открытия карточки. -->
+    <record id="view_purchase_order_tree_object_warehouse" model="ir.ui.view">
+        <field name="name">purchase.order.tree.object.warehouse</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="object_request_project_id" string="Объект" optional="show"/>
+                <field name="dest_warehouse_id" string="Склад" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_purchase_order_kpis_tree_object_warehouse" model="ir.ui.view">
+        <field name="name">purchase.order.kpis.tree.object.warehouse</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_kpis_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="object_request_project_id" string="Объект" optional="show"/>
+                <field name="dest_warehouse_id" string="Склад" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_purchase_order_view_tree_object_warehouse" model="ir.ui.view">
+        <field name="name">purchase.order.view.tree.object.warehouse</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_view_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="object_request_project_id" string="Объект" optional="show"/>
+                <field name="dest_warehouse_id" string="Склад" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Смарт-кнопка «Закупки» на товаре: purchase.history.list -->
+    <record id="view_purchase_history_tree_object_warehouse" model="ir.ui.view">
+        <field name="name">purchase.history.list.object.warehouse</field>
+        <field name="model">purchase.order.line</field>
+        <field name="inherit_id" ref="purchase.purchase_history_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="object_request_project_id" string="Объект" optional="show"/>
+                <field name="dest_warehouse_id" string="Склад" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
 </odoo>

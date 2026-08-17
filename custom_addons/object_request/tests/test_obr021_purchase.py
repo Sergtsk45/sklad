@@ -112,6 +112,20 @@ class TestOBR021Purchase(TransactionCase):
             po.picking_type_id, self.project.warehouse_id.in_type_id
         )
 
+    def test_create_po_line_name_uses_product_not_name_raw(self):
+        """Description строки закупки — полное имя товара из каталога, не name_raw."""
+        request = self._create_request()
+        line = self._add_line(request, self.product1, 5.0, self.vendor1)
+        line.write({"name_raw": "сетка"})
+        request.write({"state": "in_progress"})
+
+        wizard = self._open_wizard(request)
+        result = wizard.action_create_purchase()
+        po = self.env["purchase.order"].browse(result["res_id"])
+
+        self.assertEqual(len(po.order_line), 1)
+        self.assertEqual(po.order_line.name, self.product1.display_name)
+
     def test_purchase_blocks_unresolved_manual_review_line(self):
         """Закупка не создаётся, если строка требует проверки номенклатуры."""
         request = self._create_request()

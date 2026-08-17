@@ -454,7 +454,11 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                     "product_id": line.product_id.id,
                     "product_qty": line.qty_to_buy,
                     "product_uom_id": uom.id,
-                    "name": line.name_raw or line.product_id.name,
+                    "name": (
+                        line.product_id.display_name
+                        if line.product_id
+                        else (line.name_raw or "")
+                    ),
                     "price_unit": line.price_raw or 0.0,
                     "date_planned": date_planned,
                 }

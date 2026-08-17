@@ -380,6 +380,7 @@ OWL-наследование перестали применяться.
 | Отправить заказ | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_rfq_send`, `invisible="state != 'purchase'"` |
 | Поставщик принял заказ | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_acknowledge` |
 | Получить | `object_request` | `views/purchase_order_inherit_views.xml` (inherit `purchase_stock`) | `purchase_stock/views/purchase_views.xml` — `action_view_picking` |
+| Объект / Склад в списке закупок | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `purchase_order_tree`, `purchase_order_kpis_tree`, `purchase_order_view_tree`, `purchase_history_tree` |
 | Загрузить счёт | `object_request` | `static/src/components/purchase_file_uploader/purchase_file_uploader.xml` | `purchase/static/src/components/purchase_file_uploader/` — `Upload Bill` |
 
 **Чеклист после `-u` или смены образа Odoo:**
@@ -387,7 +388,8 @@ OWL-наследование перестали применяться.
 1. Открыть форму закупки (RFQ и подтверждённый PO) — проверить подписи и подсказки кнопок (наведение мыши).
 2. На подтверждённом PO проверить «Загрузить счёт», «Получить», «Поставщик принял заказ».
 3. Открыть список товаров на складе — проверить «На складе» / «Доступно».
-4. При ошибках загрузки assets — обновить xpath в указанных файлах по актуальному upstream.
+4. Открыть список заказов на закупку и смарт-кнопку «Закупки» на товаре — колонки «Объект» и «Склад».
+5. При ошибках загрузки assets — обновить xpath в указанных файлах по актуальному upstream.
 
 Команда upgrade после деплоя:
 

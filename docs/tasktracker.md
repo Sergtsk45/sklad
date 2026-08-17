@@ -1,3 +1,15 @@
+## Задача: Закупки — колонки Объект и Склад в списках
+- **Статус**: Завершена
+- **Описание**: В списке закупок (в том числе смарт-кнопка «Закупки» на товаре)
+  показать объект требования и склад поступления, чтобы не открывать каждый заказ.
+- **Шаги выполнения**:
+  - [x] Related-поля `dest_warehouse_id` на `purchase.order` и строке.
+  - [x] Inherit list views PO и `purchase.history.list`.
+  - [x] Тесты `test_purchase_order_list_columns.py`.
+  - [x] Прогон focused-тестов (`or_po_list_cols`, 3) и upgrade модуля `19.0.1.10.13`.
+  - [x] Changelog / project.md.
+- **Зависимости**: `object_request`, `purchase`, `purchase_stock`.
+
 ## Задача: OR — статус строки «Ожидает счёт от поставщика» (OBR-039)
 - **Статус**: Задеплоена на prod 2026-08-13 (`a42e2f3`, `19.0.1.10.12`)
 - **Детальный трекер**: [`tasktrecker-line-waitinvoice.md`](tasktrecker-line-waitinvoice.md)
