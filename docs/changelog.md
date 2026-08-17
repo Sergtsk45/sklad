@@ -7,6 +7,10 @@
 
 ### Изменено
 - Версия: `object_request` `19.0.1.10.13`.
+- Prod deploy `014463b`: backup
+  `/opt/project_odoo/backups/po-object-warehouse-columns-20260817-070623/`,
+  `-u object_request` → `19.0.1.10.14`, restart; health `pass`, `/web/login`
+  HTTP 200.
 
 ## [2026-08-17] — Закупки: полное наименование в строке PO из каталога
 
