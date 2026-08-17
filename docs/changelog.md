@@ -5,6 +5,9 @@
   `object.request.project`: сначала поле «Адрес», иначе наименование объекта
   (для P00095 — «Ломоносова 164»).
 - Версия: `object_request` `19.0.1.10.15`.
+- Prod deploy `42a5485`: backup
+  `/opt/project_odoo/backups/po-transfer-delivery-address-20260817-083645/`,
+  `-u object_request` → `19.0.1.10.15`, restart; `/web/login` HTTP 200.
 
 ## [2026-08-17] — Закупки: колонки Объект и Склад в списках
 
