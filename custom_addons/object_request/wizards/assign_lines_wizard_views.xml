@@ -16,6 +16,7 @@
                         name="vendor_id"
                         invisible="assign_type != 'vendor'"
                         required="assign_type == 'vendor'"
+                        context="{'object_request_recent_vendors': True}"
                     />
                     <field
                         name="product_id"

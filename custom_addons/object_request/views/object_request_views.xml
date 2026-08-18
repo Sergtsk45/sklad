@@ -495,7 +495,15 @@
                                     />
                                     <!-- Поставщик до Товара: при выборе сужает поиск номенклатуры -->
                                     <field name="supplier_raw" string="Поставщик (файл)" optional="show"/>
-                                    <field name="preferred_vendor_id" string="Поставщик" optional="show"/>
+                                    <field
+                                        name="preferred_vendor_id"
+                                        string="Поставщик"
+                                        optional="show"
+                                        context="{
+                                            'object_request_recent_vendors': True,
+                                            'object_request_company_id': parent.company_id,
+                                        }"
+                                    />
                                     <field
                                         name="product_id"
                                         string="Товар"

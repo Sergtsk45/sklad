@@ -17,4 +17,5 @@ from . import purchase_order_ext  # noqa: F401
 from . import purchase_order_line_ext  # noqa: F401
 from . import product_purchase_create_guard  # noqa: F401
 from . import product_vendor_search  # noqa: F401
+from . import partner_recent_search  # noqa: F401
 from . import ir_actions_report  # noqa: F401

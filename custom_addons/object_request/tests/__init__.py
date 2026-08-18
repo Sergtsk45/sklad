@@ -33,4 +33,5 @@ from . import test_obr030_preview_ai  # noqa: F401
 from . import test_product_purchase_create_guard  # noqa: F401
 from . import test_obr038_vendor_product_search  # noqa: F401
 from . import test_obr039_line_wait_invoice  # noqa: F401
+from . import test_obr040_recent_vendors  # noqa: F401
 from . import test_purchase_order_list_columns  # noqa: F401
