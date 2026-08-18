@@ -10,6 +10,9 @@
 
 ### Изменено
 - Версия: `object_request` `19.0.1.10.16`.
+- Prod deploy `78cbc98`: backup
+  `/opt/project_odoo/backups/or-obr040-recent-vendors-20260818-215920/`,
+  `-u object_request` → `19.0.1.10.16`, restart; `/web/login` HTTP 200.
 
 ## [2026-08-17] — Закупки: адрес объекта в передаточной ведомости
 
