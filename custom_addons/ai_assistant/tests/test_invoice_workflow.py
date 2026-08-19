@@ -185,7 +185,23 @@ class TestInvoiceWorkflow(TransactionCase):
         self.assertEqual(po.state, 'purchase')
         self.assertEqual(po.partner_ref, '3315')
         self.assertTrue(attachment.exists())
+        self.assertEqual(attachment.res_model, 'purchase.order')
         self.assertEqual(attachment.res_id, po.id)
+        bill = self.env['account.move'].browse(flow['bill_id'])
+        self.assertTrue(bill.exists())
+        self.assertEqual(bill.move_type, 'in_invoice')
+        self.assertEqual(bill.ref, '3315')
+        self.assertEqual(str(bill.invoice_date), '2026-05-25')
+        self.assertIn(bill, po.invoice_ids)
+        bill_pdf = self.env['ir.attachment'].search([
+            ('res_model', '=', 'account.move'),
+            ('res_id', '=', bill.id),
+            ('name', '=', 'invoice-aia.pdf'),
+        ], limit=1)
+        self.assertTrue(bill_pdf.exists())
+        self.assertAlmostEqual(bill.amount_untaxed, po.amount_untaxed, places=2)
+        self.assertAlmostEqual(bill.amount_total, po.amount_total, places=2)
+        self.assertIn('Счёт поставщика создан', result['answer'])
 
         second = self.workflow.execute_purchase_plan(self.env.uid, token)
         self.assertEqual(second['status'], InvoiceWorkflow.FLOW_EXECUTED)
@@ -195,6 +211,7 @@ class TestInvoiceWorkflow(TransactionCase):
             ]),
             1,
         )
+        self.assertEqual(len(po.invoice_ids), 1)
 
     def test_execute_purchase_plan_can_validate_receipt(self):
         product = self.env['product.product'].create({
@@ -227,9 +244,56 @@ class TestInvoiceWorkflow(TransactionCase):
         self.workflow.execute_purchase_plan(self.env.uid, token)
         flow = self.workflow.current_purchase_flow_state(self.env.uid, token)
         picking = self.env['stock.picking'].browse(flow['picking_id'])
+        po = self.env['purchase.order'].browse(flow['po_id'])
 
         self.assertTrue(picking.exists())
         self.assertEqual(picking.state, 'done')
+        self.assertFalse(flow.get('bill_id'))
+        self.assertFalse(po.invoice_ids)
+
+    def test_execute_purchase_plan_bill_uses_received_qty(self):
+        product = self.env['product.product'].create({
+            'name': 'AIA bill receive product',
+            'is_storable': True,
+            'purchase_ok': True,
+            'purchase_method': 'receive',
+        })
+        invoice = dict(self.invoice_data)
+        invoice['invoice_number'] = 'AIA-BILL-RCV'
+        invoice['items'] = [{
+            'line_no': 1,
+            'name': product.name,
+            'unit': 'шт',
+            'qty': 3,
+            'price': 10.0,
+        }]
+        token = self.store.put(
+            self.env.uid,
+            invoice,
+            filename='invoice-rcv.pdf',
+            file_bytes=b'%PDF-test',
+            mimetype='application/pdf',
+        )
+        self.workflow.record_product_created(
+            self.env.uid, token, '1', product.id,
+        )
+        self.workflow.set_create_po_decision(self.env.uid, token, True)
+        self.workflow.select_warehouse(
+            self.env.uid,
+            token,
+            payload={'warehouse_query': 'Ос.ск'},
+        )
+        self.workflow.set_attach_invoice_decision(self.env.uid, token, True)
+        self.workflow.set_receive_picking_decision(self.env.uid, token, True)
+
+        self.workflow.execute_purchase_plan(self.env.uid, token)
+        flow = self.workflow.current_purchase_flow_state(self.env.uid, token)
+        bill = self.env['account.move'].browse(flow['bill_id'])
+        line = bill.invoice_line_ids.filtered('product_id')[:1]
+
+        self.assertTrue(bill.exists())
+        self.assertEqual(line.quantity, 3.0)
+        self.assertEqual(line.price_unit, 10.0)
 
     def test_next_partner_draft_for_unknown_supplier(self):
         invoice = dict(self.invoice_data)

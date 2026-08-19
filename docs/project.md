@@ -507,14 +507,17 @@ session storage, а источником истины остаётся backend s
 4. `invoice_po_set_receive_picking` — сохранить решение по приёмке.
 5. `invoice_po_execute_plan` — выполнить итоговый план.
 
-До финального `Выполнить` не создаются `purchase.order`, `ir.attachment` и не
-проводится `stock.picking`. Финальный запуск выполняет выбранные действия в
-порядке: создать PO из `_build_po_args()` через валидированный
-`CreatePurchaseOrderDraftTool`, вызвать `purchase.order.button_confirm()`,
-прикрепить исходный PDF к PO при `attach_invoice=True`, затем провести входящую
-приёмку через `stock.picking.button_validate()` при `receive_picking=True`.
-Повторный запуск использует сохранённый `po_id` и поиск attachment по
-`res_model/res_id/name`, поэтому не создаёт дубликаты.
+До финального `Выполнить` не создаются `purchase.order`, `account.move`,
+`ir.attachment` и не проводится `stock.picking`. Финальный запуск выполняет
+выбранные действия в порядке: создать PO из `_build_po_args()` через
+валидированный `CreatePurchaseOrderDraftTool`, вызвать
+`purchase.order.button_confirm()`, провести входящую приёмку через
+`stock.picking.button_validate()` при `receive_picking=True`, затем при
+`attach_invoice=True` создать черновик vendor bill
+(`purchase.order.action_create_invoice` или bill по заказанному количеству,
+если qty_to_invoice ещё 0) и прикрепить исходный PDF к PO и к
+`account.move`. Счёт не проводится. Повторный запуск использует сохранённые
+`po_id` / `bill_id` и поиск attachment, поэтому не создаёт дубликаты.
 
 ```mermaid
 flowchart TD
@@ -526,13 +529,13 @@ flowchart TD
     Receipt --> Plan[Итоговый план]
     Plan -->|Отмена| Stop
     Plan -->|Выполнить| PO[purchase.order create + button_confirm]
-    PO --> MaybeAttach{attach_invoice?}
-    MaybeAttach -->|Да| PDF[ir.attachment на PO]
-    MaybeAttach -->|Нет| MaybeReceipt
-    PDF --> MaybeReceipt{receive_picking?}
+    PO --> MaybeReceipt{receive_picking?}
     MaybeReceipt -->|Да| Picking[stock.picking button_validate]
-    MaybeReceipt -->|Нет| Done[Готово]
-    Picking --> Done
+    MaybeReceipt -->|Нет| MaybeAttach
+    Picking --> MaybeAttach{attach_invoice?}
+    MaybeAttach -->|Да| Bill[account.move draft + PDF]
+    MaybeAttach -->|Нет| Done[Готово]
+    Bill --> Done
 ```
 
 Сценарий контрагентов расширяет тот же tool layer:

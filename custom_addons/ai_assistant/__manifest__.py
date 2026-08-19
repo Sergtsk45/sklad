@@ -1,6 +1,6 @@
 {
     'name': 'AI Assistant',
-    'version': '19.0.1.2.2',
+    'version': '19.0.1.2.3',
     'summary': 'Floating AI chat assistant for Odoo users',
     'description': """
         AI-консультант для Odoo 19.
@@ -17,6 +17,7 @@
         'mail',
         'stock',
         'purchase',
+        'account',
         'object_request',
         'custom_product_search',
     ],

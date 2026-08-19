@@ -1,3 +1,15 @@
+## Задача: AIA — «Привязать счёт?» = vendor bill + PDF
+- **Статус**: Завершена
+- **Описание**: В диалоге загрузки счёта «Привязать счёт? → Да» создаёт черновик
+  `account.move` и вешает PDF на bill (и копию на PO). Без `action_post`.
+- **Шаги выполнения**:
+  - [x] `InvoiceWorkflow._bind_vendor_bill` / `_create_vendor_bill`.
+  - [x] Приёмка до bill; fallback по заказанному qty.
+  - [x] Тесты workflow: bill + PDF, без bill при «Нет», qty после приёмки.
+  - [x] Прогон `TestInvoiceWorkflow` в Docker.
+  - [x] Docs: changelog, project.md, AIA-062, user-guide.
+- **Зависимости**: `ai_assistant`, `purchase`, `account`.
+
 ## Задача: OR — недавние поставщики в выпадающем списке (TD-008 / OBR-040)
 - **Статус**: Задеплоена на prod 2026-08-19 (`78cbc98`, `19.0.1.10.16`)
 - **Описание**: При фокусе на пустом «Поставщик» в строках требования сначала

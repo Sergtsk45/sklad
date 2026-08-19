@@ -34,7 +34,9 @@ Tool `find_warehouse` принимает `query`: код (`O002`, `O001`, `Ос.
 
 ## Denylist процесса
 
-AI не вызывает `button_confirm`, `button_validate`, `action_done`, `action_post`; не пишет `state` напрямую; не использует `stock.quant.write/create/unlink` и inventory adjustment; не создает `account.move` vendor bill или платежи; не работает с `res.users`, `res.groups`, `ir.model.*`, `ir.ui.*`; не удаляет проведенные документы.
+AI не вызывает `button_confirm`, `button_validate`, `action_done`, `action_post` из свободных LLM tools; не пишет `state` напрямую; не использует `stock.quant.write/create/unlink` и inventory adjustment; не создает платежи (`account.payment`); не работает с `res.users`, `res.groups`, `ir.model.*`, `ir.ui.*`; не удаляет проведенные документы.
+
+Исключение: детерминированный `InvoiceWorkflow` после кнопки **«Выполнить»** может вызвать `button_confirm`, `button_validate` и создать **черновик** vendor bill (`account.move`), если пользователь ответил «Да» на «Привязать счёт?». `action_post` и оплаты не вызываются.
 
 Остатки появляются только после штатного Validate в UI или после закрытия TD-003. Прямой перевод picking в `done` через API дает документ без quants.
 

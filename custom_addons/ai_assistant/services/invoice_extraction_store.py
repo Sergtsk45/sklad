@@ -116,6 +116,7 @@ class InvoiceExtractionStore:
             'receive_picking': None,
             'po_id': None,
             'attachment_id': None,
+            'bill_id': None,
             'picking_id': None,
             'executed': False,
         }

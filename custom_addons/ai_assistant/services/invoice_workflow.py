@@ -394,6 +394,42 @@ class InvoiceWorkflow:
         if flow.get('executed'):
             return self._executed_response(flow)
         self._validate_plan_ready(flow)
+        po = self._ensure_confirmed_po(uid, extraction_token, flow)
+        picking = None
+        if flow.get('receive_picking'):
+            picking = self._receive_po_picking(po)
+            flow['picking_id'] = picking.id if picking else None
+        attachment = None
+        bill = None
+        if flow.get('attach_invoice'):
+            attachment, bill = self._bind_vendor_bill(
+                uid, extraction_token, po
+            )
+            flow['attachment_id'] = attachment.id if attachment else None
+            flow['bill_id'] = bill.id if bill else None
+        steps = self._execution_steps(po, attachment, bill, picking)
+        po.message_post(
+            body='AI-ассистент выполнил план по счёту:<br/>%s'
+            % '<br/>'.join(steps),
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+        )
+        flow['state'] = self.FLOW_EXECUTED
+        flow['executed'] = True
+        return {
+            'status': self.FLOW_EXECUTED,
+            'answer': (
+                'План выполнен.\n'
+                + '\n'.join('• %s' % s for s in steps)
+            ),
+            'suggestions': [],
+            'cards': [self._execution_result_card(
+                po, attachment, picking, bill
+            )],
+            'meta': self._flow_meta(uid, extraction_token),
+        }
+
+    def _ensure_confirmed_po(self, uid, extraction_token, flow):
         context = self._context_helper.fetch_context(uid, extraction_token)
         warehouse = {
             'id': flow['warehouse_id'],
@@ -412,37 +448,7 @@ class InvoiceWorkflow:
             flow['po_id'] = po.id
         if po.state in ('draft', 'sent'):
             po.button_confirm()
-        attachment = None
-        if flow.get('attach_invoice'):
-            attachment = self._attach_invoice(uid, extraction_token, po)
-            flow['attachment_id'] = attachment.id if attachment else None
-        picking = None
-        if flow.get('receive_picking'):
-            picking = self._receive_po_picking(po)
-            flow['picking_id'] = picking.id if picking else None
-        steps = ['Закупка создана и подтверждена: %s' % po.name]
-        if attachment:
-            steps.append('Счёт прикреплён к закупке.')
-        if picking:
-            steps.append('Приёмка проведена: %s' % picking.name)
-        po.message_post(
-            body='AI-ассистент выполнил план по счёту:<br/>%s'
-            % '<br/>'.join(steps),
-            message_type='notification',
-            subtype_xmlid='mail.mt_note',
-        )
-        flow['state'] = self.FLOW_EXECUTED
-        flow['executed'] = True
-        return {
-            'status': self.FLOW_EXECUTED,
-            'answer': (
-                'План выполнен.\n'
-                + '\n'.join('• %s' % s for s in steps)
-            ),
-            'suggestions': [],
-            'cards': [self._execution_result_card(po, attachment, picking)],
-            'meta': self._flow_meta(uid, extraction_token),
-        }
+        return po
 
     def prepare_po_draft(self, uid, extraction_token, warehouse_query=None):
         """
@@ -806,11 +812,14 @@ class InvoiceWorkflow:
             flow.get('attachment_id')
         )
         picking = self.env['stock.picking'].browse(flow.get('picking_id'))
+        bill = self.env['account.move'].browse(flow.get('bill_id'))
         return {
             'status': self.FLOW_EXECUTED,
             'answer': 'Сценарий уже выполнен. Дубликаты не созданы.',
             'suggestions': [],
-            'cards': [self._execution_result_card(po, attachment, picking)],
+            'cards': [self._execution_result_card(
+                po, attachment, picking, bill
+            )],
             'meta': {'status': self.FLOW_EXECUTED, 'purchase_flow': flow},
         }
 
@@ -838,7 +847,7 @@ class InvoiceWorkflow:
         invoice_number = context.get('invoice_number') or 'без номера'
         actions = ['создать и подтвердить закупку']
         if flow.get('attach_invoice'):
-            actions.append('прикрепить PDF счёта')
+            actions.append('создать счёт поставщика и прикрепить PDF')
         if flow.get('receive_picking'):
             actions.append('провести приёмку')
         return (
@@ -856,6 +865,96 @@ class InvoiceWorkflow:
             (', сумма %s' % total) if total else '',
             '; '.join(actions),
         )
+
+    def _bind_vendor_bill(self, uid, extraction_token, po):
+        attachment = self._attach_invoice(uid, extraction_token, po)
+        bill = self._create_vendor_bill(po)
+        extra = self._vendor_bill_extra_vals(uid, extraction_token, po)
+        if extra:
+            bill.write(extra)
+        self._attach_pdf_to_bill(bill, attachment)
+        return attachment, bill
+
+    def _vendor_bill_extra_vals(self, uid, extraction_token, po):
+        context = self._context_helper.fetch_context(uid, extraction_token)
+        vals = {}
+        invoice_date = context.get('invoice_date')
+        if invoice_date:
+            vals['invoice_date'] = invoice_date
+        ref = po.partner_ref or context.get('invoice_number')
+        if ref:
+            vals['ref'] = ref
+        return vals
+
+    def _create_vendor_bill(self, po):
+        existing = po.invoice_ids.filtered(
+            lambda move: move.move_type == 'in_invoice'
+            and move.state != 'cancel'
+        )
+        if existing:
+            return existing[0]
+        if any(line.qty_to_invoice for line in po.order_line):
+            po.action_create_invoice()
+        else:
+            self._create_bill_from_ordered_qty(po)
+        bills = po.invoice_ids.filtered(
+            lambda move: move.move_type == 'in_invoice'
+            and move.state != 'cancel'
+        )
+        if not bills:
+            raise ValidationError('Не удалось создать счёт поставщика.')
+        return bills[0]
+
+    def _create_bill_from_ordered_qty(self, po):
+        vals = po._prepare_invoice()
+        sequence = 10
+        for line in po.order_line:
+            if line.display_type:
+                continue
+            line_vals = line._prepare_account_move_line()
+            line_vals['quantity'] = line.product_qty
+            line_vals['sequence'] = sequence
+            sequence += 1
+            vals['invoice_line_ids'].append((0, 0, line_vals))
+        if not vals.get('invoice_line_ids'):
+            raise ValidationError('Нет строк для счёта поставщика.')
+        return self.env['account.move'].with_context(
+            default_move_type='in_invoice',
+        ).create(vals)
+
+    def _attach_pdf_to_bill(self, bill, attachment):
+        if not bill or not bill.exists() or not attachment:
+            return
+        linked = self._ensure_attachment_on(attachment, bill)
+        posted = bill.message_ids.mapped('attachment_ids').filtered(
+            lambda item: item.name == linked.name
+        )
+        if posted:
+            return
+        bill.message_post(
+            body='PDF счёта прикреплён AI-ассистентом.',
+            attachment_ids=linked.ids,
+            message_type='notification',
+            subtype_xmlid='mail.mt_note',
+        )
+
+    def _ensure_attachment_on(self, attachment, record):
+        existing = self.env['ir.attachment'].search([
+            ('res_model', '=', record._name),
+            ('res_id', '=', record.id),
+            ('name', '=', attachment.name),
+        ], limit=1)
+        if existing:
+            return existing
+        if (
+            attachment.res_model == record._name
+            and attachment.res_id == record.id
+        ):
+            return attachment
+        return attachment.copy({
+            'res_model': record._name,
+            'res_id': record.id,
+        })
 
     def _attach_invoice(self, uid, extraction_token, po):
         source = self._store.get_file(uid, extraction_token) or {}
@@ -918,12 +1017,37 @@ class InvoiceWorkflow:
             picking.invalidate_recordset()
         return picking
 
-    def _execution_result_card(self, po, attachment=None, picking=None):
+    def _execution_steps(self, po, attachment, bill, picking):
+        steps = ['Закупка создана и подтверждена: %s' % po.name]
+        if bill:
+            steps.append(
+                'Счёт поставщика создан: %s.'
+                % (bill.name or bill.display_name)
+            )
+        if attachment:
+            steps.append('PDF счёта прикреплён к счёту поставщика.')
+        if picking:
+            steps.append('Приёмка проведена: %s' % picking.name)
+        return steps
+
+    def _execution_result_card(
+        self, po, attachment=None, picking=None, bill=None
+    ):
         details = []
+        if bill and bill.exists():
+            details.append({
+                'label': 'Счёт поставщика',
+                'value': bill.name or bill.display_name,
+            })
         if attachment and attachment.exists():
             details.append({'label': 'Вложение', 'value': attachment.name})
         if picking and picking.exists():
             details.append({'label': 'Приёмка', 'value': picking.name})
+        hint = 'Откройте закупку и проверьте результат.'
+        if bill and bill.exists():
+            hint = (
+                'Откройте счёт поставщика: PDF лежит во вложениях счёта.'
+            )
         return {
             'type': 'result',
             'status': 'success',
@@ -935,6 +1059,6 @@ class InvoiceWorkflow:
                 if po and po.exists() else '',
             },
             'details': details,
-            'next_hint': 'Откройте закупку и проверьте результат.',
+            'next_hint': hint,
             'steps': [],
         }
