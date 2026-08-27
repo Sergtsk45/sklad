@@ -104,6 +104,7 @@
                     name="preferred_vendor_id"
                     string="Поставщик"
                     optional="show"
+                    class="o_or_full_dropdown"
                     context="{
                         'object_request_recent_vendors': True,
                         'object_request_company_id': company_id,
@@ -112,6 +113,7 @@
                 <field
                     name="product_id"
                     string="Товар"
+                    class="o_or_full_dropdown"
                     context="{
                         'display_default_code': True,
                         'object_request_preferred_vendor_id': preferred_vendor_id,

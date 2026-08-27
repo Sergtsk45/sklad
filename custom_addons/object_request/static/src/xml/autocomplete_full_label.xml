@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-inherit="web.AutoComplete" t-inherit-mode="extension">
+        <xpath
+            expr="//li[hasclass('o-autocomplete--dropdown-item')]"
+            position="attributes"
+        >
+            <attribute name="t-att-title">option.label</attribute>
+        </xpath>
+        <xpath
+            expr="//t[hasclass('ui-menu-item-wrapper')]"
+            position="attributes"
+        >
+            <attribute name="t-att-title">option.label</attribute>
+        </xpath>
+    </t>
+</templates>

@@ -16,12 +16,14 @@
                         name="vendor_id"
                         invisible="assign_type != 'vendor'"
                         required="assign_type == 'vendor'"
+                        class="o_or_full_dropdown"
                         context="{'object_request_recent_vendors': True}"
                     />
                     <field
                         name="product_id"
                         invisible="assign_type != 'product'"
                         required="assign_type == 'product'"
+                        class="o_or_full_dropdown"
                         context="{'display_default_code': True}"
                     />
                 </group>

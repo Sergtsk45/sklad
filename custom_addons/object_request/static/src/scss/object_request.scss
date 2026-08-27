@@ -43,6 +43,24 @@
     }
 }
 
+.o_or_full_dropdown {
+    .o-autocomplete--dropdown-menu {
+        min-width: min(36rem, 92vw);
+        max-width: min(56rem, 96vw) !important;
+        width: max-content;
+    }
+
+    .o-autocomplete--dropdown-item > .dropdown-item {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+        height: auto;
+        line-height: 1.35;
+        padding-top: 0.35rem;
+        padding-bottom: 0.35rem;
+    }
+}
+
 .o_list_table.o_object_request_column_dragging {
     th[data-name] {
         cursor: grabbing;
