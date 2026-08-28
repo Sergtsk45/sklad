@@ -92,7 +92,11 @@
             >
                 <field name="request_id" string="Документ" optional="show"/>
                 <field name="sequence" string="№"/>
-                <field name="name_raw" string="Наименование (файл)"/>
+                <field
+                    name="name_raw"
+                    string="Наименование (файл)"
+                    readonly="request_id.state != 'draft'"
+                />
                 <field name="supplier_article" string="Артикул" optional="show"/>
                 <field
                     name="technical_designation"
@@ -117,6 +121,7 @@
                     context="{
                         'display_default_code': True,
                         'object_request_preferred_vendor_id': preferred_vendor_id,
+                        'object_request_search_product_tags': True,
                         'object_request_company_id': company_id,
                     }"
                 />

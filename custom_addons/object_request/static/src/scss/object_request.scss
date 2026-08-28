@@ -45,8 +45,10 @@
 
 .o_or_full_dropdown {
     .o-autocomplete--dropdown-menu {
-        min-width: min(36rem, 92vw);
-        max-width: min(56rem, 96vw) !important;
+        // CSS min() must be interpolated: libsass treats min() as a Sass
+        // function and fails on mixed rem/vw units.
+        min-width: #{'min(36rem, 92vw)'};
+        max-width: #{'min(56rem, 96vw)'} !important;
         width: max-content;
     }
 

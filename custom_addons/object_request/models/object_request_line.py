@@ -8,6 +8,7 @@ _COMPOSITION_LOCK_MSG = (
     "Состав строк и запрошенное количество можно менять "
     "только в черновике."
 )
+_NAME_RAW_LOCK_MSG = "Наименование строки можно менять только в черновике."
 
 
 class ObjectRequestLine(models.Model):
@@ -438,6 +439,11 @@ class ObjectRequestLine(models.Model):
             ):
                 raise UserError(_COMPOSITION_LOCK_MSG)
 
+    def _check_name_raw_change(self, new_name):
+        locked = self.filtered(lambda ln: ln.request_id.state != "draft")
+        if any(line.name_raw != new_name for line in locked):
+            raise UserError(_NAME_RAW_LOCK_MSG)
+
     @api.model_create_multi
     def create(self, vals_list):
         self.check_access("create")
@@ -456,6 +462,8 @@ class ObjectRequestLine(models.Model):
     def write(self, vals):
         if "allowed_substitute_ids" in vals:
             self._check_supply_manager_substitution_action()
+        if "name_raw" in vals:
+            self._check_name_raw_change(vals["name_raw"])
         if "qty_requested" in vals:
             self._check_qty_requested_change(vals["qty_requested"])
         self._check_explicit_invoice_request_write(vals)

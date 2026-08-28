@@ -1,3 +1,5 @@
+from lxml import etree
+
 from odoo.tests.common import TransactionCase
 from odoo.exceptions import UserError
 from odoo.tests import tagged
@@ -198,6 +200,12 @@ class TestStateMachine(TransactionCase):
         line.unlink()
         self.assertFalse(req.line_ids)
 
+    def test_draft_allows_name_raw_change(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        line.write({"name_raw": "Изменённая позиция"})
+        self.assertEqual(line.name_raw, "Изменённая позиция")
+
     def test_in_progress_forbids_line_create(self):
         req = self._make_request()
         self._add_matched_line(req)
@@ -235,6 +243,32 @@ class TestStateMachine(TransactionCase):
         req.action_in_progress()
         line.write({"qty_requested": 10.0, "qty_to_issue": 4.0})
         self.assertAlmostEqual(line.qty_to_issue, 4.0)
+
+    def test_in_progress_forbids_name_raw_change(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_in_progress()
+        with self.assertRaisesRegex(
+            UserError,
+            "Наименование строки можно менять только в черновике",
+        ):
+            line.write({"name_raw": "Подменённая позиция"})
+        self.assertEqual(line.name_raw, "Тестовая позиция")
+
+    def test_in_progress_allows_same_name_raw_write(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_in_progress()
+        line.write({"name_raw": line.name_raw, "qty_to_issue": 4.0})
+        self.assertAlmostEqual(line.qty_to_issue, 4.0)
+
+    def test_cancelled_forbids_name_raw_change(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_cancel()
+        with self.assertRaises(UserError):
+            line.write({"name_raw": "Подменённая позиция"})
+        self.assertEqual(line.name_raw, "Тестовая позиция")
 
     def test_in_progress_allows_qty_to_issue_change(self):
         req = self._make_request()
@@ -275,3 +309,31 @@ class TestStateMachine(TransactionCase):
         self.assertNotIn('create="parent.state', arch)
         self.assertNotIn('delete="parent.state', arch)
         self.assertIn('readonly="parent.state != \'draft\'"', arch)
+
+    def test_views_lock_name_raw_outside_draft(self):
+        form = etree.fromstring(
+            self.env.ref(
+                "object_request.view_object_request_form"
+            ).arch_db
+        )
+        editable_name_fields = form.xpath(
+            "//field[@name='line_ids'][contains(@groups, "
+            "'group_supply_manager')]/list/field[@name='name_raw']"
+        )
+        self.assertEqual(len(editable_name_fields), 1)
+        self.assertEqual(
+            editable_name_fields[0].get("readonly"),
+            "parent.state != 'draft'",
+        )
+
+        line_list = etree.fromstring(
+            self.env.ref(
+                "object_request.view_object_request_line_list"
+            ).arch_db
+        )
+        list_name_fields = line_list.xpath("//field[@name='name_raw']")
+        self.assertEqual(len(list_name_fields), 1)
+        self.assertEqual(
+            list_name_fields[0].get("readonly"),
+            "request_id.state != 'draft'",
+        )

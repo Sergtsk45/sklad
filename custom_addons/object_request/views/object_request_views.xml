@@ -486,7 +486,12 @@
                                     <field name="sequence" widget="handle"/>
                                     <field name="source_row_no" string="Excel №" optional="hide"/>
                                     <!-- Оригинальные данные из файла → поле выбора (Наименование) -->
-                                    <field name="name_raw" string="Наименование (файл)" optional="show"/>
+                                    <field
+                                        name="name_raw"
+                                        string="Наименование (файл)"
+                                        optional="show"
+                                        readonly="parent.state != 'draft'"
+                                    />
                                     <field name="supplier_article" string="Артикул" optional="show"/>
                                     <field
                                         name="technical_designation"
@@ -513,6 +518,7 @@
                                         context="{
                                             'display_default_code': True,
                                             'object_request_preferred_vendor_id': preferred_vendor_id,
+                                            'object_request_search_product_tags': True,
                                             'object_request_company_id': parent.company_id,
                                         }"
                                     />

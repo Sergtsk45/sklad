@@ -9,7 +9,12 @@
 from odoo import api, models
 from odoo.fields import Domain
 
+from odoo.addons.custom_product_search.models.product_search_utils import (
+    normalize_product_search_text,
+)
+
 CTX_PREFERRED_VENDOR = "object_request_preferred_vendor_id"
+CTX_PRODUCT_TAG_SEARCH = "object_request_search_product_tags"
 CTX_REQUEST_COMPANY = "object_request_company_id"
 CTX_SKIP_GLOBAL_SUPPLIER_SEARCH = "object_request_skip_global_supplier_search"
 POSITIVE_OPS = ("=", "ilike", "=ilike", "like", "=like")
@@ -124,15 +129,17 @@ class ProductProduct(models.Model):
     @api.model
     def name_search(self, name="", domain=None, operator="ilike", limit=100):
         vendor_id = self._or_preferred_vendor_id_from_context()
-        if not vendor_id:
-            return super().name_search(name, domain, operator, limit)
-
         search_domain = Domain(domain or Domain.TRUE)
-        search_domain &= self._or_vendor_catalog_domain(vendor_id)
-        results = super(
-            ProductProduct,
-            self.with_context(**{CTX_SKIP_GLOBAL_SUPPLIER_SEARCH: True}),
-        ).name_search(
+        product_model = super()
+        if vendor_id:
+            search_domain &= self._or_vendor_catalog_domain(vendor_id)
+            product_model = super(
+                ProductProduct,
+                self.with_context(
+                    **{CTX_SKIP_GLOBAL_SUPPLIER_SEARCH: True}
+                ),
+            )
+        results = product_model.name_search(
             name,
             search_domain,
             operator,
@@ -152,7 +159,65 @@ class ProductProduct(models.Model):
                 )
                 results += vendor_hits
 
+        if (
+            self.env.context.get(CTX_PRODUCT_TAG_SEARCH)
+            and name
+            and operator in POSITIVE_OPS
+        ):
+            remaining = self._or_remaining_name_search_limit(limit, results)
+            if remaining != 0:
+                tag_hits = self._or_search_by_product_tags(
+                    name,
+                    operator,
+                    domain=search_domain,
+                    exclude_ids=[row[0] for row in results],
+                    limit=remaining,
+                )
+                results += tag_hits
+
         return self._or_add_vendor_to_labels(results, vendor_id)
+
+    @api.model
+    def _or_search_by_product_tags(
+        self,
+        name,
+        operator,
+        domain=None,
+        exclude_ids=None,
+        limit=None,
+    ):
+        tokens = normalize_product_search_text(name).split()
+        if not tokens:
+            return []
+
+        tag_domain = Domain.AND(
+            [
+                Domain.OR(
+                    [
+                        Domain("product_tag_ids.name", operator, token),
+                        Domain(
+                            "additional_product_tag_ids.name",
+                            operator,
+                            token,
+                        ),
+                    ]
+                )
+                for token in tokens
+            ]
+        )
+        product_domain = Domain(domain or Domain.TRUE) & tag_domain
+        if exclude_ids:
+            product_domain &= Domain("id", "not in", exclude_ids)
+
+        products = self.search_fetch(
+            product_domain,
+            ["display_name"],
+            limit=limit,
+        )
+        return [
+            (product.id, product.display_name)
+            for product in products
+        ]
 
     @api.model
     def _or_add_vendor_to_labels(self, results, vendor_id):

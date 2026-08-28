@@ -235,9 +235,12 @@ docker compose restart odoo
 
 ### После обновления версии Odoo: проверить переопределения UI
 
+Сначала пройти [`docs/odoo-upgrade-notes.md`](odoo-upgrade-notes.md) (письма RFQ,
+notify/портал и другие привязки к API ядра). Подписи кнопок и колонок —
+ниже и в разделе **«Переопределения UI при обновлении Odoo»** в `docs/project.md`.
+
 Проект переименовывает часть англоязычных кнопок и колонок через
-`object_request` и `stock_qty_labels_ru` (см. раздел **«Переопределения UI
-при обновлении Odoo»** в `docs/project.md`).
+`object_request` и `stock_qty_labels_ru`.
 
 После смены образа Odoo или массового `-u`:
 

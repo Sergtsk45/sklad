@@ -21,7 +21,7 @@ alwaysApply: false
 6. **Скидка** — обычно **5%** на все строки (`discount_percent` в JSON).
 7. **`partner_ref`** — полный номер: `П000014101`, не `14101`.
 8. При `needs_review: true`, `items_empty` или `sum_mismatch` — **сообщи пользователю**, не создавай PO молча.
-9. **Odoo** — только по явной команде: поставщик → `odoo-supplier-from-invoice`, закупка → `purchase-from-invoice`.
+9. **Odoo** — только по явной команде: поставщик → `odoo-supplier-from-invoice`, закупка → `odoo-purchase-from-invoice`.
 
 ## Поставщик
 

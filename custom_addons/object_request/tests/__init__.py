@@ -37,3 +37,4 @@ from . import test_obr040_recent_vendors  # noqa: F401
 from . import test_obr041_dropdown_full_label  # noqa: F401
 from . import test_purchase_order_list_columns  # noqa: F401
 from . import test_purchase_rfq_copy_recipient  # noqa: F401
+from . import test_td014_product_tag_search  # noqa: F401

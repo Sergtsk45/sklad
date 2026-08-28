@@ -22,6 +22,8 @@
   по связанным требованиям после оплаты счетов поставщиков.
 - `custom_addons/custom_product_search/` — нормализованный поиск товаров для backend UI, складских документов и AI-сервисного слоя.
 - `docs/` — проектная документация, changelog и tasktracker.
+- [`docs/odoo-upgrade-notes.md`](odoo-upgrade-notes.md) — реестр переопределений
+  ядра, которые надо сразу проверить при переходе **Odoo 19 → 20**.
 
 ## custom_product_search
 
@@ -374,6 +376,9 @@ flowchart TD
 - Legacy-запросы `ОбМ-2` и `ОбМ-4` временно поддерживаются AI Assistant как aliases на `O001` и `O002`.
 
 ## Переопределения UI при обновлении Odoo
+
+Поведение писем, notify API и прочие привязки к ядру (не только xpath) —
+в [`docs/odoo-upgrade-notes.md`](odoo-upgrade-notes.md). Ниже — подписи UI.
 
 Часть англоязычных подписей стандартного интерфейса переопределена в
 `custom_addons/` (ядро `odoo/` не меняется). **После обновления версии Odoo**

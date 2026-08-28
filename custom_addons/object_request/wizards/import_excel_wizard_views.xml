@@ -93,6 +93,9 @@
                                         optional="show"
                                         width="360px"
                                         options="{'no_create': True, 'no_create_edit': True}"
+                                        context="{
+                                            'object_request_search_product_tags': True,
+                                        }"
                                     />
                                     <field
                                         name="candidate_product_ids"

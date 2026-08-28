@@ -24,7 +24,10 @@
                         invisible="assign_type != 'product'"
                         required="assign_type == 'product'"
                         class="o_or_full_dropdown"
-                        context="{'display_default_code': True}"
+                        context="{
+                            'display_default_code': True,
+                            'object_request_search_product_tags': True,
+                        }"
                     />
                 </group>
                 <footer>

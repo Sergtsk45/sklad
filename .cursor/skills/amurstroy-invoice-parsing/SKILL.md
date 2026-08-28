@@ -5,7 +5,7 @@ description: >
   по ИНН 2801019127 и заголовку «Договор-Счет № П…». Извлекает таблицу с колонками
   Цена / Сумма без скидки / Скидка / Сумма (типично 5%). Используй для файлов
   schetП0000*.pdf, Родбант.pdf и любых сканов Амурстроя из docs/invoices/.
-  Для закупки — purchase-from-invoice; для поставщика — odoo-supplier-from-invoice.
+  Для закупки — odoo-purchase-from-invoice; для поставщика — odoo-supplier-from-invoice.
 compatibility: "Tesseract rus+eng, pdfplumber, scripts/amurstroy_parse.py"
 ---
 
@@ -126,7 +126,7 @@ python3 .cursor/skills/amurstroy-invoice-parsing/scripts/amurstroy_parse.py "doc
 |--------|-----------------|
 | Только распарсить | Этот скилл |
 | Создать поставщика | `odoo-supplier-from-invoice` |
-| Создать закупку | `purchase-from-invoice` |
+| Создать закупку | `odoo-purchase-from-invoice` |
 
 Поставщик в Odoo: `res.partner` id **20**, ИНН `2801019127`.
 
