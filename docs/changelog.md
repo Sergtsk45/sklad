@@ -15,6 +15,10 @@
 - Проверки: TD-014 — 8 post-tests; OBR-038 — 22 post-tests; полный
   `/object_request` — 560 post-tests, 0 failed, 0 errors.
 - Версия: `object_request` `19.0.1.10.23`.
+- Prod deploy `0a767d6`: backup
+  `/opt/project_odoo/backups/or-td013-td014-scss-20260828-200709/`,
+  `-u object_request` → `19.0.1.10.23`, restart; health `pass`, `/web/login`
+  HTTP 200.
 
 ## [2026-08-28] — TD-013: блокировка исходного наименования строки
 
