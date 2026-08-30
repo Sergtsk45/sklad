@@ -3,6 +3,10 @@
 ### Изменено
 - В письме «Отправить запрос»: закупщик-администратор → «Сергей»; пустое
   поле закупщика → без имени; иначе имя закупщика. `object_request` `19.0.1.10.26`.
+- Prod deploy `fd14839`: backup
+  `/opt/project_odoo/backups/or-rfq-signer-sergey-20260830-010333/`,
+  `-u object_request` → `19.0.1.10.26`, restart; health `pass`, `/web/login`
+  HTTP 200.
 
 ## [2026-08-30] — Подпись RFQ: имя составителя заявки
 
