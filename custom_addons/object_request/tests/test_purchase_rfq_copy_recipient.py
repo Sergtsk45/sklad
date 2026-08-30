@@ -40,7 +40,7 @@ class TestPurchaseRfqCopyRecipient(TransactionCase):
     def test_rfq_template_has_company_signature(self):
         template = self.env.ref("purchase.email_template_edi_purchase")
         body = template.body_html or ""
-        self.assertIn("С уважением", body)
+        self.assertIn("С уважением,", body)
         self.assertIn("get_rfq_mail_signer_name", body)
         self.assertIn("Теплосервис-Комплект", body)
         self.assertNotIn("object.user_id.name", body)

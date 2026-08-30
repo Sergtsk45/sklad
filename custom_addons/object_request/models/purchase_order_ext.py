@@ -29,7 +29,7 @@ RFQ_MAIL_BODY_HTML = """\
     </table>
     <p style="margin:16px 0 0 0;">
         <t t-set="signer" t-value="object.get_rfq_mail_signer_name()"/>
-        С уважением<t t-if="signer"> <t t-out="signer"/></t>
+        С уважением,<t t-if="signer"> <t t-out="signer"/></t>
         ООО &quot;Теплосервис-Комплект&quot;
     </p>
 </div>
