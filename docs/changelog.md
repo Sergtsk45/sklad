@@ -3,6 +3,10 @@
 ### Изменено
 - В письме «Отправить запрос» после таблицы: «С уважением,» с запятой.
   `object_request` `19.0.1.10.27`.
+- Prod deploy `17d942a`: backup
+  `/opt/project_odoo/backups/or-rfq-signer-comma-20260830-011747/`,
+  `-u object_request` → `19.0.1.10.27`, restart; health `pass`, `/web/login`
+  HTTP 200.
 
 ## [2026-08-30] — Подпись RFQ: Сергей вместо Administrator
 
