@@ -4,6 +4,10 @@
 - В письме «Отправить запрос» после таблицы: «С уважением &lt;имя закупщика&gt;
   ООО "Теплосервис-Комплект"» (`purchase.order.user_id`). Телефон из подписи
   убран. Версия `object_request`: `19.0.1.10.25`.
+- Prod deploy `a93cb4d`: backup
+  `/opt/project_odoo/backups/td002-pipe-uom-rfq-sign-20260830-003640/`,
+  `-u object_request,ai_assistant` → `19.0.1.10.25` / `19.0.1.2.4`,
+  restart; health `pass`, `/web/login` HTTP 200.
 
 ## [2026-08-29] — TD-002: трубы, коэффициент кг/м и пересчёт в метры
 
@@ -12,7 +16,7 @@
 - В `object_request` добавлено поле `kg_per_meter` на товар и в карточку товара; workflow закупки теперь показывает пересчёт и пишет в PO только подтверждённые метры.
 - Обновлены предупреждения, prompt rules, knowledge base и пользовательская инструкция по трубам.
 - Добавлены unit/integration-тесты для сервиса, workflow и предупреждений; полный suite `ai_assistant` проходит.
-- Версия `object_request`: `19.0.1.10.24`.
+- Версия `object_request`: `19.0.1.10.24`; `ai_assistant`: `19.0.1.2.4`.
 
 ## [2026-08-28] — TD-014: поиск товара в OR по тегам
 
