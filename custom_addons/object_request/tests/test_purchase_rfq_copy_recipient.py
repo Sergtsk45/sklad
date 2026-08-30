@@ -41,8 +41,9 @@ class TestPurchaseRfqCopyRecipient(TransactionCase):
         template = self.env.ref("purchase.email_template_edi_purchase")
         body = template.body_html or ""
         self.assertIn("С уважением", body)
-        self.assertIn("object.user_id.name", body)
+        self.assertIn("get_rfq_mail_signer_name", body)
         self.assertIn("Теплосервис-Комплект", body)
+        self.assertNotIn("object.user_id.name", body)
         self.assertNotIn("8 962 285 85 10", body)
         self.assertGreater(
             body.find("</table>"),
@@ -51,23 +52,59 @@ class TestPurchaseRfqCopyRecipient(TransactionCase):
         )
         self.assertGreater(body.find("С уважением"), body.find("</table>"))
 
-    def test_rfq_body_renders_buyer_name(self):
-        vendor = self.env["res.partner"].create(
+    def _make_vendor(self, email):
+        return self.env["res.partner"].create(
             {
                 "name": "Поставщик подписи RFQ",
-                "email": "vendor-sign-rfq@example.com",
+                "email": email,
                 "supplier_rank": 1,
+            }
+        )
+
+    def test_rfq_signer_admin_is_sergey(self):
+        self.assertEqual(
+            self.env["purchase.order"].create(
+                {
+                    "partner_id": self._make_vendor("v-admin@example.com").id,
+                    "user_id": self.env.ref("base.user_admin").id,
+                }
+            ).get_rfq_mail_signer_name(),
+            "Сергей",
+        )
+
+    def test_rfq_signer_empty_buyer_has_no_name(self):
+        po = self.env["purchase.order"].create(
+            {"partner_id": self._make_vendor("v-empty@example.com").id}
+        )
+        po.user_id = False
+        self.assertEqual(po.get_rfq_mail_signer_name(), "")
+        body = self.env.ref("purchase.email_template_edi_purchase")._render_field(
+            "body_html", po.ids
+        )[po.id]
+        self.assertIn("С уважением", body)
+        self.assertNotIn("Сергей", body)
+        self.assertIn("Теплосервис-Комплект", body)
+
+    def test_rfq_body_renders_buyer_name(self):
+        buyer = self.env["res.users"].create(
+            {
+                "name": "Иван Снабженец",
+                "login": "buyer_rfq_signer_test",
+                "email": "buyer-rfq-signer@example.com",
             }
         )
         po = self.env["purchase.order"].create(
             {
-                "partner_id": vendor.id,
-                "user_id": self.env.user.id,
+                "partner_id": self._make_vendor("vendor-sign-rfq@example.com").id,
+                "user_id": buyer.id,
             }
         )
-        template = self.env.ref("purchase.email_template_edi_purchase")
-        body = template._render_field("body_html", po.ids)[po.id]
-        self.assertIn(self.env.user.name, body)
+        self.assertEqual(po.get_rfq_mail_signer_name(), "Иван Снабженец")
+        body = self.env.ref("purchase.email_template_edi_purchase")._render_field(
+            "body_html", po.ids
+        )[po.id]
+        self.assertIn("Иван Снабженец", body)
+        self.assertNotIn("Administrator", body)
         self.assertIn("Теплосервис-Комплект", body)
         self.assertGreater(body.find("С уважением"), body.find("</table>"))
 

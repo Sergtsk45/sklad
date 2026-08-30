@@ -28,8 +28,8 @@ RFQ_MAIL_BODY_HTML = """\
         </tbody>
     </table>
     <p style="margin:16px 0 0 0;">
-        С уважением
-        <t t-out="object.user_id.name or ''"/>
+        <t t-set="signer" t-value="object.get_rfq_mail_signer_name()"/>
+        С уважением<t t-if="signer"> <t t-out="signer"/></t>
         ООО &quot;Теплосервис-Комплект&quot;
     </p>
 </div>
@@ -119,6 +119,18 @@ class PurchaseOrderExt(models.Model):
             "domain": [("id", "in", self.object_request_ids.ids)],
             "target": "current",
         }
+
+    def get_rfq_mail_signer_name(self):
+        """Имя в подписи RFQ: Сергей для admin, иначе закупщик, пусто если нет."""
+        self.ensure_one()
+        buyer = self.user_id
+        if not buyer:
+            return ""
+        login = (buyer.login or "").strip().lower()
+        name = (buyer.name or "").strip()
+        if login == "admin" or name in ("Administrator", "Администратор"):
+            return "Сергей"
+        return name
 
     @api.model
     def _setup_rfq_copy_mail_template(self):
