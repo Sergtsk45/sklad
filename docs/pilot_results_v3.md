@@ -67,7 +67,7 @@ No tool confirms purchase orders or validates pickings. `button_confirm` and
 
 - Full module flake8 still fails on pre-existing style debt outside the v3 action changes.
 - Coverage percentage is not available in the current Odoo test workflow.
-- Pipe kg/ton to meter conversion remains manual until TD-002 is closed.
+- Pipe kg/ton to meter conversion is now handled by the workflow; remaining follow-up is catalog cleanup and coefficient population.
 - Receipt validation and stock quant creation remain manual until TD-003 is closed.
 - `pending_action` and tool rate limits are in-memory and reset on Odoo worker restart.
 

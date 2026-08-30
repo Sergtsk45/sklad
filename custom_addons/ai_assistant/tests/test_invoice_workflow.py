@@ -143,6 +143,116 @@ class TestInvoiceWorkflow(TransactionCase):
         self.assertEqual(po_args['lines'][0]['product_qty'], 2.0)
         self.assertEqual(po_args['lines'][0]['price_unit'], 1500.0)
 
+    def test_prepare_po_draft_converts_pipe_lines_to_meters(self):
+        pipe_category = self.env['product.category'].create({
+            'name': 'Трубы TD-002 workflow',
+        })
+        kg_pipe = self.env['product.product'].create({
+            'name': 'Труба ВГП 89×3,5 TD-002 kg',
+            'is_storable': True,
+            'purchase_ok': True,
+            'categ_id': pipe_category.id,
+            'uom_id': self.env.ref('uom.product_uom_meter').id,
+            'kg_per_meter': 4.88,
+        })
+        piece_pipe = self.env['product.product'].create({
+            'name': 'Труба э/с 76×3,5 L12 TD-002 pcs',
+            'is_storable': True,
+            'purchase_ok': True,
+            'categ_id': pipe_category.id,
+            'uom_id': self.env.ref('uom.product_uom_meter').id,
+            'kg_per_meter': 5.80,
+        })
+        invoice = dict(self.invoice_data)
+        invoice['invoice_number'] = 'PIPE-TD-002'
+        invoice['items'] = [
+            {
+                'line_no': 1,
+                'name': kg_pipe.name,
+                'unit': 'кг',
+                'qty': 488.0,
+                'price': 10.0,
+            },
+            {
+                'line_no': 2,
+                'name': piece_pipe.name,
+                'unit': 'шт',
+                'qty': 2.0,
+                'price': 20.0,
+            },
+        ]
+        token = self.store.put(self.env.uid, invoice)
+
+        payload = self.workflow.prepare_po_draft(
+            self.env.uid,
+            token,
+            'Ос.ск',
+        )
+        self.assertEqual(payload['status'], 'pending')
+        self.assertAlmostEqual(payload['po_args']['lines'][0]['product_qty'], 100.0, places=2)
+        self.assertEqual(
+            payload['po_args']['lines'][0]['product_uom'],
+            self.env.ref('uom.product_uom_meter').id,
+        )
+        self.assertAlmostEqual(payload['po_args']['lines'][1]['product_qty'], 24.0, places=2)
+        self.assertEqual(
+            payload['po_args']['lines'][1]['product_uom'],
+            self.env.ref('uom.product_uom_meter').id,
+        )
+
+        self.workflow.record_product_created(
+            self.env.uid, token, '1', kg_pipe.id,
+        )
+        self.workflow.record_product_created(
+            self.env.uid, token, '2', piece_pipe.id,
+        )
+        self.workflow.set_create_po_decision(self.env.uid, token, True)
+        self.workflow.select_warehouse(
+            self.env.uid,
+            token,
+            payload={'warehouse_query': 'Ос.ск'},
+        )
+        self.workflow.set_attach_invoice_decision(self.env.uid, token, False)
+        summary = self.workflow.set_receive_picking_decision(
+            self.env.uid,
+            token,
+            False,
+        )
+
+        self.assertIn('488 кг / 4.88 кг/м = 100 м', summary['answer'])
+        self.assertIn('2 шт × 12 м = 24 м', summary['answer'])
+
+    def test_prepare_po_draft_rejects_pipe_without_kg_per_meter(self):
+        pipe_category = self.env['product.category'].create({
+            'name': 'Трубы TD-002 invalid',
+        })
+        bad_pipe = self.env['product.product'].create({
+            'name': 'Труба ВГП 89×3,5 TD-002 invalid',
+            'is_storable': True,
+            'purchase_ok': True,
+            'categ_id': pipe_category.id,
+            'uom_id': self.env.ref('uom.product_uom_meter').id,
+        })
+        invoice = dict(self.invoice_data)
+        invoice['invoice_number'] = 'PIPE-TD-002-BAD'
+        invoice['items'] = [{
+            'line_no': 1,
+            'name': bad_pipe.name,
+            'unit': 'кг',
+            'qty': 100.0,
+            'price': 10.0,
+        }]
+        token = self.store.put(self.env.uid, invoice)
+
+        payload = self.workflow.prepare_po_draft(
+            self.env.uid,
+            token,
+            'Ос.ск',
+        )
+
+        self.assertEqual(payload['status'], 'error')
+        self.assertIn('кг/м', payload['answer'])
+
     def test_execute_purchase_plan_creates_confirmed_po_and_attachment(self):
         product_1 = self.env['product.product'].create({
             'name': 'AIA execute product 1',

@@ -88,6 +88,14 @@ class ProductTemplate(models.Model):
         compute="_compute_object_request_product_features",
         store=True,
     )
+    kg_per_meter = fields.Float(
+        string="Кг/м",
+        digits="Product Unit of Measure",
+        help=(
+            "Коэффициент массы погонного метра трубы. "
+            "Используется для пересчёта кг/т в метры."
+        ),
+    )
 
     @api.depends("name")
     def _compute_object_request_product_features(self):
@@ -155,4 +163,9 @@ class ProductProduct(models.Model):
     or_feature_parse_warning = fields.Char(
         related="product_tmpl_id.or_feature_parse_warning",
         store=True,
+    )
+    kg_per_meter = fields.Float(
+        related="product_tmpl_id.kg_per_meter",
+        store=True,
+        readonly=False,
     )

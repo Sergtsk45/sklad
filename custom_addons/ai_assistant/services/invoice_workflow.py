@@ -13,6 +13,9 @@ from odoo.addons.ai_assistant.services.action_tools.write_tools import (
 from odoo.addons.ai_assistant.services.action_tools.read_tools import (
     FindWarehouseTool,
 )
+from odoo.addons.ai_assistant.services.pipe_qty_converter import (
+    convert_pipe_quantity,
+)
 from odoo.addons.ai_assistant.services.invoice_context_helper import (
     InvoiceContextHelper,
 )
@@ -617,9 +620,13 @@ class InvoiceWorkflow:
                 price = float(price)
             except (TypeError, ValueError):
                 price = 0.0
-            uom_id = (
-                self._resolve_uom_id(item.get('unit')) or product.uom_id.id
-            )
+            if self._is_pipe_product(product):
+                qty, uom_id = self._convert_pipe_item(item, product)
+            else:
+                uom_id = (
+                    self._resolve_uom_id(item.get('unit'))
+                    or product.uom_id.id
+                )
             lines.append({
                 'product_id': product_id,
                 'product_qty': qty,
@@ -672,6 +679,31 @@ class InvoiceWorkflow:
             return None
         uom = self.env.ref(xmlid, raise_if_not_found=False)
         return uom.id if uom else None
+
+    def _is_pipe_product(self, product):
+        if not product or not product.exists():
+            return False
+        category = (product.categ_id.complete_name or product.categ_id.name or '')
+        category = category.lower()
+        feature = getattr(product.product_tmpl_id, 'or_product_family', False)
+        return 'труб' in category or feature == 'pipe'
+
+    def _convert_pipe_item(self, item, product):
+        description = ' '.join(
+            part for part in (
+                item.get('name'),
+                product.display_name,
+            ) if part
+        )
+        conversion = convert_pipe_quantity(
+            item.get('qty'),
+            item.get('unit'),
+            kg_per_meter=product.product_tmpl_id.kg_per_meter,
+            description=description,
+        )
+        return conversion['meters'], self.env.ref(
+            'uom.product_uom_meter'
+        ).id
 
     def _short_name(self, name, limit=48):
         text = (name or '').strip()
@@ -850,12 +882,21 @@ class InvoiceWorkflow:
             actions.append('создать счёт поставщика и прикрепить PDF')
         if flow.get('receive_picking'):
             actions.append('провести приёмку')
+        pipe_lines = self._pipe_conversion_lines(
+            uid, extraction_token, context
+        )
+        pipe_summary = ''
+        if pipe_lines:
+            pipe_summary = '\n• Пересчёт труб:\n' + '\n'.join(
+                '  - %s' % line for line in pipe_lines
+            ) + '\n'
         return (
             'Итоговый план:\n'
             '• Поставщик: %s\n'
             '• Склад: %s\n'
             '• Счёт: %s\n'
             '• Строк: %s%s\n'
+            '%s'
             '• Действия: %s'
         ) % (
             partner,
@@ -863,8 +904,39 @@ class InvoiceWorkflow:
             invoice_number,
             lines,
             (', сумма %s' % total) if total else '',
+            pipe_summary,
             '; '.join(actions),
         )
+
+    def _pipe_conversion_lines(self, uid, extraction_token, context):
+        session = self._store.get_session(uid, extraction_token) or {}
+        created = session.get('created_by_line') or {}
+        lines = []
+        for idx, item in enumerate(context.get('items') or []):
+            product = self._product_for_line(item, idx, created)
+            if not product or not self._is_pipe_product(product):
+                continue
+            conversion = convert_pipe_quantity(
+                item.get('qty'),
+                item.get('unit'),
+                kg_per_meter=product.product_tmpl_id.kg_per_meter,
+                description=' '.join(
+                    part for part in (
+                        item.get('name'),
+                        product.display_name,
+                    ) if part
+                ),
+            )
+            lines.append(
+                '%s: %s'
+                % (item.get('name') or product.display_name, conversion['formula'])
+            )
+        return lines
+
+    def _product_for_line(self, item, index, created):
+        line_key = self._line_key(item, index)
+        product_id = self._product_id_for_line(item, line_key, created)
+        return self.env['product.product'].browse(product_id) if product_id else None
 
     def _bind_vendor_bill(self, uid, extraction_token, po):
         attachment = self._attach_invoice(uid, extraction_token, po)

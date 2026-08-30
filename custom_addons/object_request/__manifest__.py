@@ -1,6 +1,6 @@
 {
     "name": "Object Request — Требование на комплектацию объекта",
-    "version": "19.0.1.10.23",
+    "version": "19.0.1.10.25",
     "category": "Inventory/Inventory",
     "summary": "Управление требованиями на комплектацию строительных объектов",
     "description": """

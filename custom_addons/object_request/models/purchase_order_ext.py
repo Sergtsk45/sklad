@@ -28,9 +28,9 @@ RFQ_MAIL_BODY_HTML = """\
         </tbody>
     </table>
     <p style="margin:16px 0 0 0;">
-        С уважением,<br/>
-        ООО &quot;Теплосервис-Комплект&quot;<br/>
-        тел. 8 962 285 85 10
+        С уважением
+        <t t-out="object.user_id.name or ''"/>
+        ООО &quot;Теплосервис-Комплект&quot;
     </p>
 </div>
 """

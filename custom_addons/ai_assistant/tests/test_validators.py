@@ -213,4 +213,4 @@ class TestActionToolValidators(TransactionCase):
     def test_validate_uom_is_meter_warns_for_pipe_non_meter(self):
         warning = validate_uom_is_meter(self.env, self.unit_pipe.id)
         self.assertIn('метр', warning)
-        self.assertIn('TD-002', warning)
+        self.assertIn('подтверждением', warning)

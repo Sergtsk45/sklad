@@ -202,7 +202,7 @@ class TestActionWriteTools(TransactionCase):
         result = tool.execute(self.env(user=self.supply_user), args)
 
         self.assertTrue(result['warnings'])
-        self.assertIn('TD-002', result['warnings'][0])
+        self.assertIn('метры', result['warnings'][0])
 
     def test_create_purchase_order_registered(self):
         self.assertIsInstance(

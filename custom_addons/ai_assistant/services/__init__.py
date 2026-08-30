@@ -16,3 +16,4 @@ from . import moving_stock  # noqa: F401
 from . import moving_draft  # noqa: F401
 from . import moving_picking_actions  # noqa: F401
 from . import moving_workflow  # noqa: F401
+from . import pipe_qty_converter  # noqa: F401

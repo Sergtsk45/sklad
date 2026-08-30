@@ -21,6 +21,7 @@ from . import test_invoice_parsing  # noqa: F401
 from . import test_upload_invoice  # noqa: F401
 from . import test_invoice_context_helper  # noqa: F401
 from . import test_invoice_workflow  # noqa: F401
+from . import test_pipe_qty_converter  # noqa: F401
 from . import test_e2e_nf504_invoice_to_po  # noqa: F401
 from . import test_e2e_unknown_supplier_invoice_to_po  # noqa: F401
 from . import test_replenishment  # noqa: F401

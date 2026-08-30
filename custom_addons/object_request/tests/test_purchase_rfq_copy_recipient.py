@@ -41,13 +41,34 @@ class TestPurchaseRfqCopyRecipient(TransactionCase):
         template = self.env.ref("purchase.email_template_edi_purchase")
         body = template.body_html or ""
         self.assertIn("С уважением", body)
+        self.assertIn("object.user_id.name", body)
         self.assertIn("Теплосервис-Комплект", body)
-        self.assertIn("8 962 285 85 10", body)
+        self.assertNotIn("8 962 285 85 10", body)
         self.assertGreater(
             body.find("</table>"),
             -1,
             "подпись должна идти после таблицы товаров",
         )
+        self.assertGreater(body.find("С уважением"), body.find("</table>"))
+
+    def test_rfq_body_renders_buyer_name(self):
+        vendor = self.env["res.partner"].create(
+            {
+                "name": "Поставщик подписи RFQ",
+                "email": "vendor-sign-rfq@example.com",
+                "supplier_rank": 1,
+            }
+        )
+        po = self.env["purchase.order"].create(
+            {
+                "partner_id": vendor.id,
+                "user_id": self.env.user.id,
+            }
+        )
+        template = self.env.ref("purchase.email_template_edi_purchase")
+        body = template._render_field("body_html", po.ids)[po.id]
+        self.assertIn(self.env.user.name, body)
+        self.assertIn("Теплосервис-Комплект", body)
         self.assertGreater(body.find("С уважением"), body.find("</table>"))
 
     def test_default_recipients_include_company_when_email_set(self):
