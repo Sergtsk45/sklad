@@ -5,6 +5,10 @@
   и языке `en_US`, копия ТСК — в другой группе и `ru_RU`. Теперь оба в одной
   группе `rfq_vendor_and_company_copy` и одном языке компании, плюс подпись
   «С уважением,» не вырезается санитайзером. `object_request` `19.0.1.10.29`.
+- Prod deploy `c043693`: backup
+  `/opt/project_odoo/backups/or-rfq-same-copy-20260902-080530/`,
+  `-u object_request` → `19.0.1.10.29`, restart; health `pass`, `/web/login`
+  HTTP 200.
 
 ## [2026-09-02] — Каталог: счёт № 3315 (ЭТМ, ЗРК VTM)
 
