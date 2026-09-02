@@ -1,3 +1,559 @@
+## Задача: Закупки — копия RFQ совпадает с письмом поставщику
+- **Статус**: В процессе (локально `19.0.1.10.29`; prod ещё `19.0.1.10.27`)
+- **Описание**: На `675001@mail.ru` должно уходить то же содержимое, что
+  поставщику (таблица + «С уважением, …»). Сейчас два разных render:
+  вендор `portal_customer`/`en_US`, ТСК другая группа/`ru_RU`; подпись
+  съедает html_sanitize.
+- **Шаги выполнения**:
+  - [x] Одна notify-группа `rfq_vendor_and_company_copy` для вендора и компании.
+  - [x] Один язык обёртки (`company.partner_id.lang`).
+  - [x] Подпись без `<t t-set>` (санитайзер).
+  - [x] Тесты `or_rfq_copy`.
+  - [ ] `-u object_request` на prod до `19.0.1.10.29`.
+- **Зависимости**: `object_request`, `purchase.email_template_edi_purchase`.
+
+## Задача: Закупки — подпись RFQ с именем составителя
+- **Статус**: Влита в задачу про одинаковую копию (`19.0.1.10.29`)
+- **Описание**: После таблицы: «С уважением, [Сергей|имя] ООО "Теплосервис-Комплект"».
+  Администратор → Сергей; пустой закупщик → без имени; иначе имя закупщика.
+  Текст подписи не должен теряться при html_sanitize (копия на 675001).
+- **Шаги выполнения**:
+  - [x] Шаблон `body_html` + `_setup_rfq_copy_mail_template`.
+  - [x] `get_rfq_mail_signer_name`.
+  - [x] Запятая после «С уважением,».
+  - [x] Тесты `or_rfq_copy`.
+  - [ ] Деплой вместе с `19.0.1.10.29`.
+- **Зависимости**: `object_request`, `purchase.email_template_edi_purchase`.
+
+## Задача: Трубы — единицы измерения и пересчёт кг/т → метры (TD-002)
+- **Статус**: Ядро задеплоено на prod 2026-08-30 (`a93cb4d`, OR `19.0.1.10.25` / AI `19.0.1.2.4`); остаются follow-up по справочнику и заполнению коэффициентов
+- **Описание**: склад считает трубу в метрах, поставщик — в кг, тоннах или
+  хлыстах. Odoo не переводит массу в длину, поэтому нужен коэффициент кг/м
+  в карточке и пересчёт до записи количества в закупку. Дополнительно в
+  справочнике живёт неиспользуемая вторая единица длины «m» (id 9),
+  несовместимая с рабочей «метр» (id 32).
+- **Шаги выполнения**:
+  - [ ] Согласовать решения D1–D6 (единица, судьба «m», где хранить кг/м,
+        хлысты, момент пересчёта, поля в UI).
+  - [ ] Политика UoM и чистка справочника, слияние дублей карточек труб.
+  - [x] Поле `kg_per_meter` на `product.template` и сервис пересчёта.
+  - [x] Встраивание пересчёта в подготовку PO с подтверждением.
+  - [x] Тесты (кг, тонны, хлысты, регрессия УТ-1132) и документация.
+- **Детальный трекер**: [`tasktracker-td002-pipe-uom.md`](tasktracker-td002-pipe-uom.md)
+- **Зависимости**: `object_request`, `ai_assistant`,
+  [`TD-002`](technical-debt.md#td-002-единицы-измерения-труб-метр--m-и-приход-на-склад-в-метрах-при-закупке-в-кгтоннах),
+  [`TD-003`](technical-debt.md#td-003-api--validate--связка-orposklad-объекта).
+
+## Задача: OR — поиск товара по тегам `product.tag` (TD-014)
+- **Статус**: Задеплоена на prod 2026-08-28 (`0a767d6`, `19.0.1.10.23`)
+- **Описание**: Ручной autocomplete товара в OR должен находить карточки
+  по тегам шаблона и варианта, сохраняя текущий приоритет имени, артикула
+  и торгового названия поставщика.
+- **Шаги выполнения**:
+  - [x] Изолировать поиск по тегам явным OR-контекстом.
+  - [x] Добавить template/variant tags, дедупликацию, AND по токенам и limit.
+  - [x] Сохранить vendor-filter, caller-domain и подписи поставщика.
+  - [x] Включить контекст в форме, списке, массовом назначении и импорте.
+  - [x] Focused TD-014, регрессия OBR-038 и полный `/object_request`.
+  - [x] Закрыть TD-014, версия и changelog.
+- **Зависимости**: `object_request`, `custom_product_search`,
+  [`TD-014`](technical-debt.md#td-014-поиск-товара-в-or-по-тегам-producttag).
+
+## Задача: Backend — ошибка компиляции стилей (OBR-041 CSS min)
+- **Статус**: Задеплоена на prod 2026-08-28 (`0a767d6`, `19.0.1.10.23`)
+- **Описание**: Браузер показывал «Ошибка стиля. Компиляция стилей не
+  удалась». libsass воспринимал CSS `min(36rem, 92vw)` как Sass-функцию
+  и падал на смешанных единицах rem/vw.
+- **Шаги выполнения**:
+  - [x] Воспроизвести: `sass.compile(object_request.scss)` → Incompatible units.
+  - [x] Экранировать CSS `min()` через интерполяцию строки в SCSS.
+  - [x] Версия `object_request` `19.0.1.10.21`, changelog.
+- **Зависимости**: `object_request` OBR-041 `.o_or_full_dropdown`.
+
+## Задача: Закупки — RFQ без кнопки портала
+- **Статус**: Задеплоена на prod 2026-08-27 (`7e2b93f`, `19.0.1.10.20`)
+- **Описание**: В письме «Отправить запрос» Odoo вставлял шапку с кнопкой
+  «Посмотреть предложение» (портал `/my/purchase/` + токен), номером P00xxx
+  и сроком. Нужен только текст заявки (таблица + подпись).
+- **Шаги выполнения**:
+  - [x] `_notify_get_recipients_groups`: `has_button_access=False` для draft/sent.
+  - [x] `_notify_by_email_prepare_rendering_context`: пустые `subtitles` для RFQ.
+  - [x] Тесты `or_rfq_copy`.
+  - [x] `-u object_request` → `19.0.1.10.20` на prod.
+- **Зависимости**: `object_request`, `purchase`, `mail`.
+
+## Задача: OR — запрет правки «Наименование» в статусе «В работе» (TD-013)
+- **Статус**: Задеплоена на prod 2026-08-28 (`0a767d6`, `19.0.1.10.23`)
+- **Описание**: После перехода требования на комплектацию в статус
+  `in_progress` колонка «Наименование» (`name_raw`) должна стать
+  read-only. Сейчас lock состава закрывает только добавление/удаление
+  строк и `qty_requested`; исходное наименование из файла всё ещё
+  можно менять.
+- **Шаги выполнения**:
+  - [x] `readonly` на `name_raw` в форме OR и списке строк при `state != 'draft'`.
+  - [x] Серверная проверка в `object.request.line.write` (как у `qty_requested`).
+  - [x] Тесты: draft — можно, in_progress — UserError; регрессия OBR-015.
+  - [x] Закрыть TD-013, changelog после внедрения.
+- **Зависимости**: `object_request`, [`TD-013`](technical-debt.md#td-013-запрет-редактирования-колонки-наименование-после-статуса-в-работе).
+
+## Задача: Закупки — копия заявки на 675001@mail.ru
+- **Статус**: Задеплоена на prod 2026-08-27 (`7e2b93f`, `19.0.1.10.20`)
+- **Описание**: Письмо «Заявка на счёт» уходило только поставщику (From уже
+  `675001@mail.ru`, копии во «Входящие» не было). Нужно, чтобы копия приходила
+  на Теплосервис-Комплект. Подпись компании — внизу после товаров.
+- **Шаги выполнения**:
+  - [x] Выяснить: `use_default_to` игнорирует `email_cc`/`partner_to` шаблона.
+  - [x] Шаблон RFQ: `use_default_to=False`, `partner_to` = вендор + company partner.
+  - [x] Обновить шаблон на prod (mail.template id 16).
+  - [x] XML-function в `object_request` + `_message_get_default_recipients` + тесты `or_rfq_copy`.
+  - [x] Подпись после таблицы товаров: ООО «Теплосервис-Комплект», тел. 8 962 285 85 10.
+  - [x] `-u object_request` на prod до `19.0.1.10.20`.
+- **Зависимости**: `object_request`, `purchase`, `mail.template`.
+
+## Задача: OR — полная подпись в выпадашке товара/поставщика (OBR-041)
+- **Статус**: Задеплоена на prod 2026-08-27 (`7e2b93f`, `19.0.1.10.20`)
+- **Описание**: В autocomplete колонок «Товар» и «Поставщик» длинные подписи
+  (имя + суффикс поставщика) обрезались ellipsis. Нужно показывать всю
+  строку и/или полный текст при наведении.
+- **Шаги выполнения**:
+  - [x] CSS `.o_or_full_dropdown`: шире меню, перенос строки.
+  - [x] `title` на пунктах autocomplete при наведении.
+  - [x] Класс на полях формы OR, списка строк и мастера назначения.
+  - [x] Тесты `test_obr041_dropdown_full_label.py`.
+  - [x] Деплой на prod: `-u object_request` → `19.0.1.10.20`.
+- **Зависимости**: `object_request`, OBR-038 (суффикс поставщика).
+
+## Задача: OR — необеспеченные позиции в списке требований (TD-012)
+- **Статус**: Не начата
+- **Описание**: В list view требований на комплектацию показать число
+  позиций, которые ещё не полностью обеспечены (не `fully_supplied` и не
+  `cancelled`). Сейчас есть «Строк» и «Несопоставленных», этого недостаточно.
+- **Шаги выполнения**:
+  - [ ] Stored-поле `line_unsupplied_count` (или эквивалент) на `object.request`.
+  - [ ] Колонка в `view_object_request_list` с предупреждением при `> 0`.
+  - [ ] Тесты compute + XML list.
+  - [ ] Закрыть TD-012, changelog после внедрения.
+- **Зависимости**: `object_request`, [`TD-012`](technical-debt.md#td-012-количество-необеспеченных-позиций-в-списке-требований-на-комплектацию).
+
+## Задача: AIA — «Привязать счёт?» = vendor bill + PDF
+- **Статус**: Задеплоена на prod 2026-08-19 (`b1cef10`, `19.0.1.2.3`)
+- **Описание**: В диалоге загрузки счёта «Привязать счёт? → Да» создаёт черновик
+  `account.move` и вешает PDF на bill (и копию на PO). Без `action_post`.
+- **Шаги выполнения**:
+  - [x] `InvoiceWorkflow._bind_vendor_bill` / `_create_vendor_bill`.
+  - [x] Приёмка до bill; fallback по заказанному qty.
+  - [x] Тесты workflow: bill + PDF, без bill при «Нет», qty после приёмки.
+  - [x] Прогон `TestInvoiceWorkflow` в Docker.
+  - [x] Docs: changelog, project.md, AIA-062, user-guide.
+- **Зависимости**: `ai_assistant`, `purchase`, `account`.
+
+## Задача: OR — недавние поставщики в выпадающем списке (TD-008 / OBR-040)
+- **Статус**: Задеплоена на prod 2026-08-19 (`78cbc98`, `19.0.1.10.16`)
+- **Описание**: При фокусе на пустом «Поставщик» в строках требования сначала
+  показываются до 8 последних поставщиков компании. Поиск по имени и domain
+  `supplier_rank > 0` сохранены. Автозаполнение из `seller_ids` не менялось.
+- **Шаги выполнения**:
+  - [x] Override `res.partner.name_search` только при context
+    `object_request_recent_vendors`.
+  - [x] История: distinct `preferred_vendor_id` по `write_date` строк OR
+    компании, лимит 8.
+  - [x] Context на форме OR, списке строк и мастере назначения.
+  - [x] Тесты `test_obr040_recent_vendors.py` (7/7 ok, tag `obr040`).
+  - [x] Changelog / project.md / TD-008.
+  - [x] Деплой на prod: `-u object_request` → `19.0.1.10.16`.
+- **Зависимости**: `object_request`, `res.partner`.
+
+## Задача: Закупки — колонки Объект и Склад в списках
+- **Статус**: Задеплоена на prod 2026-08-17 (`014463b`, `19.0.1.10.14`)
+- **Описание**: В списке закупок (в том числе смарт-кнопка «Закупки» на товаре)
+  показать объект требования и склад поступления, чтобы не открывать каждый заказ.
+- **Шаги выполнения**:
+  - [x] Related-поля `dest_warehouse_id` на `purchase.order` и строке.
+  - [x] Inherit list views PO и `purchase.history.list`.
+  - [x] Тесты `test_purchase_order_list_columns.py`.
+  - [x] Прогон focused-тестов (`or_po_list_cols`, 3) и upgrade модуля `19.0.1.10.13`.
+  - [x] Changelog / project.md.
+- **Зависимости**: `object_request`, `purchase`, `purchase_stock`.
+
+## Задача: OR — статус строки «Ожидает счёт от поставщика» (OBR-039)
+- **Статус**: Задеплоена на prod 2026-08-13 (`a42e2f3`, `19.0.1.10.12`)
+- **Детальный трекер**: [`tasktrecker-line-waitinvoice.md`](tasktrecker-line-waitinvoice.md)
+- **Описание**: Снабженец вручную отмечает строку, по которой счёт запрошен
+  у поставщика. Появляется синий статус «Ожидает счёт от поставщика».
+  Товар в каталоге не обязателен. Закупка и выдача не блокируются.
+- **Шаги выполнения**:
+  - [x] Модель: Boolean, `line_state`, права, сброс, onchange.
+  - [x] Views: checkbox, decoration-info, фильтр, problem domain.
+  - [x] Тесты `test_obr039_line_wait_invoice.py`.
+  - [x] Прогон focused (`obr039`, 49) и полный `/object_request` (521), ревью.
+  - [x] Prod deploy: backup + `-u object_request` → `19.0.1.10.12`.
+  - [ ] Ручная приёмка в UI под снабженцем / прорабом / кладовщиком.
+- **Зависимости**: `object_request`.
+
+## Задача: Номенклатура — полная синхронизация переводов name (весь каталог)
+- **Статус**: Завершена
+- **Описание**: После точечного фикса отводов/фланцев выполнен полный проход по
+  активному каталогу: все 127 карточек с `en_US ≠ ru_RU` приведены к канону en_US
+  в оба языка. Повторный скан — 0 расхождений.
+- **Шаги выполнения**:
+  - [x] Скан 1106 активных `product.template` (lang en_US / ru_RU).
+  - [x] Синхронизация 127 записей через write + `context lang`.
+  - [x] Проверка: mismatches=0; «отвод стальн» ru_RU = 38.
+  - [x] Changelog / tasktracker.
+- **Зависимости**: `.cursor/rules/odoo-product-catalog.mdc` (языковая политика).
+
+## Задача: Номенклатура — синхронизация переводов названий (ru_RU + en_US)
+- **Статус**: Завершена
+- **Описание**: Исправлена рассинхронизация переводов названий товаров после нормализации.
+  На основе языковой политики (`.cursor/rules/odoo-product-catalog.mdc`): основной язык ru_RU,
+  write с context lang, синхронизация ru_RU+en_US, MCP не для переводимых полей.
+  Синхронизированы 41 карточка: 35 из 38 отводов стальных, 6 фланцев (id 715–720).
+- **Шаги выполнения**:
+  - [x] Определена языковая политика в `.cursor/rules/odoo-product-catalog.mdc`.
+  - [x] Синхронизированы переводы 38 отводов стальных (35 исправлено, 3 совпадали).
+  - [x] Синхронизированы переводы 6 фланцев (id 715–720).
+  - [x] Проверка через search_count ru_RU: результат = 38 для «отвод стальн».
+  - [x] Обновлена документация: changelog.md и tasktracker.md.
+- **Зависимости**: `product.product`, `ir.translation`, `product.supplierinfo` (не трогалась).
+
+## Задача: AI-ассистент — перемещение товара между складами через чат
+
+- **Статус**: Задеплоена на prod 2026-08-12 (`77c4b45`, `19.0.1.2.0`); флаг выключен
+- **Детальный трекер**: [`tasktrecker-assistent-moving.md`](tasktrecker-assistent-moving.md)
+- **Краткое описание**: детерминированный диалог товар → количество/UoM →
+  склад-источник → точный доступный остаток → склад-назначение → итоговое
+  подтверждение → draft `stock.picking`. Ассистент может явно зарезервировать
+  наличие, но Validate выполняется пользователем в стандартном UI Odoo.
+- **Безопасность**: server allowlist для всех ID, exact-before-fuzzy, повторная
+  проверка available перед Execute, session-authoritative picking и запрет
+  `button_validate` в LLM tools.
+- **UX**: button-first диалог; каждый нетерминальный ответ возвращает допустимые
+  кнопки, неожиданный текст не меняет сессию, Execute возможен только кнопкой.
+- **Rollout**: отдельный feature flag `ai_assistant.moving_enabled` выключен по
+  умолчанию; нужны Supply и Stock User. Multi-worker session store — TD-011.
+- **Зависимости**: `ai_assistant`, `custom_product_search`, `stock`; общее правило
+  `.cursor/rules/ai-assistant-workflow-dialogs.mdc`.
+
+## Задача: AI-ассистент — пополнение товара через чат
+- **Статус**: Завершена и задеплоена на prod 2026-08-11 (`8bdb07b`, `19.0.1.1.0`)
+- **Детальный трекер**: `docs/tasktrecker-assistent-replenishment.md` (AR-001…AR-027)
+- **Описание**: Исследована текущая архитектура `ai_assistant` (tools, ConfirmationCard/ResultCard,
+  `InvoiceWorkflow` как эталон state-machine, denylist executor) и спроектирован сценарий
+  «пополнение товара»: определение товара → остаток → количество/UoM → применимые предложения
+  поставщиков (`product.supplierinfo`) → склад → итоговое подтверждение → черновик PO (переиспользуется
+  `CreatePurchaseOrderDraftTool`) → кнопки в чате «Отправить запрос/Подтвердить/Печать/Отменить»
+  (вне `ToolRegistry`, только по клику, с ACL и state-проверками). D7: гибридный intent-extractor —
+  один LLM-вызов извлекает только текстовые поля, резолвинг в Odoo-записи и весь workflow —
+  детерминированный код; keyword-детекция — fallback при недоступности LLM.
+  По итогам второго техревью (проверка построчно кода `ai_chat_boot.js`/`chat_controller.py`/
+  `openrouter_client.py`) закрыты 6 блокеров: противоречие подтверждения количества (D9),
+  отсутствие ACTION_SELECT_PRODUCT и таблицы состояний (AR-003), отсутствие frontend-контракта
+  `replenishment_token` (AR-015 — обнаружено, что клики по чужим action без токена сейчас молча
+  игнорируются), отсутствие `OpenRouterClient.send_structured_chat` (AR-017), keyword fallback
+  передававший сырое сообщение как поисковый запрос (AR-019), отсутствие `vendor_preference` в
+  схеме извлечения (AR-018). Плюс более мелкие: ACL read tool в consult-режиме (D8), валюта
+  supplierinfo (D10), origin/partner_ref, конкурентные клики «Выполнить» (лок в AR-002/AR-010),
+  тип action для печати vs отправки, po_id как advisory-параметр (AR-012).
+  Третье техревью закрыло остаточные блокеры: active token отделён от post-PO token в ResultCard;
+  валюта seller сравнивается с будущей валютой PO партнёра; qty/UoM конвертируются стандартными
+  `_compute_quantity`/`_compute_price`, несовместимые категории блокируются; seller-tier выбирается
+  после qty через `_select_seller` отдельно для каждого поставщика; описан старт workflow, приоритет invoice/replenishment и
+  проверки Supply/enabled/actions; RFQ/печать вызывают стандартные методы Odoo; `partner_ref`
+  сделан необязательным для replenishment.
+- **Шаги выполнения**:
+  - [x] Исследование архитектуры (controllers/services/action_tools/frontend).
+  - [x] Согласование 6 неоднозначных бизнес-правил с пользователем (D1–D6).
+  - [x] Ревью подхода к intent-детекции → решение D7 (LLM-extractor + fallback).
+  - [x] Второе техревью → закрыты 6 блокеров + доп. противоречия (D8–D10, AR-003, AR-015, AR-017).
+  - [x] Третье техревью → закрыты token lifetime, валюта PO, UoM, стартовая маршрутизация и локальные замечания (D11).
+  - [x] Реализация backend (AR-001…AR-013, AR-017…AR-020).
+  - [x] Реализация frontend (AR-014…AR-016).
+  - [x] Документация (AR-027).
+  - [x] Финальный полный прогон backend-тестов: 401 post-tests / 473 tests stats, 0 ошибок.
+  - [x] Prod: backup, `git pull`, `-u ai_assistant` → `19.0.1.1.0`, restart, health `pass`.
+  - [ ] Расширенное QUnit/HttpCase-покрытие всех acceptance-пунктов AR-021…AR-026 (не блокирует текущую реализацию).
+- **Зависимости**: `ai_assistant`, `custom_product_search`, `purchase`, `stock`.
+- **Техдолг**: [`TD-011`](technical-debt.md#td-011-production-hardening-многошаговых-workflow-ai-ассистента) — multi-worker сессии, коррекции шагов, расширенные acceptance/UI-тесты и наблюдаемость.
+
+## Задача: OR — поиск товара с учётом поставщика (OBR-038)
+- **Статус**: Завершена и задеплоена на prod 2026-08-11 (`5c84aa9`, `19.0.1.10.6`)
+- **Описание**: При заполненном «Поставщик» в строке OR поиск в «Товар»
+  показывает только номенклатуру из прайса этого поставщика (в т.ч. по
+  торговому имени/артикулу). Без поставщика — нормализованные названия.
+- **Шаги выполнения**:
+ - [x] `product_vendor_search.py` + context/domain во views.
+ - [x] Тесты `test_obr038_vendor_product_search`.
+ - [x] version `19.0.1.10.5`, changelog.
+ - [x] Прогон тестов локально (4/4 ok).
+ - [x] Деплой на prod.
+ - [x] Ревью `9766686`: variants, multi-company, limit, onchange.
+ - [x] Исправления `19.0.1.10.6` и дополнительные regression-тесты.
+ - [x] Полный post-install suite `object_request`: 457/457 ok.
+ - [x] Деплой исправлений `19.0.1.10.6` на prod.
+- **Зависимости**: `custom_product_search`, `product.supplierinfo`.
+
+## Задача: Событие в календаре при оплате счёта поставщика (Bill → calendar.event)
+- **Статус**: Завершена и задеплоена на prod 2026-08-08 (`d429771`)
+- **Детальный трекер**: `docs/tasktracker-invoice-paid-calendar-event.md`
+- **Описание**: При оплате vendor bill создаётся `calendar.event` на 1 час в первом свободном слоте снабженца (09:00–16:00, обед 12–13, TZ компании) на `object.request.need_date`.
+- **Шаги выполнения**:
+ - [x] Спецификация + ревью + живая проверка триггера на `BILL/2026/08/0002`.
+ - [x] ICE-002…ICE-008: модуль `object_request_calendar` 19.0.1.0.0, 22 post-tests ok.
+ - [x] ICE-009: commit `d429771`, push, backup, `-i object_request_calendar` на prod, restart, HTTP 200.
+ - [ ] Ручная проверка оплаты bill → встреча в календаре (желательно).
+- **Зависимости**: `object_request`, `calendar`, `account`, `purchase`.
+
+## Задача: ai_assistant — матчинг позиций счёта по артикулу поставщика
+- **Статус**: Завершена и задеплоена на prod 2026-08-08
+- **Описание**: После загрузки счёта ассистент помечал существующие товары
+  как «создать», потому что `InvoiceContextHelper` искал только по названию
+  из PDF и игнорировал `article` / `product.supplierinfo.product_code`.
+  Пример: счёт УТБФ0006395 — 6 из 8 позиций уже были в базе.
+- **Шаги выполнения**:
+ - [x] Диагностика: `_match_item` без артикула; `ai_search_products` без
+   `seller_ids.product_code`.
+ - [x] Match по article → supplierinfo → default_code → name.
+ - [x] Расширить AI-поиск товаров по vendor code.
+ - [x] Тесты `TestInvoiceContextHelper` + `TestCustomProductSearch` (18 ok).
+ - [x] Задеплоить `ai_assistant` + `custom_product_search` на VPS и
+   `-u` модули (prod `304b3e8`, 2026-08-08).
+- **Зависимости**: `product.supplierinfo`, `custom_product_search`.
+
+## Задача: docs — частичная приёмка и бэкордер
+- **Статус**: Завершена
+- **Описание**: UI-инструкция со скриншотами: заказ/счёт на N, привезли M,
+  ждём довоз — частичная Validate + Create Backorder, счёт не трогать.
+- **Шаги выполнения**:
+ - [x] Снять скриншоты prod (`P00090`, `Офис/IN/00015`, `Офис/IN/00016`).
+ - [x] Написать `docs/instruction-partial-receipt-backorder.md`.
+ - [x] Сохранить изображения в `docs/screenshots/partial-receipt-backorder/`.
+ - [x] Обновить changelog и ссылки из смежных инструкций.
+- **Зависимости**: стандартный Purchase/Stock.
+
+## Задача: docs — инструкция пополнения Ос.ск / Расх
+- **Статус**: Завершена
+- **Описание**: UI-инструкция со скриншотами: пополнение базовых складов
+  (Ос.ск, Расходники) обычной закупкой с приёмкой на базу; отличие от цикла
+  OR → склад объекта.
+- **Шаги выполнения**:
+ - [x] Снять скриншоты prod (`P00040`, `P00048`, `Ос.ск/IN/00015`).
+ - [x] Написать `docs/instruction-base-warehouse-replenish.md`.
+ - [x] Сохранить изображения в `docs/screenshots/base-warehouse-replenish/`.
+ - [x] Обновить changelog.
+- **Зависимости**: стандартный Purchase/Stock; не модуль `object_request`.
+
+## Задача: docs — мини-инструкция закупки (два поставщика / частичная)
+- **Статус**: Завершена
+- **Описание**: Краткая UI-инструкция со скриншотами по двум сценариям
+  снабженца на вкладке «Строки» требования: (A) разные поставщики → несколько
+  PO; (B) купить только часть строк, остальное ждать склад.
+- **Шаги выполнения**:
+ - [x] Снять скриншоты с prod (`OR/2026/08/0032`, `P00077`).
+ - [x] Написать `docs/instruction-purchase-split-vendors.md`.
+ - [x] Сохранить изображения в `docs/screenshots/purchase-split-vendors/`.
+ - [x] Обновить changelog.
+- **Зависимости**: модуль `object_request`, мастер
+  `object.request.purchase.wizard`.
+
+## Задача: object_request — объединить вкладки «Строки» и «Обработка»
+- **Статус**: Завершена и задеплоена на prod 2026-07-27
+- **Детальный план**: `docs/plans/2026-07-27-object-request-merge-lines-processing-tab.md`
+- **Описание**: На форме требования убрать вкладку «Обработка» и перенести её
+  полезные элементы на вкладку «Строки» и в шапку документа. Блок «Сводка по
+  количествам» в интерфейсе не показывать. «Статистика строк» (и статус
+  сопоставления) — в шапке в одной линии с «Основные данные» и «Ответственные».
+  Кнопки «Рассчитать наличие», «Авто-разбивка», «Подготовить закупку» — в одной
+  строке с «Отсортировать строки» и «Проверить номенклатуру» на вкладке «Строки».
+- **Шаги выполнения**:
+ - [x] UI-001: перенести «Статистика строк» + `matching_state` в шапку формы.
+ - [x] UI-002: объединить пять кнопок на вкладке «Строки».
+ - [x] UI-003: удалить вкладку `page_processing` («Обработка»).
+ - [x] UI-004: обновить тесты xpath, changelog, версию модуля; ручная проверка ролей.
+ - [x] Prod deploy: `git pull` + `-u object_request` до `19.0.1.10.2`.
+- **Проверка**: регрессионный тест структуры формы в
+  `test_obr009_mass_actions.py`; prod upgrade выполнен; backup:
+  `/opt/project_odoo/backups/ui-merge-tabs-20260727-080108/`.
+  Ручная UI-проверка ролей в браузере остаётся желательной.
+- **Зависимости**: `object_request/views/object_request_views.xml`, тесты
+  `test_obr009_mass_actions.py` (при необходимости).
+
+## Задача: object_request — подпись складов в «Рассчитать наличие»
+- **Статус**: Завершена и задеплоена на prod 2026-07-27
+- **Описание**: В мастере после «Рассчитать наличие» поле «Проверено по
+  складам» показывало все активные склады компании, хотя расчёт шёл только
+  по выбранным складам выдачи требования.
+- **Шаги выполнения**:
+ - [x] Исправить `_compute_warehouse_names` в `stock_check_wizard`.
+ - [x] Ограничить `_get_stock_breakdown_label` складами выдачи.
+ - [x] Добавить регрессионный тест OBR-025.
+ - [x] Обновить changelog и версию модуля до `19.0.1.10.1`.
+ - [x] Prod deploy вместе с `19.0.1.10.2` (коммит `bc0507c` + `8e1dfd0`).
+- **Зависимости**: модуль `object_request`, мастер
+  `object.request.stock.check.wizard`.
+
+## Задача: object_request — корректное обеспечение строк выдачей и закупкой
+- **Статус**: Завершена и задеплоена на prod 2026-07-20
+- **Детальный план**: `docs/plans/2026-07-20-object-request-supply-state.md`.
+- **Описание**: Исправить пересчёт фактического обеспечения строк требования
+  после складской выдачи и поступления закупки непосредственно на склад
+  объекта. Плановые значения «К выдаче» и «К закупке» не должны включать уже
+  обеспеченное количество; статус строки должен отражать факт обеспечения,
+  а не только план складской выдачи.
+- **Шаги выполнения**:
+ - [x] Унифицировать расчёт фактического обеспечения по движениям.
+ - [x] Пересчитывать оставшийся план после завершения выдачи и поступления.
+ - [x] Исправить статус строки и уведомление о полном обеспечении.
+ - [x] Сделать отображение источников обеспечения понятным в UI.
+ - [x] Добавить идемпотентный пересчёт строк по завершённым движениям.
+ - [x] Добавить регрессионные тесты.
+ - [x] Прогнать пересчёт для OR/2026/07/0029 и выполнить deploy.
+- **Проверка**: локальный `/object_request` suite зелёный — 438 post-tests,
+  0 failed, 0 errors. Prod upgrade `object_request` до `19.0.1.10.0`
+  выполнен; backup перед upgrade:
+  `/opt/project_odoo/backups/sup-001-007-20260720-070944/`.
+- **Зависимости**: модуль `object_request`, модели `stock.picking`,
+  `stock.move`, `purchase.order.line`.
+
+## Задача: ai_assistant — OpenRouter 403 security policy на проде
+- **Статус**: Завершена
+- **Описание**: На `skladtsk.duckdns.org` чат отвечал
+  `OpenRouter: ошибка 403: Access denied by security policy` даже на «привет».
+  Расследование показало: блокировка на уровне egress IP прод-VPS
+  (`195.209.210.27`) — резался весь OpenRouter API (`/api/v1/key`,
+  `/api/v1/models`, любые модели: Gemini/GPT/Claude/Mistral/DeepSeek), не
+  только tools-запросы. С другого IP (VPN/локально) тот же ключ работал.
+  У n8n на том же VPS — идентичная блокировка (другие ключи OpenRouter).
+  Причина — гео-ограничения OpenRouter/upstream-провайдеров для российской
+  инфраструктуры (см. `docs/deep-research-report.md`), не баг конфигурации.
+- **Решение**: переход с OpenRouter на **ProxyAPI** (`proxyapi.ru`) —
+  российский OpenAI-совместимый прокси-сервис с оплатой в рублях по счёту
+  для юрлица, без VPN. Чисто конфигурационная замена без изменений кода:
+  те же модели (`gemini-2.5-flash`, `openai/gpt-4o`), тот же формат API
+  (`tool_calls`, ошибки).
+- **Шаги выполнения**:
+ - [x] Подтвердить текст ошибки с прода и воспроизвести локально (локально 200 OK).
+ - [x] `HTTP-Referer` из `web.base.url` + `X-Title` (фикс не решил проблему — блок был по IP, не по Referer).
+ - [x] Fallback consult без tools при 403 security policy.
+ - [x] Диагностика с прод-VPS: `/api/v1/key`, `/api/v1/models`, разные модели — везде 403.
+ - [x] Проверка n8n на том же VPS — та же блокировка OpenRouter.
+ - [x] Deep research по гео-ограничениям OpenRouter (`docs/deep-research-report.md`).
+ - [x] Сравнение альтернатив: DeepSeek напрямую (оплата — блокер для юрлица), Yandex Cloud/GigaChat (нужна адаптация кода), ProxyAPI (drop-in, ₽, юрлицо).
+ - [x] Аккаунт ProxyAPI создан, ключ выпущен.
+ - [x] Конфиг на проде обновлён: `ai_assistant.openrouter_base_url=https://openai.api.proxyapi.ru/v1`,
+       `ai_assistant.text_model=gemini/gemini-2.5-flash`, `ai_assistant.vision_model=openai/gpt-4o`, новый ключ.
+ - [x] Проверено: прямые запросы (text/vision/tool-calling) через ProxyAPI — 200 OK; живой чат в Odoo на проде — 200 OK, без ошибок.
+- **Зависимости**: модуль `ai_assistant`, аккаунт ProxyAPI (ранее — OpenRouter), VPS deploy.
+
+## Задача: object_request — пользовательская раскладка колонок строк требования
+- **Статус**: Реализована; ручной UI test plan ожидает прогона в браузере.
+- **Детальный трекер**: `docs/tasktracker-column-fix.md`.
+- **Описание**: Для таблиц строк требования добавлено сохранение пользовательской ширины, порядка и набора optional-колонок с независимыми профилями для вкладки **«Строки»**, smart-button **«Строки»**, smart-button **«Проблем»** и списка после **«Диагностика PO»**.
+- **Шаги выполнения**:
+ - [x] Подключить frontend asset в `web.assets_backend`.
+ - [x] Ограничить расширение поддерживаемыми таблицами `object.request.line`.
+ - [x] Разделить ключи хранения по scope: `request_form_lines`, `request_action_lines`, `request_problem_lines`, `request_po_diagnostics`.
+ - [x] Сохранять и применять ширину, порядок и optional-набор колонок через `localStorage`.
+ - [x] Добавить drag-and-drop field-колонок заголовка без вмешательства в selector/action/button columns.
+ - [x] Проверить syntax/XML/JS, flake8 и Odoo post-tests.
+- **Зависимости**:
+ - Модуль `object_request`.
+ - Odoo web `ListRenderer`, `column_width_hook`, `web.assets_backend`.
+
+## Задача: Cursor — senior-review и fail-closed refactor парсера Амурстроя
+- **Статус**: Завершена
+- **Описание**: Проверить специализированный OCR-парсер счетов ОАО УПТК «Амурстрой» через senior-review и устранить риски тихого создания закупок при неполном или спорном OCR.
+- **Шаги выполнения**:
+ - [x] Провести senior-review `amurstroy_parse.py`, скилла, правил, интеграции `ocr_parse.py` и тестов.
+ - [x] Добавить `needs_review`, `items_empty`, `validation_target` и нормализацию `П14101` → `П000014101`.
+ - [x] Перевести общий `ocr_parse.py` на полный контракт `amurstroy_contract_invoice` без молчаливого fallback.
+ - [x] Обновить правила закупки: при `sum_mismatch`/`needs_review` не создавать PO без подтверждения пользователя.
+ - [x] Расширить тесты на fail-closed сценарии и интеграцию общего OCR.
+- **Зависимости**:
+ - `.cursor/skills/amurstroy-invoice-parsing/`
+ - `.cursor/skills/scanned-invoice-parsing/scripts/ocr_parse.py`
+ - `.cursor/rules/purchase-from-invoice.mdc`
+
+## Задача: object_request — проектные справочники размещения строк
+- **Статус**: Завершена
+- **Описание**: Нормализовать размещение строк требования на комплектацию: заменить пользовательский концепт `Зона` на `Захватка`, добавить независимые справочники `Захватки`, `Этажи`, `Участки` на уровне объекта и перевести строки требования на Many2one-связи с безопасным fallback на старые текстовые поля.
+- **Шаги выполнения**:
+ - [x] Добавить модели `object.request.project.capture`, `object.request.project.floor`, `object.request.project.section`.
+ - [x] Добавить редактируемые вкладки справочников `Захватки`, `Этажи`, `Участки` в `object.request.project`.
+ - [x] Добавить поля `capture_id`, `floor_id`, `section_id` в `object.request.line`, сохранив `zone`, `floor`, `section` как переходный fallback.
+ - [x] Обновить печатные формы требований и выдач: показывать Many2one-названия с fallback на старый текст.
+ - [x] Добавить миграцию `19.0.1.5.0`: создать справочники по старым значениям в разрезе объекта и назначить Many2one-поля строкам.
+ - [x] Добавить действие «Отсортировать строки» с порядком `Захватка → Этаж → Участок → Поставщик`.
+ - [x] Проверить `flake8`, focused `TestObjectRequestProjectLocations` (5/5 pass) и полный suite `object_request` (358 tests, 0 failed, 0 errors).
+- **Зависимости**:
+ - Модуль `object_request` версии `19.0.1.5.0`.
+ - Модели `object.request.project` и `object.request.line`; старые поля `zone`, `floor`, `section` используются только как переходный слой совместимости.
+
+## Задача: object_request — разделение артикула и технического обозначения
+- **Статус**: Завершена
+- **Описание**: Исправить регрессию Excel import/matching для `OR/2026/06/0014` и `OR/2026/06/0016`: колонка `Обозначение` содержит технический контекст строки, а не реальный артикул поставщика. Значения из этой колонки больше не должны попадать в exact matching по `product.supplierinfo`/`default_code` и подавлять генерацию кандидатов.
+- **Детальный трекер**: `docs/tasktrecker-comparison-v2.md`.
+- **Шаги выполнения**:
+ - [x] Добавить поле `technical_designation` для Excel-колонки `Обозначение`.
+ - [x] Ограничить `supplier_article` только реальными артикулами поставщика.
+ - [x] Использовать `technical_designation` в combined search, scoring и LLM-shortlist как контекст, без exact matching по supplierinfo/default_code.
+ - [x] Обновить lookup памяти: точная пара `name + designation` с fallback к записям без designation.
+ - [x] Добавить миграцию `19.0.1.4.0/post-migrate.py` для переноса старых значений по `OR/2026/06/0014` и `OR/2026/06/0016`.
+ - [x] Проверить flake8 и focused тесты `TestObr028CombinedMatching` + `TestObr032Memory` (22/22 pass); full `object_request` suite был зелёным после реализации.
+- **Зависимости**:
+ - Модуль `object_request` версии `19.0.1.4.0`.
+ - Требуется redeploy на VPS и повторное пересопоставление `OR/2026/06/0014` / `OR/2026/06/0016` после commit/deploy.
+
+## Задача: object_request — MVP v2 сопоставления Excel-строк
+- **Статус**: Завершена
+- **Описание**: Реализован первый безопасный срез v2 из `docs/tasktrecker-comparison-v2.md`: пересопоставление всех строк, combined deterministic candidates без LLM, классификация технических фрагментов и синхронизация нормализации поиска товаров.
+- **Детальный трекер**: `docs/tasktrecker-comparison-v2.md`.
+- **Шаги выполнения**:
+ - [x] Добавить действие «Пересопоставить все строки» рядом с обычным пересопоставлением несопоставленных.
+ - [x] Не менять строки, похожие на ручной выбор товара, без отдельного источника auto-match.
+ - [x] Маркировать новые auto-match строки импорта в `matching_note`.
+ - [x] Добавить `_classify_import_line()` и `_combined_match_query()`.
+ - [x] Подключить shortlist кандидатов через `custom_product_search.ai_search_products()`.
+ - [x] Не auto-match спорные candidates и строки `L=...` / одиночные размеры.
+ - [x] Синхронизировать нормализацию `custom_product_search` для `Ду/Ру/DN/PN`, размеров `х/x/×`, десятичных `,/.`.
+ - [x] Добавить регрессионные тесты OBR-009, OBR-028 и `custom_product_search`.
+- **Зависимости**:
+ - `object_request` теперь явно зависит от `custom_product_search`.
+ - LLM-rerank, AI-поля строк и preview top-3 остаются следующей итерацией.
+
+## Задача: object_request — улучшенное сопоставление Excel-импорта
+- **Статус**: Завершена
+- **Описание**: Улучшить автосопоставление строк Excel-импорта требований на комплектацию: нормализация артикулов и названий, безопасный token-scoring, отказ от недетерминированных совпадений и явная «память сопоставлений» через `product.supplierinfo`.
+- **Детальный трекер**: `docs/tasktrecker-comparison.md`.
+- **Шаги выполнения**:
+ - [x] Этап 0: зафиксировать baseline и текущие ложные совпадения.
+ - [x] Этап 1: нормализация артикулов и названий.
+ - [x] Этап 2: улучшенный match по артикулу.
+ - [x] Этап 3: безопасный match по названию и token-scoring.
+ - [x] Этап 4: интеграция, регрессия, flake8 и контрольный импорт.
+ - [x] Этап 5: «память сопоставлений» через supplierinfo и обработка конфликтов.
+ - [x] Этап 6: документация (`changelog`, `project`, `tasktracker`).
+- **Зависимости**:
+ - Модуль `object_request`: `object.request.excel.parser`, `object.request.line`, wizard импорта.
+ - Стандартные модели Odoo: `product.product`, `product.supplierinfo`, `res.partner`.
+ - Контрольный сценарий: `docs/materials/Ленина 231 31-000_05-2025-УУТЭ.xlsx`.
+
+## Задача: AI-ассистент — контрагенты через чат (по скиллу odoo-add-partner)
+- **Статус**: Завершена
+- **Описание**: Научить ai_assistant распознавать в чате намерение «добавить контрагента / дополнить данные контрагента» и вести сценарий по правилам скилла `.cursor/skills/odoo-add-partner/SKILL.md`: дубликат по ИНН, обязательное уточнение категории (Поставщик/Заказчик/Покупатель/Подрядчик), тег, банковские реквизиты, контактные лица. Детальный трекер: `docs/tasktrecker-creat-partner-v2.md`.
+- **Шаги выполнения**:
+ - [x] Анализ текущей архитектуры ai_assistant (tools, executor, prompt, UI).
+ - [x] Детальный трекер в `docs/tasktrecker-creat-partner-v2.md`.
+ - [x] Актуализация скилла `odoo-add-partner` (раздел для ai_assistant, правила update).
+ - [x] Этап CPV-1 (CPV-001…006): validators (категории, БИК, тег) + tools `update_partner_draft`, `add_partner_bank_draft`, `add_partner_contact_draft`, расширение `create_partner_draft`/`find_partner`.
+ - [x] Этап CPV-2 (CPV-007…009): правила в `_ACTIONS_RULES_BLOCK`, chips категорий, knowledge doc.
+ - [x] Этап CPV-3 (CPV-010): UI ConfirmationCard/ResultCard для новых tools.
+ - [x] Этап CPV-4 (CPV-011…013): тесты (validators, tools, executor security, E2E чат).
+ - [x] Этап CPV-5 (CPV-014): документация (changelog, project.md, user guide) и синхронизация со скиллом.
+- **Зависимости**:
+ - Скилл `.cursor/skills/odoo-add-partner/SKILL.md` — канонический workflow.
+ - Детальный трекер: `docs/tasktrecker-creat-partner-v2.md`.
+ - Модуль `ai_assistant`: registry/executor/PendingActionStore/ConfirmationCard.
+
 ## Задача: Улучшенный поиск товаров custom_product_search
 - **Статус**: Завершена
 - **Описание**: Реализовать отдельный addon `custom_product_search` для нормализованного поиска товаров в Odoo 19: backend UI, складские документы и сервисный метод для AI-ассистента.
@@ -98,6 +654,33 @@
  - `docs/functionalspecobjectrequest.md`
  - Стандартные Odoo-модули: `stock`, `purchase`, `product`, `contacts`, `mail`
 
+## Задача: AI Assistant v3 — Actions (исполнение из чата в Odoo)
+- **Статус**: Завершена
+- **Описание**: Расширить модуль `custom_addons/ai_assistant/` от консультативного режима к исполнению ограниченного набора действий снабжения из `docs/instruction-warehouse-supply-cycle.md` прямо в чате Odoo: создание черновиков `object.request`, `purchase.order`, `stock.picking` (internal/incoming), поиск товаров/остатков/складов, аудит через `mail.thread.message_post`. Без TD-003 — никаких `button_confirm`/`button_validate`.
+- **Шаги выполнения**:
+  - [x] Подготовить roadmap `docs/roadmap_ai_assistant_v3_actions.md` (allowlist/denylist, архитектура, безопасность, риски).
+  - [x] Подготовить детальный трекер `docs/tasktracker_ai_assistant_v3.md` (AIA-029…AIA-050) с контекстом, метками Context7, DoD, зависимостями.
+  - [x] V3-1 Knowledge + Prompt: AIA-029, AIA-030.
+  - [x] V3-2 Tool layer (домен): AIA-031, AIA-032, AIA-033, AIA-034.
+  - [x] V3-3 Write tools + executor: AIA-035, AIA-036, AIA-037, AIA-038.
+  - [x] V3-4 OpenRouter integration: AIA-039, AIA-040.
+  - [x] V3-5 Frontend UX: AIA-041, AIA-042, AIA-043.
+  - [x] V3-6 Безопасность: AIA-044, AIA-045, AIA-046.
+  - [x] V3-7 Тесты и E2E: AIA-047, AIA-048, AIA-049.
+  - [x] V3-8 Документация и пилот: AIA-050.
+- **Зависимости**:
+  - Модули: `ai_assistant` (v2), `object_request`, `custom_product_search`, стандартные `stock`, `purchase`, `mail`.
+  - Документы: `docs/instruction-warehouse-supply-cycle.md`, `docs/technical-debt.md` (TD-001/TD-002/TD-003), `docs/datamodelspecobjectrequest.md`.
+  - Внешние: OpenRouter function calling (см. Context7-задачи в трекере).
+
+## Задача: AIA-051 — find_warehouse по названию/адресу склада
+- **Статус**: Не начата
+- **Описание**: Read-tool `find_warehouse` ищет только по `stock.warehouse.code` (`ОбМ-N`); запросы вроде «Б. Хмельницкого, 112» не резолвятся — ассистент просит код. Расширить поиск: `ilike` по `name` + сохранить поиск по `code`.
+- **Шаги выполнения**:
+  - [ ] Реализовать по задаче в `docs/tasktracker_ai_assistant_v3.md` (AIA-051).
+  - [ ] Тесты + деплой `-u ai_assistant`.
+- **Зависимости**: AI Assistant v3 (AIA-034); детали — `docs/tasktracker_ai_assistant_v3.md` § V3-9.
+
 ## Задача: Поле «Склад» в заявке на комплектацию
 - **Статус**: Завершена
 - **Описание**: Добавить обязательное поле `warehouse_id` (Склад) в модель `object.request`. Склад должен указываться при создании заявки (вручную и через импорт Excel), использоваться при расчёте наличия (`action_check_stock`), подставляться в wizard выдачи и передаваться в `purchase.order` при создании закупок (чтобы приёмка шла на правильный склад).
@@ -158,6 +741,30 @@
  - Перспективная задача: списание на объект через КС-2.
  - Отдельная задача: регенерация AI knowledge pack после завершения этой.
 
+## Задача: WHM — миграция production-складов объектов на `O###`
+- **Статус**: Завершена
+- **Описание**: Production-склады объектов переведены на схему `O001`/`O002`: Ломоносова 164 закреплена за warehouse id `10`, Б. Хмельницкого, 112 — за warehouse id `16`. Тестовые `ОбМ-1`, `ОбМ-3`, `ОбМ-5` выведены из активной работы, legacy aliases оставлены для AI Assistant на переходный период.
+- **Шаги выполнения**:
+ - [x] Выполнить prod-аудит и backup перед миграцией.
+ - [x] Освободить конфликтующие `O###` и создать production projects `O001`/`O002`.
+ - [x] Переименовать рабочие склады без переноса остатков.
+ - [x] Отменить тестовый `ОбМ-1/INT/00002`, обнулить тестовые остатки `ОбМ-1` и архивировать тестовые склады.
+ - [x] Обновить `object_request`, `ai_assistant`, документацию и changelog.
+ - [x] Выполнить stage/prod smoke и финальную проверку.
+- **Зависимости**:
+ - Детальный план и отчёты: `docs/tasktrecker-wh-migreit.md`, `docs/reports/whm_*.json`.
+
+## Задача: AI Assistant — навигационные ссылки в consult-режиме (AIA-053)
+- **Статус**: Не начата
+- **Описание**: Добавить в `ai_assistant` read-tool `get_navigation_link`, чтобы на вопросы «как посмотреть …?», «где найти …?», «открой …» ассистент возвращал рабочую markdown-ссылку (`/odoo/<path>`) на нужный экран Odoo 19, а не описывал путь меню словами. Реализация по варианту «гибрид»: статический каталог в коде + tool с ACL-проверкой + knowledge-файл `navigation_map.md` + правило в системном промпте + (опц.) UI-кнопки.
+- **Шаги выполнения**:
+  - [ ] Детальный план и DoD: `docs/tasktracker_ai_assistant_v3.md` §AIA-053.
+  - [ ] AIA-053.1 — каталог + `GetNavigationLinkTool`.
+  - [ ] AIA-053.2 — `navigation_map.md` + `_NAVIGATION_RULES_BLOCK` в `prompt_builder.py`.
+  - [ ] AIA-053.3 — тесты `test_read_tools.py` / `test_prompt_builder.py`.
+  - [ ] AIA-053.UI (опционально) — `links[]` в ответе `/ai_assistant/chat` и кнопки в OWL-виджете.
+- **Зависимости**: AIA-030, AIA-031, AIA-033, AIA-034 (уже выполнены); связано с AIA-052 (`get_warehouse_stock_link`).
+
 ## Задача: Столбец «Наименование (файл)» — необязательное поле (`name_raw`)
 - **Статус**: Не начата
 - **Описание**: В модуле «Комплектация объекта» столбец «Наименование (файл)» соответствует полю `name_raw` в модели строки требования (`object.request.line`): исходная формулировка из Excel или при ручном создании строки, отдельно от выбранного в каталоге `product_id`. Сейчас поле, вероятно, обязательное или так трактуется в UI/валидации. Нужно сделать его необязательным: строка может существовать только с номенклатурой, а `name_raw` заполнять по желанию. Учесть последствия: автосопоставление по имени (`match_product_by_name`), печатные формы и закупки (`name_raw or product_id.name` в `purchase_wizard.py`) уже допускают отсутствие текста из файла — при реализации проверить edge cases (пустой импорт, отчёты, описание в PO).
@@ -167,3 +774,17 @@
  - [ ] Проверить wizards (импорт, закупка) и тесты; при необходимости добавить тест на строку без `name_raw` с заполненным `product_id`.
 - **Зависимости**:
  - Модуль `object_request`, см. `docs/datamodelspecobjectrequest.md` / roadmap по строкам требования.
+
+## Задача: Ограничение редактирования строк в статусе «В работе»
+- **Статус**: Завершена
+- **Описание**: В статусе `in_progress` (В работе) документа комплектации объектов (`object.request`) необходимо запретить: добавление новых строк, удаление строк, изменение количества товара (`qty_requested`). Редактирование разрешено только в статусе `draft` (Черновик).
+- **Шаги выполнения**:
+  - [x] В XML-представлении (`object_request_views.xml`) установить `readonly` на поле `line_ids` для снабженца/кладовщика при `state == 'in_progress'` (сейчас блокируется только `closed`/`cancelled`)
+  - [x] Установить `readonly` на поле `qty_requested` в строке при `state != 'draft'`
+  - [x] Убедиться, что `create="0"` и `delete="0"` применяются при `in_progress` (через условный `readonly` на уровне списка)
+  - [x] Добавить серверную проверку в `object.request.line`: запрет на создание/удаление строк и изменение `qty_requested` при `state == 'in_progress'` через `@api.constrains` или переопределение `write`/`create`/`unlink`
+  - [x] Написать тест на попытку добавить/удалить строку и изменить количество в `in_progress`
+  - [x] Обновить `docs/changelog.md`
+  - [x] Убрать обход `unlink` через пользовательский context; каскад документа — `_unlink_from_parent_request`
+  - [x] Перенести `create`/`delete` с нерабочего атрибута `<list>` на `options` поля `line_ids`
+- **Зависимости**: Модуль `object_request`, файлы `models/object_request.py`, `models/object_request_line.py`, `views/object_request_views.xml`

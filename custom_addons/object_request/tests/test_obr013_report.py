@@ -50,6 +50,12 @@ class TestObjectRequestReport(TransactionCase):
         )
         self.assertTrue(report, "Отчёт должен быть зарегистрирован")
         self.assertEqual(report.model, "object.request")
+        self.assertIn("Требование на комплектацию", report.print_report_name)
+        self.assertIn("object.name", report.print_report_name)
+        self.assertIn(
+            "object.project_id.warehouse_id",
+            report.print_report_name,
+        )
 
     def test_report_binding(self):
         report = self.env["ir.actions.report"].search(

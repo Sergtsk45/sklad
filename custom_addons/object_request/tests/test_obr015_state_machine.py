@@ -1,3 +1,5 @@
+from lxml import etree
+
 from odoo.tests.common import TransactionCase
 from odoo.exceptions import UserError
 from odoo.tests import tagged
@@ -187,3 +189,151 @@ class TestStateMachine(TransactionCase):
         req.action_in_progress()
         req.write({"comment": "Комментарий в работе"})
         self.assertEqual(req.comment, "Комментарий в работе")
+
+    # --- Состав строк: только черновик ---
+
+    def test_draft_allows_line_create_qty_and_unlink(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        line.write({"qty_requested": 12.0})
+        self.assertAlmostEqual(line.qty_requested, 12.0)
+        line.unlink()
+        self.assertFalse(req.line_ids)
+
+    def test_draft_allows_name_raw_change(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        line.write({"name_raw": "Изменённая позиция"})
+        self.assertEqual(line.name_raw, "Изменённая позиция")
+
+    def test_in_progress_forbids_line_create(self):
+        req = self._make_request()
+        self._add_matched_line(req)
+        req.action_in_progress()
+        with self.assertRaises(UserError):
+            self._add_unmatched_line(req)
+
+    def test_in_progress_forbids_line_unlink(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_in_progress()
+        with self.assertRaises(UserError):
+            line.unlink()
+        self.assertTrue(line.exists())
+
+    def test_in_progress_forbids_line_unlink_via_rpc_context(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_in_progress()
+        with self.assertRaises(UserError):
+            line.with_context(object_request_allow_line_unlink=True).unlink()
+        self.assertTrue(line.exists())
+
+    def test_in_progress_forbids_qty_requested_change(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_in_progress()
+        with self.assertRaises(UserError):
+            line.write({"qty_requested": 20.0})
+        self.assertAlmostEqual(line.qty_requested, 10.0)
+
+    def test_in_progress_allows_same_qty_requested_write(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_in_progress()
+        line.write({"qty_requested": 10.0, "qty_to_issue": 4.0})
+        self.assertAlmostEqual(line.qty_to_issue, 4.0)
+
+    def test_in_progress_forbids_name_raw_change(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_in_progress()
+        with self.assertRaisesRegex(
+            UserError,
+            "Наименование строки можно менять только в черновике",
+        ):
+            line.write({"name_raw": "Подменённая позиция"})
+        self.assertEqual(line.name_raw, "Тестовая позиция")
+
+    def test_in_progress_allows_same_name_raw_write(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_in_progress()
+        line.write({"name_raw": line.name_raw, "qty_to_issue": 4.0})
+        self.assertAlmostEqual(line.qty_to_issue, 4.0)
+
+    def test_cancelled_forbids_name_raw_change(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_cancel()
+        with self.assertRaises(UserError):
+            line.write({"name_raw": "Подменённая позиция"})
+        self.assertEqual(line.name_raw, "Тестовая позиция")
+
+    def test_in_progress_allows_qty_to_issue_change(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_in_progress()
+        line.write({"qty_to_issue": 3.0})
+        self.assertAlmostEqual(line.qty_to_issue, 3.0)
+
+    def test_closed_forbids_line_create(self):
+        req = self._make_request()
+        line = self._add_matched_line(req)
+        req.action_in_progress()
+        line.write({"qty_to_issue": 10.0, "qty_issued": 10.0})
+        req.action_close()
+        with self.assertRaises(UserError):
+            self._add_unmatched_line(req)
+
+    def test_in_progress_request_unlink_still_works(self):
+        req = self._make_request()
+        self._add_matched_line(req)
+        req.action_in_progress()
+        req.unlink()
+        self.assertFalse(req.exists())
+
+    def test_copy_in_progress_becomes_draft(self):
+        req = self._make_request()
+        self._add_matched_line(req)
+        req.action_in_progress()
+        copy = req.copy()
+        self.assertEqual(copy.state, "draft")
+        self.assertEqual(len(copy.line_ids), 1)
+
+    def test_form_view_locks_line_composition_in_progress(self):
+        view = self.env.ref("object_request.view_object_request_form")
+        arch = view.arch_db
+        self.assertIn("'create': [('state', '=', 'draft')]", arch)
+        self.assertIn("'delete': [('state', '=', 'draft')]", arch)
+        self.assertNotIn('create="parent.state', arch)
+        self.assertNotIn('delete="parent.state', arch)
+        self.assertIn('readonly="parent.state != \'draft\'"', arch)
+
+    def test_views_lock_name_raw_outside_draft(self):
+        form = etree.fromstring(
+            self.env.ref(
+                "object_request.view_object_request_form"
+            ).arch_db
+        )
+        editable_name_fields = form.xpath(
+            "//field[@name='line_ids'][contains(@groups, "
+            "'group_supply_manager')]/list/field[@name='name_raw']"
+        )
+        self.assertEqual(len(editable_name_fields), 1)
+        self.assertEqual(
+            editable_name_fields[0].get("readonly"),
+            "parent.state != 'draft'",
+        )
+
+        line_list = etree.fromstring(
+            self.env.ref(
+                "object_request.view_object_request_line_list"
+            ).arch_db
+        )
+        list_name_fields = line_list.xpath("//field[@name='name_raw']")
+        self.assertEqual(len(list_name_fields), 1)
+        self.assertEqual(
+            list_name_fields[0].get("readonly"),
+            "request_id.state != 'draft'",
+        )

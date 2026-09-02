@@ -19,7 +19,7 @@ class AiAssistantConfig(models.TransientModel):
     ai_assistant_text_model = fields.Char(
         string='Модель (текст)',
         config_parameter='ai_assistant.text_model',
-        default='google/gemini-2.0-flash-001',
+        default='google/gemini-2.5-flash',
     )
     ai_assistant_vision_model = fields.Char(
         string='Модель (скриншот/vision)',
@@ -37,6 +37,21 @@ class AiAssistantConfig(models.TransientModel):
     ai_assistant_enabled = fields.Boolean(
         string='Включить AI-ассистент',
         config_parameter='ai_assistant.enabled',
+    )
+    ai_assistant_actions_enabled = fields.Boolean(
+        string='Включить actions',
+        config_parameter='ai_assistant.actions_enabled',
+        default=False,
+    )
+    ai_assistant_replenishment_enabled = fields.Boolean(
+        string='Пополнение товара через чат',
+        config_parameter='ai_assistant.replenishment_enabled',
+        default=True,
+    )
+    ai_assistant_moving_enabled = fields.Boolean(
+        string='Перемещения между складами через чат',
+        config_parameter='ai_assistant.moving_enabled',
+        default=False,
     )
     ai_assistant_system_prompt_override = fields.Char(
         string='Кастомный системный промпт (опционально)',

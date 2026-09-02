@@ -1,0 +1,137 @@
+/**
+ * @file: object_request.scss
+ * @description: Backend UI refinements for object request forms.
+ * @dependencies: object_request form views, Odoo web backend assets.
+ * @created: 2026-06-14
+ */
+
+.o_form_view .o_object_request_line_ids {
+    .o_list_renderer,
+    .o_list_table {
+        max-height: calc(100vh - 320px);
+        overflow: auto;
+    }
+}
+
+.o_form_view.o_object_request_full_width_form.o_object_request_chatter_hidden {
+    .o-mail-Form-chatter,
+    .o-mail-ChatterContainer {
+        display: none !important;
+    }
+
+    &.o_xxl_form_view {
+        .o_form_view_container,
+        .o_form_sheet_bg {
+            flex: 1 1 100%;
+            width: 100%;
+            max-width: 100%;
+        }
+    }
+}
+
+.o_form_view.o_object_request_full_width_form {
+    .o_object_request_chatter_toggle_wrap {
+        flex-basis: 100%;
+    }
+
+    .o_object_request_chatter_toggle {
+        white-space: nowrap;
+    }
+
+    .o_form_sheet {
+        max-width: none;
+    }
+}
+
+.o_or_full_dropdown {
+    .o-autocomplete--dropdown-menu {
+        // CSS min() must be interpolated: libsass treats min() as a Sass
+        // function and fails on mixed rem/vw units.
+        min-width: #{'min(36rem, 92vw)'};
+        max-width: #{'min(56rem, 96vw)'} !important;
+        width: max-content;
+    }
+
+    .o-autocomplete--dropdown-item > .dropdown-item {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+        height: auto;
+        line-height: 1.35;
+        padding-top: 0.35rem;
+        padding-bottom: 0.35rem;
+    }
+}
+
+.o_list_table.o_object_request_column_dragging {
+    th[data-name] {
+        cursor: grabbing;
+        user-select: none;
+    }
+
+    .o_object_request_column_drag_source {
+        opacity: 0.55;
+    }
+
+    .o_object_request_column_drag_over {
+        box-shadow: inset 3px 0 0 var(--o-brand-primary);
+    }
+}
+
+.modal-dialog:has(.o_object_request_import_wizard) {
+    width: 96vw;
+    max-width: 96vw;
+
+    .modal-content,
+    .modal-body,
+    .o_form_view,
+    .o_form_sheet_bg {
+        width: 100%;
+        max-width: none;
+    }
+}
+
+.o_object_request_import_wizard {
+    width: 100% !important;
+    max-width: none !important;
+
+    .o_form_sheet {
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    .o_notebook,
+    .tab-content,
+    .tab-pane {
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    .o_object_request_import_preview_lines {
+        display: block;
+        width: 100% !important;
+        max-width: none !important;
+
+        &.o_field_widget,
+        .o_field_x2many,
+        .o_x2m_control_panel {
+            width: 100% !important;
+            max-width: none !important;
+        }
+
+        .o_list_renderer {
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: none !important;
+            max-height: calc(100vh - 360px);
+            overflow: auto;
+            scrollbar-gutter: stable both-edges;
+        }
+
+        .o_list_table {
+            width: 100% !important;
+            min-width: 100% !important;
+            table-layout: fixed;
+        }
+    }
+}

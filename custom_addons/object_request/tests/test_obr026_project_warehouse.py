@@ -42,7 +42,11 @@ class TestObjectRequestProjectWarehouse(TransactionCase):
             self.project.warehouse_id.name,
             f"{self.project.name} склад",
         )
-        self.assertEqual(self.project.warehouse_id.code, self.project.code)
+        self.assertTrue(
+            self.project.warehouse_id.code.startswith(
+                self.project.code[:4]
+            )
+        )
 
     def test_supply_manager_cannot_rename_project(self):
         with self.assertRaises(UserError):

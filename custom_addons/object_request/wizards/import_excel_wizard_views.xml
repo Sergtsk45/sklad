@@ -8,7 +8,7 @@
         <field name="name">object.request.import.wizard.form</field>
         <field name="model">object.request.import.wizard</field>
         <field name="arch" type="xml">
-            <form string="Импорт Excel — Требование на комплектацию">
+            <form string="Импорт Excel — Требование на комплектацию" class="o_object_request_import_wizard">
                 <sheet>
 
                     <!-- Файл -->
@@ -26,6 +26,7 @@
                         </group>
                         <group>
                             <field name="priority"/>
+                            <field name="ai_mode" widget="radio"/>
                             <field name="comment"/>
                         </group>
                     </group>
@@ -57,23 +58,81 @@
                     <!-- Предпросмотр строк -->
                     <notebook invisible="validation_state == 'not_checked'">
                         <page string="Предпросмотр строк" name="page_preview">
-                            <field name="preview_line_ids" readonly="1">
+                            <field name="preview_line_ids" class="o_object_request_import_preview_lines">
                                 <list
+                                    editable="bottom"
+                                    create="0"
+                                    delete="0"
                                     decoration-danger="has_error == True"
                                     string="Строки из файла"
                                 >
-                                    <field name="sequence" string="№"/>
-                                    <field name="source_row_no" string="Стр. Excel"/>
-                                    <field name="supplier_article" string="Артикул"/>
-                                    <field name="name_raw" string="Наименование"/>
-                                    <field name="uom_raw" string="Ед. изм."/>
-                                    <field name="qty" string="Кол-во"/>
-                                    <field name="price" string="Цена"/>
-                                    <field name="supplier_raw" string="Поставщик"/>
+                                    <field name="sequence" string="№" width="28px" readonly="1"/>
+                                    <field name="source_row_no" string="Стр. Excel" width="42px" readonly="1"/>
+                                    <field
+                                        name="supplier_article"
+                                        string="Артикул"
+                                        optional="show"
+                                        width="60px"
+                                        readonly="1"
+                                    />
+                                    <field
+                                        name="technical_designation"
+                                        string="Обозначение"
+                                        optional="show"
+                                        width="260px"
+                                        readonly="1"
+                                    />
+                                    <field name="name_raw" string="Наименование" width="360px" readonly="1"/>
+                                    <field name="uom_raw" string="Ед. изм." width="38px" readonly="1"/>
+                                    <field name="qty" string="Кол-во" width="42px" readonly="1"/>
+                                    <field name="price" string="Цена" width="46px" readonly="1"/>
+                                    <field name="supplier_raw" string="Поставщик" width="65px" readonly="1"/>
+                                    <field
+                                        name="selected_product_id"
+                                        string="Товар для импорта"
+                                        optional="show"
+                                        width="360px"
+                                        options="{'no_create': True, 'no_create_edit': True}"
+                                        context="{
+                                            'object_request_search_product_tags': True,
+                                        }"
+                                    />
+                                    <field
+                                        name="candidate_product_ids"
+                                        string="Кандидаты"
+                                        widget="many2many_tags"
+                                        optional="show"
+                                        width="380px"
+                                        readonly="1"
+                                    />
+                                    <field
+                                        name="ai_suggested_product_id"
+                                        string="AI-предложение"
+                                        optional="show"
+                                        width="340px"
+                                        readonly="1"
+                                    />
+                                    <field
+                                        name="ai_match_confidence"
+                                        string="Уверенность"
+                                        optional="show"
+                                        digits="[4, 2]"
+                                        width="48px"
+                                        readonly="1"
+                                    />
+                                    <field
+                                        name="matching_source"
+                                        string="Источник"
+                                        optional="show"
+                                        width="55px"
+                                        readonly="1"
+                                    />
                                     <field
                                         name="error_message"
                                         string="Ошибка"
                                         optional="show"
+                                        width="70px"
+                                        readonly="1"
                                     />
                                     <field name="has_error" column_invisible="1"/>
                                 </list>
@@ -89,12 +148,13 @@
                         name="action_validate"
                         type="object"
                         class="btn-primary"
+                        invisible="validation_state == 'valid'"
                     />
                     <button
-                        string="Импортировать"
+                        string="Создать требование"
                         name="action_import"
                         type="object"
-                        class="btn-secondary"
+                        class="btn-primary"
                         invisible="validation_state != 'valid'"
                     />
                     <button

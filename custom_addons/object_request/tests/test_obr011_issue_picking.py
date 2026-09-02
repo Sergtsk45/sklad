@@ -31,7 +31,6 @@ class TestObr011IssuePicking(TransactionCase):
             }
         )
         self.uom = self.product.uom_id
-        self.warehouse = self.env["stock.warehouse"].search([], limit=1)
         self.request = self.env["object.request"].create(
             {
                 "project_id": self.project.id,
@@ -39,6 +38,7 @@ class TestObr011IssuePicking(TransactionCase):
                 "need_date": datetime.date.today(),
             }
         )
+        self.warehouse = self.request._get_issue_warehouses()[:1]
         # Line with qty_to_issue
         self.line = self.env["object.request.line"].create(
             {
@@ -70,7 +70,7 @@ class TestObr011IssuePicking(TransactionCase):
         )
 
     def _create_warehouse(self, suffix):
-        return (
+        warehouse = (
             self.env["stock.warehouse"]
             .sudo()
             .create(
@@ -81,6 +81,8 @@ class TestObr011IssuePicking(TransactionCase):
                 }
             )
         )
+        self.request.write({"issue_warehouse_ids": [(4, warehouse.id)]})
+        return warehouse
 
     def _create_wizard(self):
         """Создать wizard предпросмотра с корректными данными."""
@@ -162,6 +164,7 @@ class TestObr011IssuePicking(TransactionCase):
                 "type": "consu",
             }
         )
+        self.request.write({"state": "draft"})
         line2 = self.env["object.request.line"].create(
             {
                 "request_id": self.request.id,
@@ -172,6 +175,7 @@ class TestObr011IssuePicking(TransactionCase):
             }
         )
         self._add_stock_distribution(line2, 15.0)
+        self.request.write({"state": "in_progress"})
         _result, picking = self._create_issue()
         self.assertEqual(len(picking.move_ids), 2)
 
@@ -215,18 +219,20 @@ class TestObr011IssuePicking(TransactionCase):
         self.assertNotIn(pickings, excluded_pickings)
 
     def test_issue_preview_excluded_group_keeps_warehouse_from_lines(self):
-        """Склад группы выводится из распределений; снятие «Создать» не ломает склад."""
+        """Снятие «Создать» не ломает склад группы."""
         warehouse2 = self._create_warehouse("D")
         self._add_stock_distribution(self.line, 4.0, warehouse=warehouse2)
         wizard = self._create_wizard()
-        group = wizard.group_ids.filtered(lambda g: g.warehouse_id == warehouse2)
+        group = wizard.group_ids.filtered(
+            lambda g: g.warehouse_id == warehouse2
+        )
         self.assertEqual(len(group), 1)
         group.write({"included": False})
         group.invalidate_recordset()
         self.assertEqual(group.warehouse_id, warehouse2)
 
     def test_issue_preview_relinks_cleared_stock_lines_on_create(self):
-        """Пустые stock_line_ids на группе (как у веб-клиента при правках) восстанавливаются перед выдачей."""
+        """Пустые stock_line_ids восстанавливаются перед выдачей."""
         warehouse2 = self._create_warehouse("E")
         self._add_stock_distribution(self.line, 4.0, warehouse=warehouse2)
         wizard = self._create_wizard()

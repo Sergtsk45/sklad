@@ -115,12 +115,72 @@ class TestOBR006ImportWizard(TransactionCase):
         wizard.action_validate()
         line = wizard.preview_line_ids[0]
         self.assertEqual(line.supplier_article, "ART-001")
+        self.assertFalse(line.technical_designation)
         self.assertEqual(line.name_raw, "Цемент М500")
         self.assertEqual(line.uom_raw, "мешок")
         self.assertAlmostEqual(line.qty, 10.0)
         self.assertAlmostEqual(line.price, 500.0)
         self.assertEqual(line.supplier_raw, "ООО Стройснаб")
         self.assertFalse(line.has_error)
+
+    def test_validate_standard_header_format_message(self):
+        """Стандартный формат wizard распознаётся по заголовкам."""
+        file_b64 = _make_xlsx(
+            [
+                ["№", "Артикул", "Наименование", "Ед.", "Кол-во"],
+                [1, "ART-001", "Цемент М500", "шт.", 10],
+            ]
+        )
+        if file_b64 is None:
+            self.skipTest("openpyxl не установлен")
+        wizard = self._create_wizard({"file": file_b64})
+        wizard.action_validate()
+        self.assertEqual(wizard.validation_state, "valid")
+        self.assertIn("стандартный импорт wizard", wizard.validation_messages)
+
+    def test_validate_uute_header_format_maps_columns(self):
+        """Формат УУТЭ не путает наименование и обозначение."""
+        file_b64 = _make_xlsx(
+            [
+                [
+                    "№",
+                    "Наименование",
+                    "Обозначение",
+                    "Единица измерения",
+                    "Количество",
+                ],
+                [1, "Кран муфтовый 15 мм", "11Б27п1", "шт.", 4],
+            ]
+        )
+        if file_b64 is None:
+            self.skipTest("openpyxl не установлен")
+        wizard = self._create_wizard({"file": file_b64})
+        wizard.action_validate()
+        self.assertEqual(wizard.validation_state, "valid")
+        line = wizard.preview_line_ids[0]
+        self.assertEqual(line.name_raw, "Кран муфтовый 15 мм")
+        self.assertFalse(line.supplier_article)
+        self.assertEqual(line.technical_designation, "11Б27п1")
+        self.assertEqual(line.uom_raw, "шт.")
+        self.assertAlmostEqual(line.qty, 4.0)
+        self.assertIn("спецификация УУТЭ", wizard.validation_messages)
+        self.assertIn("Обозначение используется", wizard.validation_messages)
+
+    def test_validate_article_header_maps_to_supplier_article(self):
+        """Реальная колонка Артикул остаётся supplier_article."""
+        file_b64 = _make_xlsx(
+            [
+                ["№", "Артикул", "Наименование", "Кол-во"],
+                [1, "REAL-ART-001", "Кран муфтовый 15 мм", 4],
+            ]
+        )
+        if file_b64 is None:
+            self.skipTest("openpyxl не установлен")
+        wizard = self._create_wizard({"file": file_b64})
+        wizard.action_validate()
+        line = wizard.preview_line_ids[0]
+        self.assertEqual(line.supplier_article, "REAL-ART-001")
+        self.assertFalse(line.technical_designation)
 
     def test_validate_skips_empty_rows(self):
         """Полностью пустые строки пропускаются при парсинге."""
@@ -168,6 +228,39 @@ class TestOBR006ImportWizard(TransactionCase):
         wizard.action_validate()
         self.assertEqual(wizard.validation_state, "invalid")
         self.assertEqual(wizard.line_preview_count, 0)
+        self.assertIn("обязательные колонки", wizard.validation_messages)
+
+    def test_validate_missing_qty_column_returns_supported_headers(self):
+        """Файл без количества объясняет, какие заголовки поддержаны."""
+        file_b64 = _make_xlsx(
+            [
+                ["№", "Наименование", "Единица измерения"],
+                [1, "Кран муфтовый 15 мм", "шт."],
+            ]
+        )
+        if file_b64 is None:
+            self.skipTest("openpyxl не установлен")
+        wizard = self._create_wizard({"file": file_b64})
+        wizard.action_validate()
+        self.assertEqual(wizard.validation_state, "invalid")
+        self.assertIn("количество", wizard.validation_messages)
+        self.assertIn("кол-во", wizard.validation_messages)
+
+    def test_validate_missing_name_column_returns_supported_headers(self):
+        """Файл без наименования объясняет, какие заголовки поддержаны."""
+        file_b64 = _make_xlsx(
+            [
+                ["№", "Обозначение", "Количество"],
+                [1, "11Б27п1", 4],
+            ]
+        )
+        if file_b64 is None:
+            self.skipTest("openpyxl не установлен")
+        wizard = self._create_wizard({"file": file_b64})
+        wizard.action_validate()
+        self.assertEqual(wizard.validation_state, "invalid")
+        self.assertIn("наименование", wizard.validation_messages)
+        self.assertIn("наименование товара", wizard.validation_messages)
 
     def test_validate_only_header_no_data_rows(self):
         """Файл только с заголовком → validation_state='invalid'."""
@@ -205,6 +298,24 @@ class TestOBR006ImportWizard(TransactionCase):
         # validation_state остаётся 'not_checked' — импорт должен упасть
         with self.assertRaises(UserError):
             wizard.action_import()
+
+    def test_import_wizard_footer_guides_next_action_after_validation(self):
+        """После проверки основной кнопкой становится создание требования."""
+        view = self.env.ref(
+            "object_request.view_object_request_import_wizard_form"
+        )
+
+        self.assertIn('string="Загрузить и проверить"', view.arch_db)
+        self.assertIn('name="action_validate"', view.arch_db)
+        self.assertIn(
+            'invisible="validation_state == \'valid\'"',
+            view.arch_db,
+        )
+        self.assertIn('string="Создать требование"', view.arch_db)
+        self.assertIn('name="action_import"', view.arch_db)
+        self.assertIn('class="btn-primary"', view.arch_db)
+        self.assertIn('editable="bottom"', view.arch_db)
+        self.assertIn('name="selected_product_id"', view.arch_db)
 
     # ------------------------------------------------------------------
     # Тест source_row_no

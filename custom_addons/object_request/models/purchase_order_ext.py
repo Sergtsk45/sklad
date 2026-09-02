@@ -1,4 +1,35 @@
-from odoo import models, fields
+from odoo import models, fields, api
+
+RFQ_MAIL_BODY_HTML = """\
+<div style="margin:0;padding:0;font-size:13px;">
+    <p style="margin:0 0 12px 0;">Добрый день, прошу выставить счёт:</p>
+    <table style="border-collapse:collapse;width:100%;max-width:640px;font-size:13px;">
+        <thead>
+            <tr>
+                <th style="text-align:left;border-bottom:1px solid #ccc;padding:4px 8px 4px 0;">Наименование</th>
+                <th style="text-align:right;border-bottom:1px solid #ccc;padding:4px 8px;">Кол-во</th>
+                <th style="text-align:left;border-bottom:1px solid #ccc;padding:4px 0 4px 8px;">Ед.</th>
+            </tr>
+        </thead>
+        <tbody>
+            <t t-foreach="object.order_line" t-as="line">
+                <tr>
+                    <td style="padding:4px 8px 4px 0;vertical-align:top;">
+                        <t t-out="line.name or ''"/>
+                    </td>
+                    <td style="text-align:right;padding:4px 8px;vertical-align:top;white-space:nowrap;">
+                        <t t-out="'{:g}'.format(line.product_qty)"/>
+                    </td>
+                    <td style="padding:4px 0 4px 8px;vertical-align:top;">
+                        <t t-out="line.product_uom_id.name or ''"/>
+                    </td>
+                </tr>
+            </t>
+        </tbody>
+    </table>
+    <p style="margin:16px 0 0 0;">С уважением, <span t-out="object.get_rfq_mail_signer_name() or ''"/> ООО &quot;Теплосервис-Комплект&quot;</p>
+</div>
+"""
 
 
 class PurchaseOrderExt(models.Model):
@@ -13,6 +44,11 @@ class PurchaseOrderExt(models.Model):
         "object.request.project",
         string="Объект требования",
         index=True,
+    )
+    dest_warehouse_id = fields.Many2one(
+        related="picking_type_id.warehouse_id",
+        string="Склад",
+        readonly=True,
     )
     # Reverse side of object.request.purchase_order_ids many2many
     object_request_ids = fields.Many2many(
@@ -30,6 +66,35 @@ class PurchaseOrderExt(models.Model):
     def _compute_object_request_count(self):
         for rec in self:
             rec.object_request_count = len(rec.object_request_ids)
+
+    def _get_transfer_report_filename(self):
+        self.ensure_one()
+        warehouse = (
+            self.object_request_project_id.warehouse_id
+            or self.picking_type_id.warehouse_id
+        )
+        suffix = (
+            warehouse.display_name
+            or self.object_request_project_id.display_name
+        )
+        invoice_ref = self.partner_ref or self.name
+        return "Передаточная ведомость №%s%s" % (
+            invoice_ref or "",
+            " %s" % suffix if suffix else "",
+        )
+
+    def get_transfer_delivery_address_display(self):
+        """Текст адреса доставки для передаточной ведомости."""
+        self.ensure_one()
+        if self.dest_address_id:
+            partner = self.dest_address_id
+            return partner.contact_address or partner.display_name
+        project = self.object_request_project_id
+        if not project and self.object_request_ids:
+            project = self.object_request_ids[:1].project_id
+        if not project:
+            return False
+        return (project.address or project.name or "").strip() or False
 
     def action_open_object_requests(self):
         self.ensure_one()
@@ -50,3 +115,143 @@ class PurchaseOrderExt(models.Model):
             "domain": [("id", "in", self.object_request_ids.ids)],
             "target": "current",
         }
+
+    def get_rfq_mail_signer_name(self):
+        """Имя в подписи RFQ: Сергей для admin, иначе закупщик, пусто если нет."""
+        self.ensure_one()
+        buyer = self.user_id
+        if not buyer:
+            return ""
+        login = (buyer.login or "").strip().lower()
+        name = (buyer.name or "").strip()
+        if login == "admin" or name in ("Administrator", "Администратор"):
+            return "Сергей"
+        return name
+
+    def _is_rfq_outgoing_mail(self):
+        """Черновик/отправленный запрос, не подтверждённый заказ."""
+        return len(self) == 1 and self.state in ("draft", "sent")
+
+    def _rfq_mail_copy_partner_ids(self):
+        """Поставщик и партнёр компании — одна копия одного и того же письма."""
+        self.ensure_one()
+        return frozenset(
+            pid
+            for pid in (self.partner_id.id, self.company_id.partner_id.id)
+            if pid
+        )
+
+    def _get_rfq_notify_force_lang(self):
+        """Один язык обёртки: иначе вендор en_US и ТСК ru_RU рендерятся отдельно."""
+        self.ensure_one()
+        candidate = self.company_id.partner_id.lang or self.env.lang
+        if candidate and self.env["res.lang"]._lang_get(candidate):
+            return candidate
+        return self.env.lang
+
+    @api.model
+    def _setup_rfq_copy_mail_template(self):
+        """Копия заявки на партнёра компании (675001@mail.ru на prod)."""
+        template = self.env.ref(
+            "purchase.email_template_edi_purchase",
+            raise_if_not_found=False,
+        )
+        if not template:
+            return
+        template.write(
+            {
+                "use_default_to": False,
+                "partner_to": (
+                    "{{ object.partner_id.id }},"
+                    "{{ object.company_id.partner_id.id }}"
+                ),
+                "body_html": RFQ_MAIL_BODY_HTML,
+            }
+        )
+
+    def _message_get_default_recipients(self, *args, **kwargs):
+        result = super()._message_get_default_recipients(*args, **kwargs)
+        for order in self:
+            copy_partner = order.company_id.partner_id
+            if not copy_partner.email:
+                continue
+            values = result.get(order.id)
+            if not values:
+                continue
+            partner_ids = list(values.get("partner_ids") or [])
+            if copy_partner.id not in partner_ids:
+                partner_ids.append(copy_partner.id)
+            values["partner_ids"] = partner_ids
+        return result
+
+    def _notify_get_recipients_groups(self, message, model_description, msg_vals=False):
+        """RFQ: без кнопки портала; поставщик и копия ТСК в одной группе layout."""
+        groups = super()._notify_get_recipients_groups(
+            message, model_description, msg_vals=msg_vals
+        )
+        if not self._is_rfq_outgoing_mail():
+            return groups
+        self.ensure_one()
+        for _name, _func, opts in groups:
+            opts["has_button_access"] = False
+        copy_ids = self._rfq_mail_copy_partner_ids()
+        rfq_copy_group = [
+            "rfq_vendor_and_company_copy",
+            lambda pdata, ids=copy_ids: pdata.get("id") in ids,
+            {
+                "active": True,
+                "has_button_access": False,
+            },
+        ]
+        return [rfq_copy_group] + list(groups)
+
+    def _notify_get_classified_recipients_iterator(
+        self,
+        message,
+        recipients_data,
+        msg_vals=False,
+        model_description=False,
+        force_email_company=False,
+        force_email_lang=False,
+        force_record_name=False,
+        subtitles=None,
+    ):
+        """RFQ: один lang, иначе два разных HTML (вендор en_US / ТСК ru_RU)."""
+        if self._is_rfq_outgoing_mail():
+            self.ensure_one()
+            force_email_lang = self._get_rfq_notify_force_lang()
+            recipients_data = [
+                {**data, "lang": force_email_lang} for data in recipients_data
+            ]
+        return super()._notify_get_classified_recipients_iterator(
+            message,
+            recipients_data,
+            msg_vals=msg_vals,
+            model_description=model_description,
+            force_email_company=force_email_company,
+            force_email_lang=force_email_lang,
+            force_record_name=force_record_name,
+            subtitles=subtitles,
+        )
+
+    def _notify_by_email_prepare_rendering_context(
+        self,
+        message,
+        msg_vals=False,
+        model_description=False,
+        force_email_company=False,
+        force_email_lang=False,
+        force_record_name=False,
+    ):
+        """RFQ: без номера P00xxx и срока рядом с кнопкой портала."""
+        render_context = super()._notify_by_email_prepare_rendering_context(
+            message,
+            msg_vals=msg_vals,
+            model_description=model_description,
+            force_email_company=force_email_company,
+            force_email_lang=force_email_lang,
+            force_record_name=force_record_name,
+        )
+        if self.state in ("draft", "sent"):
+            render_context["subtitles"] = []
+        return render_context

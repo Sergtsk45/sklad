@@ -1,6 +1,6 @@
 {
     'name': 'AI Assistant',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.2.4',
     'summary': 'Floating AI chat assistant for Odoo users',
     'description': """
         AI-консультант для Odoo 19.
@@ -10,12 +10,25 @@
     'category': 'Tools',
     'author': 'Custom',
     'license': 'LGPL-3',
-    'depends': ['base', 'web', 'base_setup'],
+    'depends': [
+        'base',
+        'web',
+        'base_setup',
+        'mail',
+        'stock',
+        'purchase',
+        'account',
+        'object_request',
+        'custom_product_search',
+    ],
     'data': [
         'security/security_groups.xml',
         'security/ir.model.access.csv',
+        'data/warehouse_stock_action.xml',
+        'views/stock_search_inherit.xml',
         'views/ai_assistant_assets.xml',
         'views/ai_assistant_settings_views.xml',
+        'views/ai_assistant_audit_views.xml',
     ],
     'assets': {
         'web.assets_backend': [
@@ -24,9 +37,16 @@
             'ai_assistant/static/src/xml/ai_chat_widget.xml',
             'ai_assistant/static/src/js/screenshot_trigger.js',
             'ai_assistant/static/src/js/ai_chat_service.js',
+            'ai_assistant/static/src/js/ai_chat_actions.js',
+            'ai_assistant/static/src/js/ai_chat_format.js',
             'ai_assistant/static/src/js/ai_chat_boot.js',
         ],
     },
+    # jsonschema is used when available and has an in-module validation
+    # fallback. Do not list it here: the runtime image provides the importable
+    # Debian package without Python distribution metadata, which makes Odoo's
+    # manifest dependency check reject an otherwise valid installation.
+    'external_dependencies': {'python': ['pdfplumber']},
     'installable': True,
     'application': False,
     'auto_install': False,

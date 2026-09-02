@@ -1,5 +1,6 @@
 from odoo.tests.common import TransactionCase
 from odoo.exceptions import AccessError
+from odoo.exceptions import UserError
 from odoo.tests import tagged
 
 
@@ -158,6 +159,48 @@ class TestACLForeman(TransactionCase):
         )
         self.assertTrue(wizard.id)
 
+    def test_foreman_cannot_manage_allowed_substitutes(self):
+        """Прораб не подтверждает и не ведёт допустимые замены."""
+        request = self.env["object.request"].create(
+            {
+                "project_id": self.project.id,
+                "foreman_user_id": self.foreman.id,
+                "need_date": "2026-04-01",
+            }
+        )
+        line = self.env["object.request.line"].create(
+            {
+                "request_id": request.id,
+                "name_raw": "Материал прораба",
+                "qty_requested": 5.0,
+            }
+        )
+        env = self.env(user=self.foreman)
+
+        with self.assertRaises(UserError):
+            env["object.request.line"].browse(line.id).write(
+                {"allowed_substitute_ids": [(4, self.product.id)]}
+            )
+
+    def test_foreman_cannot_create_substitute_rule(self):
+        """Прораб не создаёт правила каталога аналогов."""
+        substitute = self.env["product.product"].create(
+            {
+                "name": "Товар ACL аналог",
+                "type": "consu",
+            }
+        )
+        env = self.env(user=self.foreman)
+
+        with self.assertRaises(UserError):
+            env["object.request.product.substitute.rule"].create(
+                {
+                    "product_id": self.product.id,
+                    "substitute_product_id": substitute.id,
+                    "reason": "ACL",
+                }
+            )
+
 
 @tagged("post_install", "-at_install")
 class TestACLSupplyManager(TransactionCase):
@@ -290,6 +333,51 @@ class TestACLSupplyManager(TransactionCase):
         env["object.request.line"].browse(line.id).write({"qty_to_issue": 6.0})
         line.invalidate_recordset()
         self.assertAlmostEqual(line.qty_to_issue, 6.0)
+
+    def test_supply_can_manage_allowed_substitutes(self):
+        """Снабженец может подтверждать допустимые замены."""
+        request = self._make_request(foreman_id=self.supply.id)
+        line = self.env["object.request.line"].create(
+            {
+                "request_id": request.id,
+                "name_raw": "Материал",
+                "qty_requested": 10.0,
+            }
+        )
+        env = self.env(user=self.supply)
+
+        env["object.request.line"].browse(line.id).write(
+            {"allowed_substitute_ids": [(4, self.product.id)]}
+        )
+
+        line.invalidate_recordset()
+        self.assertIn(self.product, line.allowed_substitute_ids)
+
+    def test_supply_can_create_substitute_rule(self):
+        """Снабженец может вести каталог аналогов."""
+        source = self.env["product.product"].create(
+            {
+                "name": "Фланец DN65 PN16 ACL source",
+                "type": "consu",
+            }
+        )
+        substitute = self.env["product.product"].create(
+            {
+                "name": "Фланец DN65 PN16 ACL substitute",
+                "type": "consu",
+            }
+        )
+        env = self.env(user=self.supply)
+
+        rule = env["object.request.product.substitute.rule"].create(
+            {
+                "product_id": source.id,
+                "substitute_product_id": substitute.id,
+                "reason": "ACL",
+            }
+        )
+
+        self.assertTrue(rule.id)
 
     def test_supply_can_use_import_wizard(self):
         """Снабженец имеет доступ к wizard импорта."""

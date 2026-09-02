@@ -1,6 +1,9 @@
 from odoo.tests.common import TransactionCase
 from odoo.tests import tagged
 
+from odoo.addons.ai_assistant.services.knowledge_provider_v2 import (
+    KnowledgeProviderV2,
+)
 from odoo.addons.ai_assistant.services.prompt_builder import PromptBuilder
 
 
@@ -82,8 +85,14 @@ class TestPromptBuilder(TransactionCase):
 
     def test_build_knowledge_block_with_snippets(self):
         snippets = [
-            {'topic': 'Создание товара', 'content': 'Нажмите Создать в меню Товары.'},
-            {'topic': 'Инвентаризация', 'content': 'Перейдите в раздел Инвентаризация.'},
+            {
+                'topic': 'Создание товара',
+                'content': 'Нажмите Создать в меню Товары.',
+            },
+            {
+                'topic': 'Инвентаризация',
+                'content': 'Перейдите в раздел Инвентаризация.',
+            },
         ]
         block = self.builder.build_knowledge_block(snippets)
         self.assertIn('Создание товара', block)
@@ -238,7 +247,7 @@ class TestPromptBuilder(TransactionCase):
     # --- term_mapping в промпте ---
 
     def test_term_mapping_included_in_build_messages(self):
-        """term_mapping должен попадать в системный промпт через build_messages."""
+        """term_mapping должен попадать в системный промпт."""
         knowledge = {
             'docs_snippets': '',
             'tech_context': None,
@@ -268,6 +277,86 @@ class TestPromptBuilder(TransactionCase):
         system_content = messages[0]['content']
         self.assertIn('ДОКУМЕНТАЦИЯ', system_content)
         self.assertIn('Инструкция', system_content)
+
+    def test_actions_mode_includes_rules(self):
+        messages = self.builder.build_messages(
+            'Создай PO', [], context=None, mode='actions'
+        )
+        system_content = messages[0]['content']
+        self.assertIn('РЕЖИМ ДЕЙСТВИЙ', system_content)
+        self.assertIn('Я создам', system_content)
+        self.assertIn('post_chatter_note', system_content)
+
+    def test_navigation_rules_in_consult_and_actions_modes(self):
+        consult_messages = self.builder.build_messages(
+            'Как посмотреть заказы поставщикам?', [], context=None,
+            mode='consult'
+        )
+        actions_messages = self.builder.build_messages(
+            'Открой заказы поставщикам', [], context=None, mode='actions'
+        )
+        for messages in (consult_messages, actions_messages):
+            system_content = messages[0]['content']
+            self.assertIn('ПРАВИЛО НАВИГАЦИОННЫХ ССЫЛОК', system_content)
+            self.assertIn('get_navigation_link', system_content)
+            self.assertIn('get_warehouse_stock_link', system_content)
+            self.assertIn('НИКОГДА не выдумывай URL', system_content)
+
+    def test_navigation_map_included_in_knowledge_block(self):
+        knowledge = KnowledgeProviderV2().get_knowledge(
+            'purchase',
+            'как посмотреть заказы поставщикам',
+            include_technical=False,
+        )
+        block = self.builder.build_knowledge_block(knowledge)
+        self.assertIn('Навигационные ссылки Odoo', block)
+        self.assertIn('get_navigation_link', block)
+        self.assertIn('Заказы поставщикам', block)
+
+    def test_consult_mode_unchanged(self):
+        default_messages = self.builder.build_messages(
+            'Вопрос', [], context=None
+        )
+        consult_messages = self.builder.build_messages(
+            'Вопрос', [], context=None, mode='consult'
+        )
+        self.assertEqual(default_messages, consult_messages)
+        self.assertNotIn('РЕЖИМ ДЕЙСТВИЙ', consult_messages[0]['content'])
+        self.assertIn(
+            'Не обещай выполнить действия автоматически',
+            consult_messages[0]['content']
+        )
+
+    def test_actions_mode_blocks_inventory_mention(self):
+        messages = self.builder.build_messages(
+            'Создай приход', [], context=None, mode='actions'
+        )
+        system_content = messages[0]['content']
+        self.assertIn('button_confirm', system_content)
+        self.assertIn('button_validate', system_content)
+        self.assertIn('state', system_content)
+        self.assertIn('инвентаризацию', system_content)
+        self.assertNotIn(
+            'Не обещай выполнить действия автоматически',
+            self.builder.build_safety_rules(mode='actions')
+        )
+
+    def test_actions_mode_requires_partner_before_products_and_po(self):
+        messages = self.builder.build_messages(
+            'Создай закупку по счету', [], context=None, mode='actions'
+        )
+        system_content = messages[0]['content']
+        self.assertIn(
+            'partner.needs_create_partner_draft=true',
+            system_content,
+        )
+        self.assertIn('create_partner_draft', system_content)
+        self.assertIn('Банковские реквизиты', system_content)
+        self.assertIn('update_partner_draft', system_content)
+        self.assertIn('add_partner_bank_draft', system_content)
+        self.assertIn('add_partner_contact_draft', system_content)
+        self.assertIn('К какой категории отнести', system_content)
+        self.assertIn('ШАГ В', system_content)
 
     # --- build_technical_context_block ---
 

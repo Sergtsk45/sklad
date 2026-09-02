@@ -1,6 +1,6 @@
 {
     "name": "Object Request — Требование на комплектацию объекта",
-    "version": "19.0.1.1.0",
+    "version": "19.0.1.10.29",
     "category": "Inventory/Inventory",
     "summary": "Управление требованиями на комплектацию строительных объектов",
     "description": """
@@ -22,15 +22,21 @@
         "product",
         "stock",
         "purchase",
+        "purchase_stock",
         "contacts",
+        "custom_product_search",
     ],
+    "external_dependencies": {"python": ["openpyxl"]},
     "data": [
         "data/ir_sequence_data.xml",
+        "data/purchase_mail_template.xml",
         "security/object_request_security.xml",
         "security/ir.model.access.csv",
         "security/object_request_rules.xml",
         "reports/object_request_report.xml",
         "reports/issue_picking_report.xml",
+        "reports/purchase_order_report.xml",
+        "reports/purchase_compact_report_templates.xml",
         "wizards/import_excel_wizard_views.xml",
         "wizards/assign_lines_wizard_views.xml",
         "wizards/issue_wizard_views.xml",
@@ -38,8 +44,11 @@
         "wizards/auto_split_confirm_wizard_views.xml",
         "wizards/confirm_state_wizard_views.xml",
         "wizards/purchase_wizard_views.xml",
+        "wizards/remember_matching_wizard_views.xml",
         "views/stock_picking_inherit_views.xml",
         "views/purchase_order_inherit_views.xml",
+        "views/product_substitute_rule_views.xml",
+        "views/product_feature_views.xml",
         "views/object_request_project_views.xml",
         "views/object_request_line_views.xml",
         "wizards/stock_check_wizard_views.xml",
@@ -50,6 +59,25 @@
     "demo": [
         "data/demo_data.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "object_request/static/src/scss/object_request.scss",
+            (
+                "object_request/static/src/js/"
+                "object_request_chatter_toggle.js"
+            ),
+            (
+                "object_request/static/src/js/"
+                "object_request_line_column_layout.js"
+            ),
+            "object_request/static/src/xml/object_request_chatter_toggle.xml",
+            "object_request/static/src/xml/autocomplete_full_label.xml",
+            (
+                "object_request/static/src/components/"
+                "purchase_file_uploader/purchase_file_uploader.xml"
+            ),
+        ],
+    },
     "installable": True,
     "application": True,
     "auto_install": False,

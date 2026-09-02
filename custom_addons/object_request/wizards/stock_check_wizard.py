@@ -41,15 +41,13 @@ class ObjectRequestStockCheckWizard(models.TransientModel):
                 )
             )
 
-    @api.depends("request_id")
+    @api.depends("request_id", "request_id.issue_warehouse_ids")
     def _compute_warehouse_names(self):
         for wiz in self:
-            warehouses = self.env["stock.warehouse"].search(
-                [
-                    ("company_id", "=", wiz.request_id.company_id.id),
-                    ("active", "=", True),
-                ]
-            )
+            if not wiz.request_id:
+                wiz.warehouse_names = ""
+                continue
+            warehouses = wiz.request_id._get_issue_warehouses()
             wiz.warehouse_names = ", ".join(warehouses.mapped("name"))
 
     @api.model

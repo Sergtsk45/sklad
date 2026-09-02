@@ -1,0 +1,32 @@
+---
+description: Парсинг договор-счетов ОАО УПТК «Амурстрой» (скан, OCR, таблица со скидкой 5%)
+globs: docs/invoices/**
+alwaysApply: false
+---
+
+# Счета ОАО УПТК «Амурстрой»
+
+Применяй, если PDF из `docs/invoices/` — **скан** договор-счёта Амурстроя (крепёж, расходники, Родбант, клей, ручки и т.п.).
+
+## Быстрый чеклист
+
+1. **Текстовый слой?** `pdfplumber` → `len(page.chars)`.
+2. **Амурстрой?** ИНН `2801019127`, «Договор-Счет № П…», имя `schetП*.pdf`.
+3. **Парсер** — скилл **amurstroy-invoice-parsing**:
+   ```bash
+   python3 .cursor/skills/amurstroy-invoice-parsing/scripts/amurstroy_parse.py "docs/invoices/<файл>.pdf" --json
+   ```
+4. **Не использовать** общий `extract_invoice()` для сканов — только OCR.
+5. **Сверка сумм** — `Σ items[].amount` ≈ «на сумму … руб» (**без НДС**), не «Итого» с НДС.
+6. **Скидка** — обычно **5%** на все строки (`discount_percent` в JSON).
+7. **`partner_ref`** — полный номер: `П000014101`, не `14101`.
+8. При `needs_review: true`, `items_empty` или `sum_mismatch` — **сообщи пользователю**, не создавай PO молча.
+9. **Odoo** — только по явной команде: поставщик → `odoo-supplier-from-invoice`, закупка → `odoo-purchase-from-invoice`.
+
+## Поставщик
+
+| ИНН | Организация | Odoo partner_id |
+|-----|-------------|-----------------|
+| `2801019127` | ОАО УПТК «Амурстрой» | 20 |
+
+Полный workflow — `.cursor/skills/amurstroy-invoice-parsing/SKILL.md`.

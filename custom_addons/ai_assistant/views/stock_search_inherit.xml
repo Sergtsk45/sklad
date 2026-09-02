@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Поле склада в search view stock-report для отображения активного фильтра -->
+    <record id="product_search_form_view_stock_report_ai_wh" model="ir.ui.view">
+        <field name="name">product.product.search.stock.report.ai.warehouse</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="stock.product_search_form_view_stock_report"/>
+        <field name="arch" type="xml">
+            <filter name="real_stock_available" position="after">
+                <separator/>
+                <field name="warehouse_id"
+                       context="{'search_warehouse': self}"
+                       filter_domain="[]"
+                       groups="stock.group_stock_multi_warehouses"/>
+            </filter>
+        </field>
+    </record>
+</odoo>

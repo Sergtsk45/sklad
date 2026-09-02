@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="paperformat_purchase_transfer_compact" model="report.paperformat">
+        <field name="name">Purchase Transfer Compact</field>
+        <field name="default" eval="False"/>
+        <field name="disable_shrinking" eval="True"/>
+        <field name="format">A4</field>
+        <field name="page_height">0</field>
+        <field name="page_width">0</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">0</field>
+        <field name="margin_bottom">8</field>
+        <field name="margin_left">7</field>
+        <field name="margin_right">7</field>
+        <field name="dpi">96</field>
+    </record>
+
+    <record id="purchase.action_report_purchase_order" model="ir.actions.report">
+        <field name="print_report_name">object._get_transfer_report_filename()</field>
+        <field name="paperformat_id" ref="paperformat_purchase_transfer_compact"/>
+    </record>
+
+    <record id="purchase.report_purchase_quotation" model="ir.actions.report">
+        <field name="print_report_name">object._get_transfer_report_filename()</field>
+        <field name="paperformat_id" ref="paperformat_purchase_transfer_compact"/>
+    </record>
+
+    <function
+        model="ir.actions.report"
+        name="_object_request_set_purchase_report_names"
+    />
+
+</odoo>
