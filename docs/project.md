@@ -389,7 +389,7 @@ OWL-наследование перестали применяться.
 |--------------|--------|--------------|---------------------|
 | На складе / Доступно | `stock_qty_labels_ru` | `views/product_qty_labels_views.xml` | `stock/views/*`, kanban, forecast |
 | Отправить запрос | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_rfq_send`, `invisible="state != 'draft'"` / `state != 'sent'` |
-| Получатели заявки (RFQ) | `object_request` | `data/purchase_mail_template.xml`, `models/purchase_order_ext.py` | `purchase.email_template_edi_purchase`: поставщик + партнёр компании (`675001@mail.ru`); без кнопки портала / P00xxx / срока в шапке |
+| Получатели заявки (RFQ) | `object_request` | `data/purchase_mail_template.xml`, `models/purchase_order_ext.py` | `purchase.email_template_edi_purchase`: поставщик + партнёр компании (`675001@mail.ru`); одна notify-группа и один язык обёртки, чтобы копия ТСК совпадала с письмом поставщику; без кнопки портала / P00xxx / срока в шапке |
 | Отправить заказ | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_rfq_send`, `invisible="state != 'purchase'"` |
 | Поставщик принял заказ | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_acknowledge` |
 | Получить | `object_request` | `views/purchase_order_inherit_views.xml` (inherit `purchase_stock`) | `purchase_stock/views/purchase_views.xml` — `action_view_picking` |

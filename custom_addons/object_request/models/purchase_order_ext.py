@@ -27,11 +27,7 @@ RFQ_MAIL_BODY_HTML = """\
             </t>
         </tbody>
     </table>
-    <p style="margin:16px 0 0 0;">
-        <t t-set="signer" t-value="object.get_rfq_mail_signer_name()"/>
-        С уважением,<t t-if="signer"> <t t-out="signer"/></t>
-        ООО &quot;Теплосервис-Комплект&quot;
-    </p>
+    <p style="margin:16px 0 0 0;">С уважением, <span t-out="object.get_rfq_mail_signer_name() or ''"/> ООО &quot;Теплосервис-Комплект&quot;</p>
 </div>
 """
 
@@ -132,6 +128,27 @@ class PurchaseOrderExt(models.Model):
             return "Сергей"
         return name
 
+    def _is_rfq_outgoing_mail(self):
+        """Черновик/отправленный запрос, не подтверждённый заказ."""
+        return len(self) == 1 and self.state in ("draft", "sent")
+
+    def _rfq_mail_copy_partner_ids(self):
+        """Поставщик и партнёр компании — одна копия одного и того же письма."""
+        self.ensure_one()
+        return frozenset(
+            pid
+            for pid in (self.partner_id.id, self.company_id.partner_id.id)
+            if pid
+        )
+
+    def _get_rfq_notify_force_lang(self):
+        """Один язык обёртки: иначе вендор en_US и ТСК ru_RU рендерятся отдельно."""
+        self.ensure_one()
+        candidate = self.company_id.partner_id.lang or self.env.lang
+        if candidate and self.env["res.lang"]._lang_get(candidate):
+            return candidate
+        return self.env.lang
+
     @api.model
     def _setup_rfq_copy_mail_template(self):
         """Копия заявки на партнёра компании (675001@mail.ru на prod)."""
@@ -168,18 +185,54 @@ class PurchaseOrderExt(models.Model):
         return result
 
     def _notify_get_recipients_groups(self, message, model_description, msg_vals=False):
-        """RFQ: не вставлять «Посмотреть предложение» и ссылку /my/purchase/."""
+        """RFQ: без кнопки портала; поставщик и копия ТСК в одной группе layout."""
         groups = super()._notify_get_recipients_groups(
             message, model_description, msg_vals=msg_vals
         )
-        if not self:
+        if not self._is_rfq_outgoing_mail():
             return groups
         self.ensure_one()
-        if self.state not in ("draft", "sent"):
-            return groups
         for _name, _func, opts in groups:
             opts["has_button_access"] = False
-        return groups
+        copy_ids = self._rfq_mail_copy_partner_ids()
+        rfq_copy_group = [
+            "rfq_vendor_and_company_copy",
+            lambda pdata, ids=copy_ids: pdata.get("id") in ids,
+            {
+                "active": True,
+                "has_button_access": False,
+            },
+        ]
+        return [rfq_copy_group] + list(groups)
+
+    def _notify_get_classified_recipients_iterator(
+        self,
+        message,
+        recipients_data,
+        msg_vals=False,
+        model_description=False,
+        force_email_company=False,
+        force_email_lang=False,
+        force_record_name=False,
+        subtitles=None,
+    ):
+        """RFQ: один lang, иначе два разных HTML (вендор en_US / ТСК ru_RU)."""
+        if self._is_rfq_outgoing_mail():
+            self.ensure_one()
+            force_email_lang = self._get_rfq_notify_force_lang()
+            recipients_data = [
+                {**data, "lang": force_email_lang} for data in recipients_data
+            ]
+        return super()._notify_get_classified_recipients_iterator(
+            message,
+            recipients_data,
+            msg_vals=msg_vals,
+            model_description=model_description,
+            force_email_company=force_email_company,
+            force_email_lang=force_email_lang,
+            force_record_name=force_record_name,
+            subtitles=subtitles,
+        )
 
     def _notify_by_email_prepare_rendering_context(
         self,

@@ -31,7 +31,7 @@
 
 ## UPG-001 — Письмо RFQ без кнопки портала и шапки P00xxx
 
-- **Статус**: актуально на Odoo 19 (`object_request` `19.0.1.10.20`, 2026-08-27)
+- **Статус**: актуально на Odoo 19 (`object_request` `19.0.1.10.29`, 2026-09-02)
 - **Зачем**: поставщику не нужна кнопка «Посмотреть предложение»
   (`/my/purchase/<id>` + персональный токен), номер заказа и срок в шапке письма.
   Нужны только тема «Заявка на счёт», таблица позиций и подпись
@@ -46,7 +46,8 @@
 
 | Метод | Поведение |
 |-------|-----------|
-| `_notify_get_recipients_groups` | Для `state` в `draft` / `sent` у всех групп `has_button_access=False`. Иначе layout снова рисует фиолетовую кнопку. |
+| `_notify_get_recipients_groups` | Для `state` в `draft` / `sent` у всех групп `has_button_access=False`. Первая группа `rfq_vendor_and_company_copy` — вендор и партнёр компании в одном layout. |
+| `_notify_get_classified_recipients_iterator` | Для RFQ один `lang` (язык партнёра компании). Иначе вендор `en_US` и ТСК `ru_RU` получают разный HTML. |
 | `_notify_by_email_prepare_rendering_context` | Для RFQ `subtitles = []` (иначе рядом с кнопкой остаются P00xxx и «Срок исполнения заказа»). |
 | `_setup_rfq_copy_mail_template` | Пишет стандартный `purchase.email_template_edi_purchase` (noupdate): `partner_to` = вендор + `company_id.partner_id`, свой `body_html`. Вызов из `data/purchase_mail_template.xml` при `-u`. |
 | `_message_get_default_recipients` | Копия на партнёра компании, если у него есть email. |
@@ -62,18 +63,20 @@
 | Место | Что смотреть |
 |-------|----------------|
 | `purchase/models/purchase_order.py` | `_notify_get_recipients_groups` (группа `portal_customer`, title View Quotation / View Order, URL `get_confirm_url()`); `_notify_by_email_prepare_rendering_context` (subtitles: имя записи + срок); `action_rfq_send` → `default_email_layout_xmlid` = `mail.mail_notification_layout_with_responsible_signature`. |
-| `portal/models/mail_thread.py` | Группа `portal_customer`: кнопка только у `partner_id` документа, URL с `access_token` / hash. |
+| `mail/models/mail_thread.py` | `_notify_get_classified_recipients_iterator` (сначала группировка по `partner.lang`, потом группы); `_notify_thread_by_email` — одно `mail.mail` на группу+lang. |
 | `mail/data/mail_templates_email_layouts.xml` | Шапка: `has_button_access` + `subtitles`. Без кнопки шапка с номером/сроком тоже скрывается (`show_header`). |
 | `mail.template` xmlid `purchase.email_template_edi_purchase` | noupdate: при установке 20 шаблон ядра может не перезаписаться нашим XML, зато `-u object_request` снова вызовет `_setup_rfq_copy_mail_template`. |
 
 ### Что сделать на Odoo 20
 
-1. Сверить сигнатуры трёх методов notify/template. Если переименовали группы
-   (`portal_customer`), layout или `action_rfq_send` — поправить override.
+1. Сверить сигнатуры notify/template. Если переименовали группы
+   (`portal_customer`), iterator классификации по lang, layout или
+   `action_rfq_send` — поправить override.
 2. Прогнать:  
    `docker exec odoo19-local odoo --test-enable --test-tags or_rfq_copy -u object_request -d <db> --stop-after-init --http-port=8093`
 3. Живая проверка: «Отправить запрос» → у поставщика и на `675001@mail.ru`
-   нет кнопки портала, нет P00xxx и срока в шапке; таблица и подпись на месте.
+   одинаковое тело (таблица + «С уважением, …»), нет кнопки портала, нет
+   P00xxx и срока в шапке.
 4. «Отправить заказ» после подтверждения — отдельно: кнопка портала PO
    допустима, пока бизнес не попросит убрать и её.
 5. Если 20 вставляет CTA иначе (composer, Discuss, другой xmlid layout) —

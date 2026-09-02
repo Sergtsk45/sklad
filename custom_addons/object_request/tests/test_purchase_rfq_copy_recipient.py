@@ -43,6 +43,10 @@ class TestPurchaseRfqCopyRecipient(TransactionCase):
         self.assertIn("С уважением,", body)
         self.assertIn("get_rfq_mail_signer_name", body)
         self.assertIn("Теплосервис-Комплект", body)
+        from odoo.tools.mail import html_sanitize
+        sanitized = html_sanitize(body)
+        self.assertIn("С уважением,", sanitized)
+        self.assertIn("Теплосервис-Комплект", sanitized)
         self.assertNotIn("object.user_id.name", body)
         self.assertNotIn("8 962 285 85 10", body)
         self.assertGreater(
@@ -156,3 +160,71 @@ class TestPurchaseRfqCopyRecipient(TransactionCase):
         po, message = self._make_rfq_and_message()
         ctx = po._notify_by_email_prepare_rendering_context(message)
         self.assertFalse(ctx.get("subtitles"))
+
+    def _pdata(self, partner, lang, recipient_type="customer"):
+        return {
+            "id": partner.id,
+            "active": True,
+            "email_normalized": partner.email,
+            "is_follower": False,
+            "name": partner.name,
+            "lang": lang,
+            "groups": [],
+            "notif": "email",
+            "share": recipient_type != "user",
+            "type": recipient_type,
+            "uid": False,
+            "ushare": False,
+        }
+
+    def test_rfq_vendor_and_company_share_notify_group(self):
+        po, message = self._make_rfq_and_message()
+        company = po.company_id.partner_id
+        groups = po._notify_get_recipients_classify(
+            message,
+            [
+                self._pdata(po.partner_id, "en_US", "customer"),
+                self._pdata(company, "ru_RU", "user"),
+            ],
+            "Purchase Order",
+        )
+        self.assertEqual(len(groups), 1, groups)
+        self.assertEqual(
+            groups[0]["notification_group_name"],
+            "rfq_vendor_and_company_copy",
+        )
+        self.assertEqual(
+            set(groups[0]["recipients_ids"]),
+            {po.partner_id.id, company.id},
+        )
+        self.assertFalse(groups[0].get("has_button_access"))
+
+    def test_rfq_notify_iterator_unifies_vendor_and_copy_lang(self):
+        self.env["res.lang"]._activate_lang("ru_RU")
+        po, message = self._make_rfq_and_message()
+        company = po.company_id.partner_id
+        company.lang = "ru_RU"
+        po.partner_id.lang = "en_US"
+        items = list(
+            po._notify_get_classified_recipients_iterator(
+                message,
+                [
+                    self._pdata(po.partner_id, "en_US", "customer"),
+                    self._pdata(company, "ru_RU", "user"),
+                ],
+            )
+        )
+        self.assertEqual(len(items), 1, items)
+        lang, _render, group = items[0]
+        self.assertEqual(lang, "ru_RU")
+        self.assertEqual(
+            set(group["recipients_ids"]),
+            {po.partner_id.id, company.id},
+        )
+
+    def test_confirmed_po_does_not_unify_rfq_copy_group(self):
+        po, message = self._make_rfq_and_message()
+        po.state = "purchase"
+        groups = po._notify_get_recipients_groups(message, "Purchase Order")
+        names = [name for name, _func, _opts in groups]
+        self.assertNotIn("rfq_vendor_and_company_copy", names)
