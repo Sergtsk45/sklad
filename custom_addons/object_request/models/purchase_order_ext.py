@@ -1,4 +1,7 @@
+from markupsafe import Markup
+
 from odoo import models, fields, api
+from odoo.tools.mail import html2plaintext
 
 RFQ_MAIL_BODY_HTML = """\
 <div style="margin:0;padding:0;font-size:13px;">
@@ -149,6 +152,27 @@ class PurchaseOrderExt(models.Model):
             return candidate
         return self.env.lang
 
+    def _get_rfq_mail_signature_html(self):
+        """Подпись после таблицы: не в теле композера, а в layout SMTP."""
+        self.ensure_one()
+        signer = (self.get_rfq_mail_signer_name() or "").strip()
+        if signer:
+            line = 'С уважением, %s ООО "Теплосервис-Комплект"' % signer
+        else:
+            line = 'С уважением, ООО "Теплосервис-Комплект"'
+        return Markup(
+            '<p style="margin:16px 0 0 0;font-size:13px;">%s</p>'
+        ) % line
+
+    def _rfq_posted_body_has_signature(self, message, msg_vals=False):
+        """True если композер не вырезал «С уважением» из тела."""
+        body = ""
+        if msg_vals and "body" in msg_vals:
+            body = msg_vals.get("body") or ""
+        elif message:
+            body = message.body or ""
+        return "с уважением" in html2plaintext(body).lower()
+
     @api.model
     def _setup_rfq_copy_mail_template(self):
         """Копия заявки на партнёра компании (675001@mail.ru на prod)."""
@@ -243,7 +267,7 @@ class PurchaseOrderExt(models.Model):
         force_email_lang=False,
         force_record_name=False,
     ):
-        """RFQ: без номера P00xxx и срока рядом с кнопкой портала."""
+        """RFQ: без P00xxx/срока; подпись в layout, если композер вырезал тело."""
         render_context = super()._notify_by_email_prepare_rendering_context(
             message,
             msg_vals=msg_vals,
@@ -252,6 +276,27 @@ class PurchaseOrderExt(models.Model):
             force_email_lang=force_email_lang,
             force_record_name=force_record_name,
         )
-        if self.state in ("draft", "sent"):
-            render_context["subtitles"] = []
+        if not self._is_rfq_outgoing_mail():
+            return render_context
+        render_context["subtitles"] = []
+        if self._rfq_posted_body_has_signature(message, msg_vals=msg_vals):
+            render_context["email_add_signature"] = False
+            render_context["signature"] = Markup("")
+        else:
+            render_context["email_add_signature"] = True
+            render_context["signature"] = self._get_rfq_mail_signature_html()
         return render_context
+
+    def _notify_by_email_render_layout(
+        self, message, recipients_group, msg_vals=False, render_values=None
+    ):
+        """RFQ: базовый layout, иначе responsible_signature глотает подпись у admin."""
+        if self._is_rfq_outgoing_mail():
+            msg_vals = dict(msg_vals or {})
+            msg_vals["email_layout_xmlid"] = "mail.mail_notification_layout"
+        return super()._notify_by_email_render_layout(
+            message,
+            recipients_group,
+            msg_vals=msg_vals,
+            render_values=render_values,
+        )

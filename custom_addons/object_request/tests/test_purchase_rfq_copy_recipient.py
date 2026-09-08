@@ -161,6 +161,54 @@ class TestPurchaseRfqCopyRecipient(TransactionCase):
         ctx = po._notify_by_email_prepare_rendering_context(message)
         self.assertFalse(ctx.get("subtitles"))
 
+    def test_rfq_layout_adds_signature_when_composer_stripped_body(self):
+        po, message = self._make_rfq_and_message()
+        po.user_id = self.env.ref("base.user_admin")
+        message.email_add_signature = False
+        ctx = po._notify_by_email_prepare_rendering_context(message)
+        self.assertTrue(ctx.get("email_add_signature"))
+        signature = str(ctx.get("signature") or "")
+        self.assertIn("С уважением,", signature)
+        self.assertIn("Сергей", signature)
+        self.assertIn("Теплосервис-Комплект", signature)
+        self.assertNotIn("Administrator", signature)
+        self.assertNotIn("OdooBot", signature)
+
+    def test_rfq_layout_skips_duplicate_if_body_already_signed(self):
+        po, message = self._make_rfq_and_message()
+        message.body = (
+            '<p>С уважением, Сергей ООО "Теплосервис-Комплект"</p>'
+        )
+        ctx = po._notify_by_email_prepare_rendering_context(message)
+        self.assertFalse(ctx.get("email_add_signature"))
+        self.assertNotIn("Сергей", str(ctx.get("signature") or ""))
+
+    def test_rfq_rendered_email_contains_signature_after_table(self):
+        po, message = self._make_rfq_and_message()
+        po.user_id = self.env.ref("base.user_admin")
+        message.email_add_signature = False
+        message.email_layout_xmlid = (
+            "mail.mail_notification_layout_with_responsible_signature"
+        )
+        ctx = po._notify_by_email_prepare_rendering_context(message)
+        group = {
+            "active": True,
+            "has_button_access": False,
+            "button_access": {"url": "#", "title": "View"},
+            "notification_group_name": "rfq_vendor_and_company_copy",
+            "recipients_data": [],
+            "recipients_ids": [po.partner_id.id],
+            "recipients_emails": [],
+        }
+        html = po._notify_by_email_render_layout(
+            message, group, render_values=ctx
+        )
+        self.assertIn("С уважением,", html)
+        self.assertIn("Сергей", html)
+        self.assertIn("Теплосервис-Комплект", html)
+        self.assertNotIn("/my/purchase/", html)
+        self.assertGreater(html.find("С уважением"), html.find("test"))
+
     def _pdata(self, partner, lang, recipient_type="customer"):
         return {
             "id": partner.id,

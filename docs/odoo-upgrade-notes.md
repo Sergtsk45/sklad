@@ -31,7 +31,7 @@
 
 ## UPG-001 — Письмо RFQ без кнопки портала и шапки P00xxx
 
-- **Статус**: актуально на Odoo 19 (`object_request` `19.0.1.10.29`, 2026-09-02)
+- **Статус**: актуально на Odoo 19 (`object_request` `19.0.1.10.30`, 2026-09-08)
 - **Зачем**: поставщику не нужна кнопка «Посмотреть предложение»
   (`/my/purchase/<id>` + персональный токен), номер заказа и срок в шапке письма.
   Нужны только тема «Заявка на счёт», таблица позиций и подпись
@@ -48,7 +48,8 @@
 |-------|-----------|
 | `_notify_get_recipients_groups` | Для `state` в `draft` / `sent` у всех групп `has_button_access=False`. Первая группа `rfq_vendor_and_company_copy` — вендор и партнёр компании в одном layout. |
 | `_notify_get_classified_recipients_iterator` | Для RFQ один `lang` (язык партнёра компании). Иначе вендор `en_US` и ТСК `ru_RU` получают разный HTML. |
-| `_notify_by_email_prepare_rendering_context` | Для RFQ `subtitles = []` (иначе рядом с кнопкой остаются P00xxx и «Срок исполнения заказа»). |
+| `_notify_by_email_prepare_rendering_context` | Для RFQ `subtitles = []`. Если в теле нет «С уважением», в `signature` пишется HTML подписи (композер её вырезает). |
+| `_notify_by_email_render_layout` | Для RFQ xmlid = `mail.mail_notification_layout`. Иначе `…_with_responsible_signature` у superuser не рисует подпись. |
 | `_setup_rfq_copy_mail_template` | Пишет стандартный `purchase.email_template_edi_purchase` (noupdate): `partner_to` = вендор + `company_id.partner_id`, свой `body_html`. Вызов из `data/purchase_mail_template.xml` при `-u`. |
 | `_message_get_default_recipients` | Копия на партнёра компании, если у него есть email. |
 
@@ -64,7 +65,7 @@
 |-------|----------------|
 | `purchase/models/purchase_order.py` | `_notify_get_recipients_groups` (группа `portal_customer`, title View Quotation / View Order, URL `get_confirm_url()`); `_notify_by_email_prepare_rendering_context` (subtitles: имя записи + срок); `action_rfq_send` → `default_email_layout_xmlid` = `mail.mail_notification_layout_with_responsible_signature`. |
 | `mail/models/mail_thread.py` | `_notify_get_classified_recipients_iterator` (сначала группировка по `partner.lang`, потом группы); `_notify_thread_by_email` — одно `mail.mail` на группу+lang. |
-| `mail/data/mail_templates_email_layouts.xml` | Шапка: `has_button_access` + `subtitles`. Без кнопки шапка с номером/сроком тоже скрывается (`show_header`). |
+| `mail/data/mail_templates_email_layouts.xml` | Шапка: `has_button_access` + `subtitles`. Без кнопки шапка с номером/сроком тоже скрывается (`show_header`). `mail_notification_layout_with_responsible_signature` подменяет `signature` на `user_id.signature` и пропускает superuser — для RFQ принудительно базовый layout. |
 | `mail.template` xmlid `purchase.email_template_edi_purchase` | noupdate: при установке 20 шаблон ядра может не перезаписаться нашим XML, зато `-u object_request` снова вызовет `_setup_rfq_copy_mail_template`. |
 
 ### Что сделать на Odoo 20
