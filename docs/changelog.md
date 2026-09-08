@@ -5,6 +5,10 @@
   Теперь при «Отправить запрос» подпись вставляется в
   `mail.mail_notification_layout` после таблицы, одинаково вендору и
   Теплосервис (`675001@mail.ru`). `object_request` `19.0.1.10.30`.
+- Prod deploy `9c4e812`: backup
+  `/opt/project_odoo/backups/or-rfq-layout-signature-20260908-013851/`,
+  `-u object_request` → `19.0.1.10.30`, restart; health `pass`, `/web/login`
+  HTTP 200.
 
 ## [2026-09-02] — RFQ: копия Теплосервис = то же письмо, что поставщику
 

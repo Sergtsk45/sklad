@@ -1,5 +1,5 @@
 ## Задача: Закупки — подпись RFQ в layout, не только в теле композера
-- **Статус**: В процессе (локально `19.0.1.10.30`; prod `19.0.1.10.29`)
+- **Статус**: Задеплоена на prod 2026-09-08 (`9c4e812`, `19.0.1.10.30`)
 - **Описание**: HTML-композер вырезает «С уважением, …» из тела, а layout
   `responsible_signature` у admin/superuser ничего не подставляет. Подпись
   нужно вставлять в базовый `mail.mail_notification_layout` при отправке,
@@ -8,7 +8,7 @@
   - [x] `_get_rfq_mail_signature_html` + layout, если тела уже нет подписи.
   - [x] RFQ render через `mail.mail_notification_layout`.
   - [x] Тесты `or_rfq_copy`.
-  - [ ] `-u object_request` на prod до `19.0.1.10.30`.
+  - [x] `-u object_request` на prod до `19.0.1.10.30`.
 - **Зависимости**: `object_request`, `mail`, `purchase`.
 
 ## Задача: Закупки — копия RFQ совпадает с письмом поставщику
