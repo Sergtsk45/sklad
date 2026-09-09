@@ -1,10 +1,11 @@
 ## Задача: Prod SMTP — DNS smtp.mail.ru
-- **Статус**: Завершена
+- **Статус**: Задеплоена на prod 2026-09-09 (`eeaac45`)
 - **Описание**: RFQ с VPS падали с `Temporary failure in name resolution`.
 - **Шаги выполнения**:
   - [x] Диагностика: в контейнере `odoo` `getaddrinfo(smtp.mail.ru)` → EAI_AGAIN.
   - [x] `dns` + `extra_hosts` в `docker-compose.yml`, recreate на VPS.
   - [x] Повторная отправка письма P00126: оба получателя Delivered.
+  - [x] Push `eeaac45` + pull/recreate Odoo на VPS; DNS и health OK.
 - **Зависимости**: `docker-compose.yml`, Mail.ru SMTP.
 
 ## Задача: Закупки — подпись RFQ в layout, не только в теле композера

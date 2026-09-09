@@ -7,6 +7,10 @@
   `dns: 8.8.8.8/1.1.1.1` и `extra_hosts` для Mail.ru / Яндекс SMTP;
   контейнер пересоздан. Письмо «Заявка на счёт» P00126 повторно отправлено,
   уведомления Амурстрой и ТСК — Delivered.
+- Prod deploy `eeaac45`: `git pull` (локальный compose на VPS stashed),
+  `docker compose up -d --force-recreate odoo`; в контейнере
+  `smtp.mail.ru` → `217.69.139.160`, health `pass`, `/web/login` HTTP 200.
+  Модули не обновлялись (`-u` не нужен).
 
 ## [2026-09-08] — RFQ: «С уважением,» снова в письме поставщику и в копии
 
