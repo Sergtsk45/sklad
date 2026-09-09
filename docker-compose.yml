@@ -28,6 +28,12 @@ services:
       - odoo-web-data:/var/lib/odoo
       - ./config/odoo.conf:/etc/odoo/odoo.conf:ro
       - ./custom_addons:/mnt/extra-addons:rw
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    extra_hosts:
+      - "smtp.mail.ru:217.69.139.160"
+      - "smtp.yandex.ru:77.88.21.158"
     networks:
       - internal
       - n8n_web

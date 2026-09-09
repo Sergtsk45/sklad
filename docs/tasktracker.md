@@ -1,3 +1,12 @@
+## Задача: Prod SMTP — DNS smtp.mail.ru
+- **Статус**: Завершена
+- **Описание**: RFQ с VPS падали с `Temporary failure in name resolution`.
+- **Шаги выполнения**:
+  - [x] Диагностика: в контейнере `odoo` `getaddrinfo(smtp.mail.ru)` → EAI_AGAIN.
+  - [x] `dns` + `extra_hosts` в `docker-compose.yml`, recreate на VPS.
+  - [x] Повторная отправка письма P00126: оба получателя Delivered.
+- **Зависимости**: `docker-compose.yml`, Mail.ru SMTP.
+
 ## Задача: Закупки — подпись RFQ в layout, не только в теле композера
 - **Статус**: Задеплоена на prod 2026-09-08 (`9c4e812`, `19.0.1.10.30`)
 - **Описание**: HTML-композер вырезает «С уважением, …» из тела, а layout
