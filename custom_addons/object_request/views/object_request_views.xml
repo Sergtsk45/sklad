@@ -11,9 +11,11 @@
             <search string="Требования на комплектацию">
 
                 <!-- Поиск по умолчанию -->
-                <field name="name" string="Номер документа"/>
+                <field name="name" string="Номер документа"
+                    filter_domain="['|', ('name', 'ilike', self), ('comment', 'ilike', self)]"/>
                 <field name="project_id" string="Объект"/>
                 <field name="foreman_user_id" string="Прораб"/>
+                <field name="comment" string="Комментарий"/>
 
                 <!-- Фильтры -->
                 <filter
@@ -118,6 +120,7 @@
                     decoration-danger="line_problem_count &gt; 0"
                     optional="show"
                 />
+                <field name="comment" string="Комментарий" optional="show"/>
                 <field name="matching_state" column_invisible="1"/>
                 <field name="create_date" string="Дата создания" optional="hide"/>
                 <field name="buyer_user_id" string="Снабженец" optional="hide"/>
