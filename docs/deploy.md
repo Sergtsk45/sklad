@@ -370,6 +370,24 @@ docker run --rm -v odoo-web-data:/data -v "$PWD":/backup alpine \
 
 ## 7) Частые проблемы
 
+### RFQ / SMTP не уходит (копия ТСК пустая)
+
+**Симптом:** в закупке «RFQ Sent», письма нет ни у поставщика, ни на
+`675001@mail.ru`. Статус PO не равен доставке SMTP.
+
+**Причина (2026-09-09):** контейнер `odoo` на VPS не резолвил `smtp.mail.ru`
+(`Temporary failure in name resolution`). Сеть `odoo_internal` (`internal: true`)
+ломает Docker DNS. В Odoo: `mail.mail` = `exception`.
+
+**Фикс:** в `docker-compose.yml` у `odoo` — `dns: 8.8.8.8/1.1.1.1` и
+`extra_hosts` для `smtp.mail.ru` / `smtp.yandex.ru`; на VPS
+`docker compose up -d odoo --force-recreate`. Повтор письма: сбросить
+`mail.mail` в `outgoing` и `send()`.
+
+**Копия ТСК:** From = To = `675001@mail.ru` — смотреть «Отправленные», не только
+«Входящие». SSH: `ssh -i ~/.ssh/vps_deploy.pem ubuntu@195.209.210.27`,
+каталог `/opt/project_odoo`.
+
 ### Let’s Encrypt не выдаёт сертификат
 
 Проверь:
