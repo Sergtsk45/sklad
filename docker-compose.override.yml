@@ -1,0 +1,5 @@
+services:
+  odoo:
+    build:
+      context: .
+    image: project-odoo-odoo:latest

@@ -15,7 +15,7 @@ class ObjectRequestProject(models.Model):
         tracking=True,
         copy=False,
         readonly=True,
-        size=5,
+        size=10,
     )
     partner_id = fields.Many2one("res.partner", string="Заказчик")
     address = fields.Char(string="Адрес")
@@ -40,6 +40,21 @@ class ObjectRequestProject(models.Model):
         "object.request",
         "project_id",
         string="Требования",
+    )
+    capture_ids = fields.One2many(
+        "object.request.project.capture",
+        "project_id",
+        string="Захватки",
+    )
+    floor_ids = fields.One2many(
+        "object.request.project.floor",
+        "project_id",
+        string="Этажи",
+    )
+    section_ids = fields.One2many(
+        "object.request.project.section",
+        "project_id",
+        string="Участки",
     )
     request_count = fields.Integer(
         compute="_compute_request_count",
@@ -157,9 +172,42 @@ class ObjectRequestProject(models.Model):
         self.ensure_one()
         return {
             "name": f"{self.name} склад",
-            "code": self.code,
+            "code": self._get_unique_project_warehouse_code(self.code),
             "company_id": self.company_id.id,
         }
+
+    def _get_unique_project_warehouse_code(
+        self,
+        base_code,
+        exclude_warehouse=False,
+    ):
+        """Вернуть детерминированный свободный код склада для компании."""
+        self.ensure_one()
+        Warehouse = self.env["stock.warehouse"].with_context(
+            active_test=False
+        ).sudo()
+        base = (base_code or "OBJ").strip()[:5] or "OBJ"
+        domain_base = [("company_id", "=", self.company_id.id)]
+        if exclude_warehouse:
+            domain_base.append(("id", "!=", exclude_warehouse.id))
+        if not Warehouse.search_count(domain_base + [("code", "=", base)]):
+            return base
+
+        alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        for number in range(1, len(alphabet) ** 2):
+            suffix = ""
+            value = number
+            while value:
+                value, remainder = divmod(value, len(alphabet))
+                suffix = alphabet[remainder] + suffix
+            candidate = f"{base[:5 - len(suffix)]}{suffix}"
+            if not Warehouse.search_count(
+                domain_base + [("code", "=", candidate)]
+            ):
+                return candidate
+        raise ValidationError(
+            "Не удалось подобрать свободный код склада объекта."
+        )
 
     def _sync_warehouse_name(self):
         for rec in self.filtered("warehouse_id"):
@@ -167,7 +215,14 @@ class ObjectRequestProject(models.Model):
 
     def _sync_warehouse_code(self):
         for rec in self.filtered("warehouse_id"):
-            rec.warehouse_id.sudo().write({"code": rec.code})
+            rec.warehouse_id.sudo().write(
+                {
+                    "code": rec._get_unique_project_warehouse_code(
+                        rec.code,
+                        exclude_warehouse=rec.warehouse_id,
+                    ),
+                }
+            )
 
     def _sync_warehouse_company(self):
         for rec in self.filtered("warehouse_id"):

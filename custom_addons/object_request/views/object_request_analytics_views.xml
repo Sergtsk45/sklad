@@ -65,8 +65,8 @@
                 <field name="matching_state" type="row"/>
                 <field name="procurement_mode" type="col"/>
                 <field name="qty_requested" type="measure" string="Запрошено"/>
-                <field name="qty_issued" type="measure" string="Выдано"/>
-                <field name="qty_to_buy" type="measure" string="К закупке"/>
+                <field name="qty_issued" type="measure" string="Обеспечено"/>
+                <field name="qty_to_buy" type="measure" string="К закупке (план)"/>
             </pivot>
         </field>
     </record>

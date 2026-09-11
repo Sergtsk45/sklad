@@ -60,6 +60,7 @@ class TestObr008MatchingUI(TransactionCase):
             self.line.matching_required,
             "matching_required должен сбрасываться при выборе товара",
         )
+        self.assertEqual(self.line.matching_source, "manual")
 
     def test_onchange_product_fills_uom(self):
         """onchange product_id заполняет uom_id из товара."""

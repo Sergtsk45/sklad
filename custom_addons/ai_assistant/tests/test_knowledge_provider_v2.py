@@ -214,6 +214,17 @@ class TestKnowledgeProviderV2(TransactionCase):
 
         self.assertIn('Поступления', result)
 
+    def test_search_docs_includes_supply_cycle_context(self):
+        """Supply-cycle context должен находиться для action modules."""
+        self.provider._term_mapping = {}
+        for module in ('purchase', 'stock', 'object_request'):
+            self.provider._docs_index = None
+            result = self.provider._search_docs(
+                module, 'как создать закупку на ОбМ-4'
+            )
+            self.assertIn('Правильный план PO', result)
+            self.assertIn('УТ-1132', result)
+
     def test_search_docs_respects_max_chars(self):
         """Результат не должен превышать MAX_DOCS_CHARS."""
         long_md = '## Раздел\n' + ('x' * MAX_DOCS_CHARS * 2)

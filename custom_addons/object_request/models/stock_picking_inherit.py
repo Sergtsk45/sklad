@@ -31,6 +31,25 @@ class StockPickingInherit(models.Model):
         for rec in self:
             rec.object_request_count = len(rec.object_request_ids)
 
+    def _get_issue_report_filename(self):
+        """Имя PDF расходной накладной: номер, склад, объект назначения."""
+        self.ensure_one()
+        warehouse = self.picking_type_id.warehouse_id
+        warehouse_name = (
+            warehouse.display_name
+            if warehouse
+            else (self.location_id.display_name if self.location_id else "")
+        )
+        project = self.object_request_project_id
+        if not project and self.object_request_ids:
+            project = self.object_request_ids[:1].project_id
+        project_name = project.display_name if project else ""
+        return "Расходная накладная №%s%s%s" % (
+            self.name or "",
+            " %s" % warehouse_name if warehouse_name else "",
+            " %s" % project_name if project_name else "",
+        )
+
     def action_open_object_requests(self):
         self.ensure_one()
         if len(self.object_request_ids) == 1:
@@ -51,41 +70,53 @@ class StockPickingInherit(models.Model):
             "target": "current",
         }
 
-    # --- OBR-012: синхронизация qty_issued после подтверждения выдачи ---
+    # --- OBR-012: синхронизация обеспечения после подтверждения движения ---
 
     def _action_done(self):
-        """После подтверждения выдачи обновить qty_issued в строках."""
+        """После подтверждения выдачи/прихода обновить qty_issued."""
         result = super()._action_done()
         request_issues = self.filtered(lambda p: p.is_object_request_issue)
         if request_issues:
             request_issues._sync_qty_issued_to_request_lines()
+        purchase_receipts = self.filtered(
+            lambda p: p.picking_type_id.code == "incoming"
+            and p.move_ids.purchase_line_id
+        )
+        if purchase_receipts:
+            purchase_receipts._sync_qty_issued_to_request_lines()
         return result
 
     def _sync_qty_issued_to_request_lines(self):
         """Обновить qty_issued строк требования по done-количеству."""
+        request_lines = self.env["object.request.line"]
+        request_lines |= self._request_lines_from_issue_pickings()
+        request_lines |= self._request_lines_from_purchase_receipts()
+        request_lines.recompute_supply_state_from_done_moves()
+        for request in request_lines.mapped("request_id"):
+            request._notify_if_all_lines_supplied()
+
+    def _request_lines_from_issue_pickings(self):
+        lines = self.env["object.request.line"]
         for picking in self:
             stock_lines = self.env["object.request.line.stock"].search(
                 [
                     ("picking_id", "=", picking.id),
                 ]
             )
-            request_lines = stock_lines.mapped("line_id") or self.env[
-                "object.request.line"
-            ].search(
+            lines |= stock_lines.mapped("line_id")
+            lines |= self.env["object.request.line"].search(
                 [
                     ("issue_picking_id", "=", picking.id),
                 ]
             )
-            for line in request_lines:
-                issue_moves = (
-                    line.stock_ids.mapped("move_id").filtered(
-                        lambda move: move.exists()
-                    )
-                    or line.issue_move_id
-                )
-                if not issue_moves:
-                    continue
-                qty_done = sum(issue_moves.mapped("quantity"))
-                line.write({"qty_issued": qty_done})
-            for request in picking.object_request_ids:
-                request._notify_if_all_lines_supplied()
+        return lines
+
+    def _request_lines_from_purchase_receipts(self):
+        purchase_lines = self.move_ids.purchase_line_id
+        if not purchase_lines:
+            return self.env["object.request.line"]
+        return self.env["object.request.line"].search(
+            [
+                ("purchase_order_line_id", "in", purchase_lines.ids),
+            ]
+        )

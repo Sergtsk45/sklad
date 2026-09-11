@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+@file: purchase_mail_template.xml
+@description: При upgrade пишет получателей RFQ (noupdate шаблона purchase).
+@dependencies: purchase.email_template_edi_purchase
+@created: 2026-08-24
+-->
+<odoo>
+    <function model="purchase.order" name="_setup_rfq_copy_mail_template"/>
+</odoo>

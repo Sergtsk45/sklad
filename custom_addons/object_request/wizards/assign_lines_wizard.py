@@ -52,6 +52,7 @@ class ObjectRequestLineAssignWizard(models.TransientModel):
                     "product_id": self.product_id.id,
                     "uom_id": self.product_id.uom_id.id,
                     "matching_required": False,
+                    "matching_source": "manual",
                 }
             )
         return {"type": "ir.actions.act_window_close"}

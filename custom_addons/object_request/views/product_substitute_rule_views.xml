@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_object_request_product_substitute_rule_search" model="ir.ui.view">
+        <field name="name">object.request.product.substitute.rule.search</field>
+        <field name="model">object.request.product.substitute.rule</field>
+        <field name="arch" type="xml">
+            <search string="Правила аналогов">
+                <field name="product_id"/>
+                <field name="substitute_product_id"/>
+                <field name="company_id"/>
+                <filter
+                    name="filter_active"
+                    string="Активные"
+                    domain="[('active', '=', True)]"
+                />
+                <filter
+                    name="filter_archived"
+                    string="Архивные"
+                    domain="[('active', '=', False)]"
+                />
+                <separator/>
+                <filter
+                    name="group_product"
+                    string="Исходный товар"
+                    context="{'group_by': 'product_id'}"
+                />
+                <filter
+                    name="group_substitute"
+                    string="Аналог"
+                    context="{'group_by': 'substitute_product_id'}"
+                />
+                <filter
+                    name="group_company"
+                    string="Компания"
+                    context="{'group_by': 'company_id'}"
+                />
+            </search>
+        </field>
+    </record>
+
+    <record id="view_object_request_product_substitute_rule_list" model="ir.ui.view">
+        <field name="name">object.request.product.substitute.rule.list</field>
+        <field name="model">object.request.product.substitute.rule</field>
+        <field name="arch" type="xml">
+            <list string="Правила аналогов">
+                <field name="active" widget="boolean_toggle"/>
+                <field name="product_id"/>
+                <field name="substitute_product_id"/>
+                <field name="direction"/>
+                <field name="confirmation_policy"/>
+                <field name="reason"/>
+                <field name="company_id"/>
+                <field name="confirmed_by"/>
+                <field name="confirmed_date"/>
+                <field name="usage_count"/>
+                <field name="last_used_date"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_object_request_product_substitute_rule_form" model="ir.ui.view">
+        <field name="name">object.request.product.substitute.rule.form</field>
+        <field name="model">object.request.product.substitute.rule</field>
+        <field name="arch" type="xml">
+            <form string="Правило аналога">
+                <sheet>
+                    <group>
+                        <field name="active"/>
+                        <field name="company_id"/>
+                    </group>
+                    <group>
+                        <field name="product_id"/>
+                        <field name="substitute_product_id"/>
+                        <field name="direction"/>
+                        <field name="confirmation_policy"/>
+                    </group>
+                    <group>
+                        <field name="reason"/>
+                        <field name="note"/>
+                    </group>
+                    <group string="Подтверждение и использование">
+                        <field name="confirmed_by" readonly="1"/>
+                        <field name="confirmed_date" readonly="1"/>
+                        <field name="usage_count" readonly="1"/>
+                        <field name="last_used_date" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_object_request_product_substitute_rule" model="ir.actions.act_window">
+        <field name="name">Правила аналогов</field>
+        <field name="res_model">object.request.product.substitute.rule</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_object_request_product_substitute_rule_search"/>
+        <field name="context">{'search_default_filter_active': 1}</field>
+    </record>
+
+    <record id="view_product_product_form_object_request_substitutes" model="ir.ui.view">
+        <field name="name">product.product.form.object.request.substitutes</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_normal_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button
+                    name="%(action_object_request_product_substitute_rule)d"
+                    type="action"
+                    class="oe_stat_button"
+                    icon="fa-exchange"
+                    string="Аналоги"
+                    context="{
+                        'default_product_id': id,
+                        'search_default_product_id': id
+                    }"
+                    groups="object_request.group_supply_manager"
+                />
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

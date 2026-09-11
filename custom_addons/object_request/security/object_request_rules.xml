@@ -12,6 +12,28 @@
         <field name="perm_unlink" eval="True"/>
     </record>
 
+    <record id="rule_object_request_line_foreman_own" model="ir.rule">
+        <field name="name">Object Request Line: Прораб — только свои документы</field>
+        <field name="model_id" ref="model_object_request_line"/>
+        <field name="groups" eval="[(4, ref('object_request.group_foreman'))]"/>
+        <field name="domain_force">[('request_id.foreman_user_id', '=', user.id)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <record id="rule_object_request_line_stock_foreman_own" model="ir.rule">
+        <field name="name">Object Request Line Stock: Прораб — только свои документы</field>
+        <field name="model_id" ref="model_object_request_line_stock"/>
+        <field name="groups" eval="[(4, ref('object_request.group_foreman'))]"/>
+        <field name="domain_force">[('line_id.request_id.foreman_user_id', '=', user.id)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
     <!-- Снабженец — без ограничений, видит все документы (правило не нужно) -->
 
     <!-- Record rule: Кладовщик видит только документы в статусе «В работе» -->
@@ -20,6 +42,28 @@
         <field name="model_id" ref="model_object_request"/>
         <field name="groups" eval="[(4, ref('object_request.group_storekeeper'))]"/>
         <field name="domain_force">[('state', '=', 'in_progress')]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <record id="rule_object_request_line_storekeeper_in_progress" model="ir.rule">
+        <field name="name">Object Request Line: Кладовщик — только документы в работе</field>
+        <field name="model_id" ref="model_object_request_line"/>
+        <field name="groups" eval="[(4, ref('object_request.group_storekeeper'))]"/>
+        <field name="domain_force">[('request_id.state', '=', 'in_progress')]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <record id="rule_object_request_line_stock_storekeeper_in_progress" model="ir.rule">
+        <field name="name">Object Request Line Stock: Кладовщик — только документы в работе</field>
+        <field name="model_id" ref="model_object_request_line_stock"/>
+        <field name="groups" eval="[(4, ref('object_request.group_storekeeper'))]"/>
+        <field name="domain_force">[('line_id.request_id.state', '=', 'in_progress')]</field>
         <field name="perm_read" eval="True"/>
         <field name="perm_write" eval="True"/>
         <field name="perm_create" eval="True"/>

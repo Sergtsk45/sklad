@@ -4,7 +4,10 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 from odoo.fields import Domain
 
-from .product_search_utils import normalize_product_search_text
+from .product_search_utils import (
+    normalize_product_search_text,
+    russian_morphology_search_tokens,
+)
 
 
 POSITIVE_NAME_SEARCH_OPERATORS = ('=', 'ilike', '=ilike', 'like', '=like')
@@ -101,7 +104,19 @@ class ProductProduct(models.Model):
             search_domain &= Domain('qty_available', '>', 0)
 
         products = product_model.search(search_domain, limit=search_limit)
-        return products.read([
+        match_type = 'exact'
+        if not products:
+            morphology_domain = (
+                product_model._get_morphology_product_search_domain(query)
+            )
+            if not morphology_domain.is_false():
+                if only_available:
+                    morphology_domain &= Domain('qty_available', '>', 0)
+                products = product_model.search(
+                    morphology_domain, limit=search_limit
+                )
+                match_type = 'morphology'
+        result = products.read([
             'id',
             'display_name',
             'default_code',
@@ -109,6 +124,9 @@ class ProductProduct(models.Model):
             'qty_available',
             'uom_id',
         ])
+        for item in result:
+            item['match_type'] = match_type
+        return result
 
     @api.model
     def _get_normalized_product_search_domain(self, query, operator='ilike'):
@@ -123,6 +141,18 @@ class ProductProduct(models.Model):
             Domain('x_search_name', 'ilike', normalized),
             Domain('product_tmpl_id.x_search_name', 'ilike', normalized),
         ]
+        skip_supplier_search = self.env.context.get(
+            'object_request_skip_global_supplier_search'
+        )
+        if not skip_supplier_search:
+            # Артикул поставщика (product.supplierinfo), точное совпадение
+            search_domains.append(
+                Domain(
+                    'product_tmpl_id.seller_ids.product_code',
+                    '=ilike',
+                    query,
+                )
+            )
 
         token_domain = self._get_normalized_token_search_domain(normalized)
         if not token_domain.is_false():
@@ -145,6 +175,21 @@ class ProductProduct(models.Model):
             for token in tokens
         ])
         return Domain.OR([product_token_domain, template_token_domain])
+
+    @api.model
+    def _get_morphology_product_search_domain(self, query):
+        """Require every conservative stem; never used while exact hits exist."""
+        stems = russian_morphology_search_tokens(query)
+        if not stems or stems == normalize_product_search_text(query).split():
+            return Domain.FALSE
+        product_domain = Domain.AND([
+            Domain('x_search_name', 'ilike', stem) for stem in stems
+        ])
+        template_domain = Domain.AND([
+            Domain('product_tmpl_id.x_search_name', 'ilike', stem)
+            for stem in stems
+        ])
+        return Domain.OR([product_domain, template_domain])
 
     @api.model
     def _get_remaining_search_limit(self, limit, results):

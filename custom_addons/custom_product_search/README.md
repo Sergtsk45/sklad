@@ -100,7 +100,11 @@ docker exec odoo19-local odoo --test-enable -u custom_product_search -d odoo19_l
 ```text
 default_code
 barcode
+артикул поставщика (product.supplierinfo.product_code)
 ```
+
+Пример: товар с каноническим именем «Отвод ПП…» и vendor code `00-00036296`
+должен находиться по запросу `00-00036296`.
 
 ## Ограничения MVP
 

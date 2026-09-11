@@ -12,7 +12,8 @@ services:
       - odoo19-local-db-data:/var/lib/postgresql/data
 
   odoo:
-    image: odoo:19.0
+    build: .
+    image: odoo19-local-custom
     container_name: odoo19-local
     restart: unless-stopped
     depends_on:

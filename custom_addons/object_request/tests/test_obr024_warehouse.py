@@ -34,16 +34,7 @@ class TestObr024Warehouse(TransactionCase):
                 "is_storable": True,
             }
         )
-        self.warehouse = (
-            self.env["stock.warehouse"].search(
-                [
-                    ("company_id", "=", self.env.company.id),
-                    ("id", "!=", self.project.warehouse_id.id),
-                ],
-                limit=1,
-            )
-            or self.project.warehouse_id
-        )
+        self.warehouse = self.project.warehouse_id
         self.vendor = self.env["res.partner"].create(
             {
                 "name": "Поставщик OBR024",

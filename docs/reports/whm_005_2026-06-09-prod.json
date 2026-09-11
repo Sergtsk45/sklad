@@ -1,0 +1,612 @@
+{
+  "before": {
+    "created_at": "2026-06-08T21:44:30Z",
+    "database": "odoo19",
+    "warehouses": [
+      {
+        "id": 8,
+        "code": "ОбМ-1",
+        "name": "Амурком (Островского 234)",
+        "active": true,
+        "view_location_id": 51,
+        "lot_stock_id": 52,
+        "in_type_id": 57,
+        "int_type_id": 63,
+        "quant_count": 11,
+        "quant_total": 38.0,
+        "picking_type_ids": [
+          57,
+          63
+        ],
+        "picking_count": 2,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 11,
+        "code": "ОбМ-3",
+        "name": "Ленина 231",
+        "active": true,
+        "view_location_id": 69,
+        "lot_stock_id": 70,
+        "in_type_id": 81,
+        "int_type_id": 87,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [
+          81,
+          87,
+          82
+        ],
+        "picking_count": 0,
+        "purchase_order_count": 1
+      },
+      {
+        "id": 12,
+        "code": "X001",
+        "name": "Амурком [архив O001] склад",
+        "active": false,
+        "view_location_id": 75,
+        "lot_stock_id": 76,
+        "in_type_id": 137,
+        "int_type_id": 139,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [],
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 13,
+        "code": "X002",
+        "name": "База (2-х этажное здание) [архив O002] склад",
+        "active": false,
+        "view_location_id": 81,
+        "lot_stock_id": 82,
+        "in_type_id": 97,
+        "int_type_id": 103,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [],
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 14,
+        "code": "X003",
+        "name": "Изготовления мостов [архив O003] склад",
+        "active": false,
+        "view_location_id": 87,
+        "lot_stock_id": 88,
+        "in_type_id": 105,
+        "int_type_id": 111,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [],
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 15,
+        "code": "X004",
+        "name": "офис [архив O004] склад",
+        "active": false,
+        "view_location_id": 93,
+        "lot_stock_id": 94,
+        "in_type_id": 113,
+        "int_type_id": 119,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [],
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 17,
+        "code": "ОбМ-5",
+        "name": "Северная, 165 т/сеть от гаража до магазина",
+        "active": true,
+        "view_location_id": 105,
+        "lot_stock_id": 106,
+        "in_type_id": 129,
+        "int_type_id": 135,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [
+          129,
+          135,
+          130
+        ],
+        "picking_count": 0,
+        "purchase_order_count": 0
+      }
+    ],
+    "test_warehouse_quant_details": [
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 114,
+        "product": "Отвод 108х4",
+        "quantity": 5.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 112,
+        "product": "Фильтр магнитный фланцевый 100 Ру16",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 113,
+        "product": "Фланец LD плоский кованый 100-10",
+        "quantity": 8.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 115,
+        "product": "Тройник 108х4 ст.",
+        "quantity": 3.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 118,
+        "product": "Резьба 20 длинная L=50мм",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 117,
+        "product": "Резьба 15 длинная L=50мм",
+        "quantity": 3.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 119,
+        "product": "Резьба ду50мм",
+        "quantity": 3.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 120,
+        "product": "Прокладка резина 100 (2мм)",
+        "quantity": 9.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 121,
+        "product": "Болт 16х 70 оцинк",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 122,
+        "product": "Гайка М16 оцинк",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 43,
+        "product": "Батарейка литиевая EEMB ER14505-DP",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      }
+    ],
+    "projects": [
+      {
+        "id": 2,
+        "code": "X001",
+        "name": "Амурком [архив O001]",
+        "active": false,
+        "warehouse_id": 12,
+        "request_count": 1
+      },
+      {
+        "id": 4,
+        "code": "X002",
+        "name": "База (2-х этажное здание) [архив O002]",
+        "active": false,
+        "warehouse_id": 13,
+        "request_count": 1
+      },
+      {
+        "id": 6,
+        "code": "O002",
+        "name": "Б. Хмельницкого, 112",
+        "active": true,
+        "warehouse_id": 16,
+        "request_count": 0
+      },
+      {
+        "id": 3,
+        "code": "X003",
+        "name": "Изготовления мостов [архив O003]",
+        "active": false,
+        "warehouse_id": 14,
+        "request_count": 3
+      },
+      {
+        "id": 5,
+        "code": "O001",
+        "name": "Ломоносова 164",
+        "active": true,
+        "warehouse_id": 10,
+        "request_count": 0
+      },
+      {
+        "id": 1,
+        "code": "X004",
+        "name": "офис [архив O004]",
+        "active": false,
+        "warehouse_id": 15,
+        "request_count": 1
+      }
+    ]
+  },
+  "actions": [
+    {
+      "action": "blocked_archive_warehouse",
+      "warehouse_id": 8,
+      "code": "ОбМ-1",
+      "reason": "You still have ongoing operations for operation types Внутренние переводы in warehouse Амурком (Островского 234)",
+      "quant_count_preserved": 11,
+      "quant_total_preserved": 38.0,
+      "picking_count_preserved": 2,
+      "purchase_order_count_preserved": 0
+    },
+    {
+      "action": "archive_warehouse",
+      "warehouse_id": 11,
+      "code": "ОбМ-3",
+      "quant_count_preserved": 0,
+      "quant_total_preserved": 0,
+      "picking_count_preserved": 0,
+      "purchase_order_count_preserved": 1
+    },
+    {
+      "action": "archive_warehouse",
+      "warehouse_id": 17,
+      "code": "ОбМ-5",
+      "quant_count_preserved": 0,
+      "quant_total_preserved": 0,
+      "picking_count_preserved": 0,
+      "purchase_order_count_preserved": 0
+    }
+  ],
+  "validations": [
+    {
+      "code": "ОбМ-1",
+      "warehouse_id": 8,
+      "active": true,
+      "ok": false
+    },
+    {
+      "code": "ОбМ-3",
+      "warehouse_id": 11,
+      "active": false,
+      "ok": true
+    },
+    {
+      "code": "ОбМ-5",
+      "warehouse_id": 17,
+      "active": false,
+      "ok": true
+    }
+  ],
+  "after": {
+    "created_at": "2026-06-08T21:44:30Z",
+    "database": "odoo19",
+    "warehouses": [
+      {
+        "id": 8,
+        "code": "ОбМ-1",
+        "name": "Амурком (Островского 234)",
+        "active": true,
+        "view_location_id": 51,
+        "lot_stock_id": 52,
+        "in_type_id": 57,
+        "int_type_id": 63,
+        "quant_count": 11,
+        "quant_total": 38.0,
+        "picking_type_ids": [
+          57,
+          63
+        ],
+        "picking_count": 2,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 11,
+        "code": "ОбМ-3",
+        "name": "Ленина 231",
+        "active": false,
+        "view_location_id": 69,
+        "lot_stock_id": 70,
+        "in_type_id": 81,
+        "int_type_id": 87,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [],
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 12,
+        "code": "X001",
+        "name": "Амурком [архив O001] склад",
+        "active": false,
+        "view_location_id": 75,
+        "lot_stock_id": 76,
+        "in_type_id": 137,
+        "int_type_id": 139,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [],
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 13,
+        "code": "X002",
+        "name": "База (2-х этажное здание) [архив O002] склад",
+        "active": false,
+        "view_location_id": 81,
+        "lot_stock_id": 82,
+        "in_type_id": 97,
+        "int_type_id": 103,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [],
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 14,
+        "code": "X003",
+        "name": "Изготовления мостов [архив O003] склад",
+        "active": false,
+        "view_location_id": 87,
+        "lot_stock_id": 88,
+        "in_type_id": 105,
+        "int_type_id": 111,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [],
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 15,
+        "code": "X004",
+        "name": "офис [архив O004] склад",
+        "active": false,
+        "view_location_id": 93,
+        "lot_stock_id": 94,
+        "in_type_id": 113,
+        "int_type_id": 119,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [],
+        "picking_count": 0,
+        "purchase_order_count": 0
+      },
+      {
+        "id": 17,
+        "code": "ОбМ-5",
+        "name": "Северная, 165 т/сеть от гаража до магазина",
+        "active": false,
+        "view_location_id": 105,
+        "lot_stock_id": 106,
+        "in_type_id": 129,
+        "int_type_id": 135,
+        "quant_count": 0,
+        "quant_total": 0,
+        "picking_type_ids": [],
+        "picking_count": 0,
+        "purchase_order_count": 0
+      }
+    ],
+    "test_warehouse_quant_details": [
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 114,
+        "product": "Отвод 108х4",
+        "quantity": 5.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 112,
+        "product": "Фильтр магнитный фланцевый 100 Ру16",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 113,
+        "product": "Фланец LD плоский кованый 100-10",
+        "quantity": 8.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 115,
+        "product": "Тройник 108х4 ст.",
+        "quantity": 3.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 118,
+        "product": "Резьба 20 длинная L=50мм",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 117,
+        "product": "Резьба 15 длинная L=50мм",
+        "quantity": 3.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 119,
+        "product": "Резьба ду50мм",
+        "quantity": 3.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 120,
+        "product": "Прокладка резина 100 (2мм)",
+        "quantity": 9.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 121,
+        "product": "Болт 16х 70 оцинк",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 122,
+        "product": "Гайка М16 оцинк",
+        "quantity": 1.0,
+        "reserved_quantity": 0.0
+      },
+      {
+        "warehouse_id": 8,
+        "warehouse_code": "ОбМ-1",
+        "location_id": 52,
+        "location": "ОбМ-1/Склад объекта",
+        "product_id": 43,
+        "product": "Батарейка литиевая EEMB ER14505-DP",
+        "quantity": 2.0,
+        "reserved_quantity": 0.0
+      }
+    ],
+    "projects": [
+      {
+        "id": 2,
+        "code": "X001",
+        "name": "Амурком [архив O001]",
+        "active": false,
+        "warehouse_id": 12,
+        "request_count": 1
+      },
+      {
+        "id": 4,
+        "code": "X002",
+        "name": "База (2-х этажное здание) [архив O002]",
+        "active": false,
+        "warehouse_id": 13,
+        "request_count": 1
+      },
+      {
+        "id": 6,
+        "code": "O002",
+        "name": "Б. Хмельницкого, 112",
+        "active": true,
+        "warehouse_id": 16,
+        "request_count": 0
+      },
+      {
+        "id": 3,
+        "code": "X003",
+        "name": "Изготовления мостов [архив O003]",
+        "active": false,
+        "warehouse_id": 14,
+        "request_count": 3
+      },
+      {
+        "id": 5,
+        "code": "O001",
+        "name": "Ломоносова 164",
+        "active": true,
+        "warehouse_id": 10,
+        "request_count": 0
+      },
+      {
+        "id": 1,
+        "code": "X004",
+        "name": "офис [архив O004]",
+        "active": false,
+        "warehouse_id": 15,
+        "request_count": 1
+      }
+    ]
+  }
+}

@@ -4,43 +4,76 @@ import { registry } from "@web/core/registry";
 import { needsScreenshot } from "./screenshot_trigger";
 
 const SESSION_KEY = "odoo_ai_assistant_session_v1";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 4;
 const MAX_MESSAGES = 50;
 const MAX_BYTES = 100 * 1024; // 100 KB (без скриншотов — они не сохраняются)
 const MAX_SCREENSHOT_BYTES = 500 * 1024; // 500 KB base64
 
 export const aiChatService = {
     start(env) {
-        function loadHistory() {
+        function _readSession() {
             try {
                 const raw = sessionStorage.getItem(SESSION_KEY);
                 if (!raw) {
-                    return [];
+                    return {};
                 }
                 const data = JSON.parse(raw);
+                const version = Number(data && data.version ? data.version : 1);
                 if (
                     !data ||
-                    data.version !== SCHEMA_VERSION ||
-                    !Array.isArray(data.messages)
+                    !Array.isArray(data.messages) ||
+                    version < 1 ||
+                    version > SCHEMA_VERSION
                 ) {
                     sessionStorage.removeItem(SESSION_KEY);
-                    return [];
+                    return {};
                 }
-                return data.messages;
+                return data;
             } catch {
                 sessionStorage.removeItem(SESSION_KEY);
-                return [];
+                return {};
             }
         }
 
-        function saveHistory(messages) {
+        function loadSession() {
+            const data = _readSession();
+            return {
+                messages: data.messages || [],
+                extractionToken: data.extraction_token || null,
+                awaitingPoWarehouse: data.awaiting_po_warehouse === true,
+                purchaseFlow: data.purchase_flow || null,
+                activeReplenishmentToken:
+                    data.active_replenishment_token || null,
+                activeMovingToken: data.active_moving_token || null,
+                activeWorkflowKind: data.active_workflow_kind || null,
+            };
+        }
+
+        function loadHistory() {
+            return loadSession().messages;
+        }
+
+        function saveHistory(messages, state = {}) {
             try {
+                const previous = loadSession();
                 // Никогда не сохраняем скриншоты в историю
-                const clean = messages.map((m) => ({
-                    role: m.role,
-                    content: m.content,
-                    timestamp: m.timestamp,
-                }));
+                const clean = messages.map((m) => {
+                    const msg = {
+                        role: m.role,
+                        content: m.content,
+                        timestamp: m.timestamp,
+                    };
+                    if (Array.isArray(m.cards) && m.cards.length) {
+                        msg.cards = m.cards;
+                    }
+                    if (Array.isArray(m.links) && m.links.length) {
+                        msg.links = m.links;
+                    }
+                    if (Array.isArray(m.suggestions) && m.suggestions.length) {
+                        msg.suggestions = m.suggestions;
+                    }
+                    return msg;
+                });
 
                 let trimmed =
                     clean.length > MAX_MESSAGES
@@ -50,6 +83,30 @@ export const aiChatService = {
                 let serialized = JSON.stringify({
                     version: SCHEMA_VERSION,
                     messages: trimmed,
+                    extraction_token:
+                        state.extractionToken !== undefined
+                            ? state.extractionToken
+                            : previous.extractionToken,
+                    awaiting_po_warehouse:
+                        state.awaitingPoWarehouse !== undefined
+                            ? state.awaitingPoWarehouse
+                            : previous.awaitingPoWarehouse,
+                    purchase_flow:
+                        state.purchaseFlow !== undefined
+                            ? state.purchaseFlow
+                            : previous.purchaseFlow,
+                    active_replenishment_token:
+                        state.activeReplenishmentToken !== undefined
+                            ? state.activeReplenishmentToken
+                            : previous.activeReplenishmentToken,
+                    active_moving_token:
+                        state.activeMovingToken !== undefined
+                            ? state.activeMovingToken
+                            : previous.activeMovingToken,
+                    active_workflow_kind:
+                        state.activeWorkflowKind !== undefined
+                            ? state.activeWorkflowKind
+                            : previous.activeWorkflowKind,
                 });
 
                 while (trimmed.length > 1 && serialized.length > MAX_BYTES) {
@@ -57,6 +114,30 @@ export const aiChatService = {
                     serialized = JSON.stringify({
                         version: SCHEMA_VERSION,
                         messages: trimmed,
+                        extraction_token:
+                            state.extractionToken !== undefined
+                                ? state.extractionToken
+                                : previous.extractionToken,
+                        awaiting_po_warehouse:
+                            state.awaitingPoWarehouse !== undefined
+                                ? state.awaitingPoWarehouse
+                                : previous.awaitingPoWarehouse,
+                        purchase_flow:
+                            state.purchaseFlow !== undefined
+                                ? state.purchaseFlow
+                                : previous.purchaseFlow,
+                        active_replenishment_token:
+                            state.activeReplenishmentToken !== undefined
+                                ? state.activeReplenishmentToken
+                                : previous.activeReplenishmentToken,
+                        active_moving_token:
+                            state.activeMovingToken !== undefined
+                                ? state.activeMovingToken
+                                : previous.activeMovingToken,
+                        active_workflow_kind:
+                            state.activeWorkflowKind !== undefined
+                                ? state.activeWorkflowKind
+                                : previous.activeWorkflowKind,
                     });
                 }
 
@@ -68,12 +149,25 @@ export const aiChatService = {
             }
         }
 
-        function addMessage(messages, role, content) {
+        function saveSessionState(state = {}) {
+            return saveHistory(loadHistory(), state);
+        }
+
+        function addMessage(messages, role, content, extra = {}) {
             const newMsg = {
                 role,
                 content,
                 timestamp: new Date().toISOString(),
             };
+            if (Array.isArray(extra.cards) && extra.cards.length) {
+                newMsg.cards = extra.cards;
+            }
+            if (Array.isArray(extra.links) && extra.links.length) {
+                newMsg.links = extra.links;
+            }
+            if (Array.isArray(extra.suggestions) && extra.suggestions.length) {
+                newMsg.suggestions = extra.suggestions;
+            }
             const updated = [...messages, newMsg];
             return saveHistory(updated);
         }
@@ -209,14 +303,272 @@ export const aiChatService = {
             return captureScreen();
         }
 
+        /**
+         * AIA-056: Загрузить файл счёта на /ai_assistant/upload_invoice.
+         * @param {File} file
+         * @returns {Promise<{success, extraction_token, summary, meta}>}
+         */
+        async function uploadInvoice(file) {
+            const formData = new FormData();
+            formData.append("file", file, file.name);
+            const response = await fetch("/ai_assistant/upload_invoice", {
+                method: "POST",
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+                body: formData,
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        }
+
+        async function workflowAction(extractionToken, action, payload = {}) {
+            const params = {
+                message: "",
+                history: [],
+                extraction_token: extractionToken,
+                invoice_workflow_action: action,
+                invoice_workflow_payload: payload || {},
+            };
+            if (payload && (payload.warehouse_query || payload.warehouse_name)) {
+                params.invoice_po_warehouse =
+                    payload.warehouse_query || payload.warehouse_name;
+            }
+            const response = await fetch("/ai_assistant/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params,
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Invoice workflow failed");
+            }
+            return result;
+        }
+
+        async function replenishmentWorkflowAction(
+            replenishmentToken,
+            action,
+            payload = {}
+        ) {
+            const response = await fetch("/ai_assistant/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        message: "",
+                        history: [],
+                        replenishment_token: replenishmentToken,
+                        replenishment_action: action,
+                        replenishment_payload: payload || {},
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Replenishment workflow failed");
+            }
+            return result;
+        }
+
+        async function callPoAction(replenishmentToken, action, poId) {
+            const response = await fetch("/ai_assistant/po_action", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        replenishment_token: replenishmentToken,
+                        action,
+                        po_id: poId,
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Purchase order action failed");
+            }
+            return result;
+        }
+
+        async function movingWorkflowAction(movingToken, action, payload = {}) {
+            const response = await fetch("/ai_assistant/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        message: "",
+                        history: [],
+                        moving_token: movingToken,
+                        moving_action: action,
+                        moving_payload: payload || {},
+                        active_workflow_kind: "moving",
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Moving workflow failed");
+            }
+            return result;
+        }
+
+        async function startWorkflow(kind, message) {
+            const response = await fetch("/ai_assistant/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        message: "",
+                        history: [],
+                        workflow_choice: kind,
+                        workflow_message: message || "",
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Workflow start failed");
+            }
+            return result;
+        }
+
+        async function callPickingAction(workflow, action, recordId) {
+            const response = await fetch("/ai_assistant/picking_action", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        moving_token: workflow && workflow.token,
+                        action,
+                        picking_id: recordId,
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            const result = data.result || {};
+            if (result.error || result.ok === false) {
+                throw new Error(result.error || "Picking action failed");
+            }
+            return result;
+        }
+
+        async function confirmAction(pendingKey, decision) {
+            const response = await fetch("/ai_assistant/confirm", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "call",
+                    params: {
+                        pending_key: pendingKey,
+                        decision,
+                    },
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message || "Backend error");
+            }
+            return data.result || {};
+        }
+
         return {
+            loadSession,
             loadHistory,
             saveHistory,
+            saveSessionState,
             addMessage,
             clearHistory,
             collectContext,
             captureScreen,
             maybeCapture,
+            confirmAction,
+            workflowAction,
+            replenishmentWorkflowAction,
+            movingWorkflowAction,
+            startWorkflow,
+            callPoAction,
+            callPickingAction,
+            uploadInvoice,
             needsScreenshot,
         };
     },

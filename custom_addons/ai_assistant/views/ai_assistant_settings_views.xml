@@ -6,53 +6,118 @@
         <field name="inherit_id" ref="base.res_config_settings_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
-                <block title="AI-консультант" name="ai_assistant_block"
-                       groups="ai_assistant.group_ai_assistant_admin">
-                    <setting string="Подключение" title="Подключение к OpenRouter API">
-                        <div class="col-lg-6">
-                            <label for="ai_assistant_api_key"/>
-                            <field name="ai_assistant_api_key" widget="password"/>
-                            <label for="ai_assistant_base_url"/>
-                            <field name="ai_assistant_base_url"/>
-                            <label for="ai_assistant_timeout"/>
-                            <field name="ai_assistant_timeout"/>
-                        </div>
-                    </setting>
-                    <setting string="Модели" title="Модели AI для разных режимов">
-                        <div class="col-lg-6">
-                            <label for="ai_assistant_text_model"/>
-                            <field name="ai_assistant_text_model"/>
-                            <p class="text-muted mt-1 mb-2">
-                                Рекомендуется: <code>google/gemini-2.0-flash-001</code>
-                                ($0.075/M input, $0.30/M output). Используется для обычных
-                                текстовых вопросов по Odoo.
-                            </p>
-                            <label for="ai_assistant_vision_model"/>
-                            <field name="ai_assistant_vision_model"/>
-                            <p class="text-muted mt-1">
-                                Рекомендуется: <code>openai/gpt-4o</code>
-                                ($2.50/M input, $10/M output). Используется при анализе
-                                скриншотов экрана пользователя.
-                            </p>
-                        </div>
-                    </setting>
-                    <setting string="Поведение" title="Поведение AI-ассистента">
-                        <div class="col-lg-6">
-                            <label for="ai_assistant_enabled"/>
+                <app
+                    data-string="AI-консультант"
+                    string="AI-консультант"
+                    name="ai_assistant"
+                    groups="ai_assistant.group_ai_assistant_admin"
+                >
+                    <block title="Подключение" name="ai_assistant_connection">
+                        <setting
+                            string="OpenRouter / ProxyAPI"
+                            help="Ключ и адрес API для текстовых и vision-запросов"
+                        >
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="ai_assistant_api_key" class="col-lg-3 o_light_label"/>
+                                    <field name="ai_assistant_api_key" widget="password" class="col-lg-9"/>
+                                </div>
+                                <div class="row mt16">
+                                    <label for="ai_assistant_base_url" class="col-lg-3 o_light_label"/>
+                                    <field name="ai_assistant_base_url" class="col-lg-9"/>
+                                </div>
+                                <div class="row mt16">
+                                    <label for="ai_assistant_timeout" class="col-lg-3 o_light_label"/>
+                                    <field name="ai_assistant_timeout" class="col-lg-3"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+                    <block title="Модели" name="ai_assistant_models">
+                        <setting
+                            string="Модели AI"
+                            help="Отдельные модели для текста и анализа скриншотов"
+                        >
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="ai_assistant_text_model" class="col-lg-3 o_light_label"/>
+                                    <field name="ai_assistant_text_model" class="col-lg-9"/>
+                                </div>
+                                <p class="text-muted">
+                                    Рекомендуется: <code>google/gemini-2.5-flash</code>
+                                </p>
+                                <div class="row mt16">
+                                    <label for="ai_assistant_vision_model" class="col-lg-3 o_light_label"/>
+                                    <field name="ai_assistant_vision_model" class="col-lg-9"/>
+                                </div>
+                                <p class="text-muted">
+                                    Рекомендуется: <code>openai/gpt-4o</code>
+                                </p>
+                            </div>
+                        </setting>
+                    </block>
+                    <block title="Поведение" name="ai_assistant_behavior">
+                        <setting
+                            id="ai_assistant_enabled_setting"
+                            string="Включить AI-ассистент"
+                            help="Показывает плавающий чат пользователям с доступом"
+                        >
                             <field name="ai_assistant_enabled"/>
-                            <label for="ai_assistant_max_history"/>
-                            <field name="ai_assistant_max_history"/>
-                        </div>
-                    </setting>
-                    <setting string="Дополнительно" title="Дополнительные настройки">
-                        <div class="col-lg-6">
-                            <label for="ai_assistant_system_prompt_override"/>
-                            <field name="ai_assistant_system_prompt_override"/>
-                            <label for="ai_assistant_debug_logging"/>
+                        </setting>
+                        <setting
+                            id="ai_assistant_actions_setting"
+                            string="Включить actions"
+                            help="Разрешает режим исполнения actions из чата для группы «Снабжение»"
+                        >
+                            <field name="ai_assistant_actions_enabled"/>
+                        </setting>
+                        <setting
+                            id="ai_assistant_replenishment_setting"
+                            string="Пополнение товара через чат"
+                            help="Отдельный workflow пополнения (RFQ). Нужна группа «Снабжение». Требует включённых actions."
+                        >
+                            <field name="ai_assistant_replenishment_enabled"/>
+                        </setting>
+                        <setting
+                            id="ai_assistant_moving_setting"
+                            string="Перемещения между складами через чат"
+                            help="Отдельный workflow перемещения. Нужны группы «Снабжение» и Stock User. Требует включённых actions. По умолчанию выключено."
+                        >
+                            <field name="ai_assistant_moving_enabled"/>
+                        </setting>
+                        <setting
+                            id="ai_assistant_history_setting"
+                            string="История чата"
+                            help="Максимум сообщений, передаваемых в контекст модели"
+                        >
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="ai_assistant_max_history" class="col-lg-3 o_light_label"/>
+                                    <field name="ai_assistant_max_history" class="col-lg-3"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+                    <block title="Дополнительно" name="ai_assistant_extra">
+                        <setting
+                            string="Системный промпт"
+                            help="Опциональная подмена системного промпта"
+                        >
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="ai_assistant_system_prompt_override" class="col-lg-3 o_light_label"/>
+                                    <field name="ai_assistant_system_prompt_override" class="col-lg-9"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting
+                            string="Debug-логирование"
+                            help="Пишет подробные логи ассистента на сервер"
+                        >
                             <field name="ai_assistant_debug_logging"/>
-                        </div>
-                    </setting>
-                </block>
+                        </setting>
+                    </block>
+                </app>
             </xpath>
         </field>
     </record>

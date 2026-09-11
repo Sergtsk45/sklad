@@ -19,6 +19,11 @@ scope: docker, odoo19, traefik, git-deploy, volumes
 
 - 90% задач решается через: наследование моделей, расширение views, actions, security, QWeb, JS assets.
 - если всё же нужно менять ядро — фиксировать это отдельным патчем/веткой и понимать, что обновления Odoo станут сложнее.
+- **Заметки на апгрейд:** любое переопределение стандартного поведения Odoo
+  (методы ядра, письма, layout уведомлений, xpath к штатным views), которое
+  придётся проверить на следующей мажорной версии, сразу фиксировать пунктом
+  `UPG-*` в [`docs/odoo-upgrade-notes.md`](odoo-upgrade-notes.md).
+  Правило для агента: `.cursor/rules/odoo-upgrade-notes.mdc`.
 
 ## Рекомендуемая структура репозитория
 
@@ -46,6 +51,7 @@ scope: docker, odoo19, traefik, git-deploy, volumes
     deploy.md
     project.md                # описание архитектуры (по необходимости)
     changelog.md              # журнал изменений
+    odoo-upgrade-notes.md     # правки ядра: проверить при переходе 19 → 20
     tasktracker.md            # статусы задач
 ```
 

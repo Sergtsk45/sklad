@@ -72,6 +72,35 @@
                     <group>
                         <field name="comment" string="Комментарий" placeholder="Описание объекта..."/>
                     </group>
+                    <notebook>
+                        <page string="Захватки" name="page_captures">
+                            <field name="capture_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="active"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Этажи" name="page_floors">
+                            <field name="floor_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="active"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Участки" name="page_sections">
+                            <field name="section_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name"/>
+                                    <field name="active"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>

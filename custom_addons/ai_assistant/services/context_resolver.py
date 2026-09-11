@@ -71,9 +71,13 @@ class ContextResolver:
 
     def _get_user_groups(self, env):
         try:
-            groups = env.user.groups_id
+            # Odoo 19: group_ids / all_group_ids (с implied)
+            groups = (
+                getattr(env.user, 'all_group_ids', False)
+                or env.user.group_ids
+            )
             names = groups.filtered(
-                lambda g: g.category_id and g.category_id.name not in (
+                lambda g: g.privilege_id and g.privilege_id.name not in (
                     'Technical', 'Extra Rights'
                 )
             ).mapped('full_name')

@@ -1,5 +1,11 @@
+import logging
+
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
+
+_logger = logging.getLogger(__name__)
+
+DEFAULT_ISSUE_WAREHOUSE_CODES = ("Офис", "Ос.ск", "метал", "Расх")
 
 
 class ObjectRequest(models.Model):
@@ -63,6 +69,7 @@ class ObjectRequest(models.Model):
         required=True,
         tracking=True,
         index=True,
+        copy=False,
     )
     active = fields.Boolean(default=True)
 
@@ -77,6 +84,45 @@ class ObjectRequest(models.Model):
         "object.request.line.stock",
         compute="_compute_line_stock_ids",
         string="Распределение по складам",
+    )
+    issue_warehouse_ids = fields.Many2many(
+        "stock.warehouse",
+        "object_request_issue_warehouse_rel",
+        "request_id",
+        "warehouse_id",
+        string="Склады выдачи",
+        help=(
+            "Склады, с которых разрешено планировать и оформлять выдачу "
+            "по этому требованию."
+        ),
+        domain="[('company_id', '=', company_id), ('active', '=', True)]",
+    )
+    issue_warehouse_selection_manual = fields.Boolean(
+        string="Склады выдачи выбраны вручную",
+        default=False,
+        copy=False,
+    )
+    stock_distribution_show_zero = fields.Boolean(
+        string="Показать нулевые остатки",
+        default=False,
+        help=(
+            "Показывать строки распределения с нулевым остатком "
+            "по выбранным складам."
+        ),
+    )
+    stock_distribution_filter_warehouse_id = fields.Many2one(
+        "stock.warehouse",
+        string="Фильтр по складу",
+        help=(
+            "Показать в таблице только выбранный склад. "
+            "Пусто — все склады выдачи."
+        ),
+        domain="[('company_id', '=', company_id), ('active', '=', True)]",
+    )
+    stock_distribution_refresh_key = fields.Integer(
+        copy=False,
+        default=0,
+        help="Служебное поле для обновления таблицы распределения в форме.",
     )
 
     # --- Поля импорта ---
@@ -211,17 +257,227 @@ class ObjectRequest(models.Model):
                     .next_by_code("object.request.sequence")
                     or "New"
                 )
-        return super().create(vals_list)
+        records = super().create(vals_list)
+        for rec in records:
+            if not rec.issue_warehouse_ids:
+                rec.with_context(
+                    auto_issue_warehouse_selection=True
+                ).sudo().write(
+                    {
+                        "issue_warehouse_ids": [
+                            (6, 0, rec._get_default_issue_warehouses().ids)
+                        ]
+                    }
+                )
+        return records
+
+    def write(self, vals):
+        project_changed = "project_id" in vals
+        warehouses_changed = "issue_warehouse_ids" in vals
+        if (
+            warehouses_changed
+            and not self.env.context.get("auto_issue_warehouse_selection")
+            and "issue_warehouse_selection_manual" not in vals
+        ):
+            vals = dict(vals)
+            vals["issue_warehouse_selection_manual"] = True
+        distribution_changed = any(
+            key in vals
+            for key in (
+                "issue_warehouse_ids",
+                "stock_distribution_show_zero",
+                "stock_distribution_filter_warehouse_id",
+            )
+        )
+        previous_warehouses = {}
+        if warehouses_changed:
+            previous_warehouses = {
+                rec.id: rec.issue_warehouse_ids for rec in self
+            }
+        if distribution_changed and len(self) == 1:
+            vals = dict(vals)
+            vals["stock_distribution_refresh_key"] = (
+                (self.stock_distribution_refresh_key or 0) + 1
+            )
+        res = super().write(vals)
+        if warehouses_changed:
+            for rec in self:
+                rec._sync_after_issue_warehouses_change(
+                    previous_warehouses.get(
+                        rec.id,
+                        self.env["stock.warehouse"],
+                    )
+                )
+                rec._clear_invalid_stock_distribution_filter()
+        if project_changed:
+            self._clear_line_locations_after_project_change()
+            self._update_default_issue_warehouses_after_project_change()
+        if distribution_changed:
+            self.invalidate_recordset(["line_stock_ids"])
+        return res
+
+    def unlink(self):
+        self.mapped("line_ids")._unlink_from_parent_request()
+        return super().unlink()
+
+    @api.onchange("issue_warehouse_ids")
+    def _onchange_issue_warehouse_ids(self):
+        self._clear_invalid_stock_distribution_filter()
+
+    def _clear_invalid_stock_distribution_filter(self):
+        for rec in self:
+            filter_wh = rec.stock_distribution_filter_warehouse_id
+            if not filter_wh:
+                continue
+            if filter_wh not in rec._get_issue_warehouses():
+                rec.stock_distribution_filter_warehouse_id = False
+
+    def _clear_line_locations_after_project_change(self):
+        for rec in self:
+            lines = rec.line_ids.filtered(
+                lambda line: (
+                    line.capture_id or line.floor_id or line.section_id
+                )
+            )
+            if lines:
+                lines.write({
+                    "capture_id": False,
+                    "floor_id": False,
+                    "section_id": False,
+                })
 
     # --- Computed methods ---
     def _compute_line_count(self):
         for rec in self:
             rec.line_count = len(rec.line_ids)
 
-    @api.depends("line_ids.stock_ids")
+    @api.depends(
+        "line_ids.stock_ids",
+        "line_ids.stock_ids.qty_on_hand",
+        "line_ids.stock_ids.qty_to_issue",
+        "line_ids.stock_ids.qty_reserved",
+        "line_ids.stock_ids.warehouse_id",
+        "issue_warehouse_ids",
+        "stock_distribution_show_zero",
+        "stock_distribution_filter_warehouse_id",
+        "stock_distribution_refresh_key",
+    )
     def _compute_line_stock_ids(self):
         for rec in self:
-            rec.line_stock_ids = rec.line_ids.mapped("stock_ids")
+            stocks = rec.line_ids.mapped("stock_ids")
+            allowed_warehouses = rec._get_issue_warehouses()
+            if allowed_warehouses:
+                stocks = stocks.filtered(
+                    lambda stock: stock.warehouse_id in allowed_warehouses
+                )
+            filter_wh = rec.stock_distribution_filter_warehouse_id
+            if filter_wh:
+                stocks = stocks.filtered(
+                    lambda stock: stock.warehouse_id == filter_wh
+                )
+            if not rec.stock_distribution_show_zero:
+                stocks = stocks.filtered(
+                    lambda stock: (
+                        stock.qty_on_hand > 0
+                        or stock.qty_to_issue > 0
+                        or stock.qty_reserved > 0
+                    )
+                )
+            rec.line_stock_ids = stocks
+
+    def _get_all_company_warehouses(self):
+        self.ensure_one()
+        return self.env["stock.warehouse"].sudo().search(
+            [
+                ("company_id", "=", self.company_id.id),
+                ("active", "=", True),
+            ]
+        )
+
+    def _get_default_issue_warehouses(self):
+        self.ensure_one()
+        warehouses = self.env["stock.warehouse"].sudo().search(
+            [
+                ("company_id", "=", self.company_id.id),
+                ("active", "=", True),
+                ("code", "in", DEFAULT_ISSUE_WAREHOUSE_CODES),
+            ]
+        )
+        project_warehouse = self.project_id.warehouse_id
+        if project_warehouse and project_warehouse.active:
+            warehouses |= project_warehouse
+        return warehouses
+
+    def _get_issue_warehouses(self):
+        self.ensure_one()
+        if self.issue_warehouse_ids:
+            return self.issue_warehouse_ids
+        return self._get_default_issue_warehouses()
+
+    def _update_default_issue_warehouses_after_project_change(self):
+        for rec in self.filtered(
+            lambda item: not item.issue_warehouse_selection_manual
+        ):
+            rec.with_context(auto_issue_warehouse_selection=True).sudo().write(
+                {
+                    "issue_warehouse_ids": [
+                        (6, 0, rec._get_default_issue_warehouses().ids)
+                    ]
+                }
+            )
+
+    def _sync_after_issue_warehouses_change(self, previous_warehouses):
+        """Сбросить план выдачи со складов, исключённых из списка."""
+        self.ensure_one()
+        allowed = self._get_issue_warehouses()
+        removed = previous_warehouses - allowed
+        if not removed:
+            return
+        stock_context = {"auto_stock_distribution": True}
+        excluded_stocks = self.line_ids.mapped("stock_ids").filtered(
+            lambda stock: stock.warehouse_id in removed
+        )
+        planned_stocks = excluded_stocks.filtered(
+            lambda stock: stock.qty_to_issue > 0 and not stock.picking_id
+        )
+        if planned_stocks:
+            planned_stocks.with_context(**stock_context).write(
+                {"qty_to_issue": 0.0}
+            )
+
+    def _check_issue_plan_stock_limits(self):
+        """Проверить, что план выдачи не превышает остаток по товару/складу."""
+        for rec in self:
+            planned_by_key = {}
+            available_by_key = {}
+            label_by_key = {}
+            stock_ids = rec.line_ids.mapped("stock_ids").filtered(
+                lambda stock: stock.line_id.product_id and stock.warehouse_id
+            )
+            for stock in stock_ids:
+                key = (stock.line_id.product_id.id, stock.warehouse_id.id)
+                available_by_key[key] = max(
+                    available_by_key.get(key, 0.0),
+                    stock.qty_on_hand,
+                )
+                label_by_key[key] = (
+                    stock.line_id.product_id.display_name,
+                    stock.warehouse_id.display_name,
+                )
+                if stock.line_id.is_cancelled or stock.qty_to_issue <= 0:
+                    continue
+                planned_by_key[key] = (
+                    planned_by_key.get(key, 0.0) + stock.qty_to_issue
+                )
+            for key, planned in planned_by_key.items():
+                available = max(available_by_key.get(key, 0.0), 0.0)
+                if planned > available + 0.00001:
+                    product_name, warehouse_name = label_by_key[key]
+                    raise ValidationError(
+                        "План выдачи превышает доступный остаток: "
+                        f"{product_name}, склад {warehouse_name}. "
+                        f"Запланировано {planned:g}, доступно {available:g}."
+                    )
 
     @api.depends("line_ids.matching_required", "line_ids.product_id")
     def _compute_matching_state(self):
@@ -244,7 +500,10 @@ class ObjectRequest(models.Model):
     @api.depends(
         "line_ids.line_state",
         "line_ids.matching_required",
+        "line_ids.matching_state",
         "line_ids.manual_vendor_required",
+        "line_ids.stock_match_warning",
+        "line_ids.supplier_invoice_requested",
         "line_ids.qty_to_issue",
         "line_ids.qty_to_buy",
     )
@@ -254,7 +513,14 @@ class ObjectRequest(models.Model):
             rec.line_problem_count = sum(
                 1
                 for ln in lns
-                if ln.matching_required or ln.manual_vendor_required
+                if (
+                    not ln.supplier_invoice_requested
+                    and (
+                        ln._requires_nomenclature_review()
+                        or ln.manual_vendor_required
+                        or ln.stock_match_warning
+                    )
+                )
             )
             rec.line_matched_count = sum(
                 1 for ln in lns if not ln.matching_required and ln.product_id
@@ -315,12 +581,24 @@ class ObjectRequest(models.Model):
     def action_approve(self):
         """Согласовать документ."""
         self.ensure_one()
+        if self.approval_state != "pending" or self.state != "draft":
+            raise UserError(
+                "Согласовать можно только черновик на согласовании."
+            )
+        if (
+            self.approver_user_id
+            and self.approver_user_id != self.env.user
+            and not self.env.user.has_group("base.group_system")
+        ):
+            raise UserError(
+                "Согласовать может только назначенный согласующий."
+            )
         self.write({"approval_state": "approved"})
+        foreman_partner = self.foreman_user_id.sudo().partner_id
+        buyer_partner = self.buyer_user_id.sudo().partner_id
         partner_ids = [
             p.id
-            for p in (
-                self.foreman_user_id.partner_id | self.buyer_user_id.partner_id
-            )
+            for p in (foreman_partner | buyer_partner)
             if p
         ]
         self.message_post(
@@ -336,12 +614,20 @@ class ObjectRequest(models.Model):
     def action_reject(self):
         """Отклонить документ."""
         self.ensure_one()
+        if self.approval_state != "pending" or self.state != "draft":
+            raise UserError("Отклонить можно только черновик на согласовании.")
+        if (
+            self.approver_user_id
+            and self.approver_user_id != self.env.user
+            and not self.env.user.has_group("base.group_system")
+        ):
+            raise UserError("Отклонить может только назначенный согласующий.")
         self.write({"approval_state": "rejected"})
+        foreman_partner = self.foreman_user_id.sudo().partner_id
+        buyer_partner = self.buyer_user_id.sudo().partner_id
         partner_ids = [
             p.id
-            for p in (
-                self.foreman_user_id.partner_id | self.buyer_user_id.partner_id
-            )
+            for p in (foreman_partner | buyer_partner)
             if p
         ]
         self.message_post(
@@ -433,7 +719,10 @@ class ObjectRequest(models.Model):
             "res_model": "object.request.line",
             "view_mode": "list",
             "domain": [("request_id", "=", self.id)],
-            "context": {"default_request_id": self.id},
+            "context": {
+                "default_request_id": self.id,
+                "object_request_column_layout_scope": "request_action_lines",
+            },
         }
 
     def action_open_problem_lines(self):
@@ -445,30 +734,168 @@ class ObjectRequest(models.Model):
             "view_mode": "list",
             "domain": [
                 ("request_id", "=", self.id),
+                ("supplier_invoice_requested", "=", False),
+                "|",
                 "|",
                 ("matching_required", "=", True),
                 ("manual_vendor_required", "=", True),
+                ("stock_match_warning", "=", True),
             ],
-            "context": {"default_request_id": self.id},
+            "context": {
+                "default_request_id": self.id,
+                "object_request_column_layout_scope": "request_problem_lines",
+            },
         }
+
+    def action_refresh_stock_match_warnings(self):
+        self.ensure_one()
+        self._check_supply_manager_processing_action()
+        lines = self.line_ids.filtered(
+            lambda line: line.product_id and not line.is_cancelled
+        )
+        if not lines:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Проверка номенклатуры",
+                    "message": "Нет строк с выбранным товаром.",
+                    "type": "info",
+                    "sticky": False,
+                },
+            }
+        return lines.action_refresh_stock_match_warning()
+
+    def action_check_purchase_stock_matches(self):
+        self.ensure_one()
+        self._check_supply_manager_processing_action()
+        lines = self.line_ids.filtered(
+            lambda line: (
+                line.product_id
+                and line.qty_to_buy > 0
+                and (line.purchase_order_id or line.purchase_order_line_id)
+                and not line.is_cancelled
+            )
+        )
+        if not lines:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Проверка закупок",
+                    "message": "Нет связанных строк закупки для проверки.",
+                    "type": "info",
+                    "sticky": False,
+                },
+            }
+        mismatch_lines = self._purchase_product_mismatch_lines(lines)
+        for line in mismatch_lines:
+            line.write(self._purchase_product_mismatch_warning_vals(line))
+
+        stock_check_lines = lines - mismatch_lines
+        stock_check_lines.action_refresh_stock_match_warning()
+        warnings = mismatch_lines | stock_check_lines.filtered(
+            "stock_match_warning"
+        )
+        if not warnings:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Проверка закупок",
+                    "message": "Похожих складских товаров не найдено.",
+                    "type": "success",
+                    "sticky": False,
+                },
+            }
+        self._post_purchase_stock_match_note(warnings)
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Закупки с похожими складскими товарами",
+            "res_model": "object.request.line",
+            "view_mode": "list",
+            "domain": [
+                ("id", "in", warnings.ids),
+            ],
+            "context": {
+                "default_request_id": self.id,
+                "object_request_column_layout_scope": "request_po_diagnostics",
+            },
+        }
+
+    def _purchase_product_mismatch_lines(self, lines):
+        return lines.filtered(
+            lambda line: (
+                line.purchase_order_line_id
+                and line.purchase_order_line_id.product_id
+                and line.product_id
+                and line.purchase_order_line_id.product_id != line.product_id
+            )
+        )
+
+    def _purchase_product_mismatch_warning_vals(self, line):
+        purchase_product = line.purchase_order_line_id.product_id
+        return {
+            "stock_match_warning": True,
+            "stock_match_candidate_id": line.product_id.id,
+            "stock_match_candidate_qty": line.stock_qty_on_hand,
+            "stock_match_warning_text": (
+                "Товар в строке закупки отличается от товара требования: "
+                "в PO выбран «%s», в требовании сейчас «%s»."
+            )
+            % (
+                purchase_product.display_name,
+                line.product_id.display_name,
+            ),
+        }
+
+    def _post_purchase_stock_match_note(self, lines):
+        self.ensure_one()
+        body_lines = [
+            "Проверка закупок нашла строки, где есть похожий товар "
+            "с остатком на складах выдачи или расхождение с PO:"
+        ]
+        for line in lines:
+            po = line.purchase_order_id or line.purchase_order_line_id.order_id
+            body_lines.append(
+                "- %s%s: %s"
+                % (
+                    "%s, " % po.name if po else "",
+                    line.name_raw,
+                    line.stock_match_warning_text or "",
+                )
+            )
+        self.message_post(
+            body="<br/>".join(body_lines),
+            message_type="notification",
+            subtype_xmlid="mail.mt_note",
+        )
 
     def action_open_issue_pickings(self):
         self.ensure_one()
+        form_view = self.env.ref(
+            "object_request.view_stock_picking_object_request_full_width_form"
+        )
         return {
             "type": "ir.actions.act_window",
             "name": "Выдачи",
             "res_model": "stock.picking",
             "view_mode": "list,form",
+            "views": [(False, "list"), (form_view.id, "form")],
             "domain": [("id", "in", self.issue_picking_ids.ids)],
         }
 
     def action_open_purchase_orders(self):
         self.ensure_one()
+        form_view = self.env.ref(
+            "object_request.view_purchase_order_object_request_full_width_form"
+        )
         return {
             "type": "ir.actions.act_window",
             "name": "Закупки",
             "res_model": "purchase.order",
             "view_mode": "list,form",
+            "views": [(False, "list"), (form_view.id, "form")],
             "domain": [("id", "in", self.purchase_order_ids.ids)],
         }
 
@@ -487,6 +914,70 @@ class ObjectRequest(models.Model):
         self.line_ids.action_reset_split()
         return self._line_mass_action_notification("Сбросить разбивку")
 
+    def action_sort_lines_by_location(self):
+        self.ensure_one()
+        self._check_supply_manager_request_action()
+        for sequence, line in enumerate(self._sorted_lines_by_location(), 1):
+            line.sequence = sequence * 10
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Строки отсортированы",
+                "message": f"Обработано строк: {len(self.line_ids)}.",
+                "type": "success",
+                "sticky": False,
+                "next": {"type": "ir.actions.client", "tag": "reload"},
+            },
+        }
+
+    def _sorted_lines_by_location(self):
+        self.ensure_one()
+        return self.line_ids.sorted(key=self._line_location_sort_key)
+
+    def _line_location_sort_key(self, line):
+        return (
+            self._location_sort_key(line.capture_id),
+            self._location_sort_key(line.floor_id),
+            self._location_sort_key(line.section_id),
+            (line.preferred_vendor_id.display_name or "").casefold(),
+            line.sequence,
+            line.id,
+        )
+
+    def _location_sort_key(self, value):
+        if not value:
+            return (1, 0, "")
+        return (0, value.sequence or 0, (value.name or "").casefold())
+
+    def _check_supply_manager_request_action(self):
+        if not self.env.user.has_group("object_request.group_supply_manager"):
+            if self.env.user.has_group("base.group_system"):
+                return
+            raise UserError(
+                "Сортировка строк доступна только снабженцу."
+            )
+
+    def _check_supply_manager_processing_action(self):
+        if not self.env.user.has_group("object_request.group_supply_manager"):
+            if self.env.user.has_group("base.group_system"):
+                return
+            raise UserError("Обработка требования доступна только снабженцу.")
+
+    def _check_processing_state(self):
+        self.ensure_one()
+        if self.state != "in_progress":
+            raise UserError(
+                "Действие доступно только для требования в работе."
+            )
+
+    def _check_purchase_preparation_state(self):
+        self.ensure_one()
+        if self.state not in ("draft", "in_progress"):
+            raise UserError(
+                "Подготовить закупку можно только в черновике или в работе."
+            )
+
     def _line_mass_action_notification(self, title):
         return {
             "type": "ir.actions.client",
@@ -502,7 +993,6 @@ class ObjectRequest(models.Model):
     def action_rematch_lines(self):
         """Повторно запустить автосопоставление по несопоставленным строкам."""
         self.ensure_one()
-        parser = self.env["object.request.excel.parser"]
         unmatched = self.line_ids.filtered(
             lambda ln: ln.matching_required or not ln.product_id
         )
@@ -517,42 +1007,378 @@ class ObjectRequest(models.Model):
                     "sticky": False,
                 },
             }
-        newly_matched = 0
-        for line in unmatched:
-            result = parser.match_row(
-                line.supplier_article, line.name_raw, line.supplier_raw
-            )
-            vals = {
-                "matching_required": result["matching_required"],
-                "manual_vendor_required": result["manual_vendor_required"],
-            }
-            if result["product"]:
-                vals["product_id"] = result["product"].id
-                vals["uom_id"] = result["product"].uom_id.id
-                if not line.preferred_vendor_id:
-                    if result["vendor"]:
-                        vals["preferred_vendor_id"] = result["vendor"].id
-                    elif result["product"].seller_ids:
-                        vals["preferred_vendor_id"] = (
-                            result["product"].seller_ids[0].partner_id.id
-                        )
-                newly_matched += 1
-            elif result["vendor"] and not line.preferred_vendor_id:
-                vals["preferred_vendor_id"] = result["vendor"].id
-            line.write(vals)
+        stats = self._rematch_request_lines(unmatched, mode="unmatched")
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
             "params": {
                 "title": "Пересопоставление завершено",
                 "message": (
-                    f"Обработано {len(unmatched)} строк. "
-                    f"Сопоставлено новых: {newly_matched}."
+                    f"Обработано {stats['processed']} строк. "
+                    f"Сопоставлено новых: {stats['matched']}."
                 ),
-                "type": "success" if newly_matched else "warning",
+                "type": "success" if stats["matched"] else "warning",
                 "sticky": False,
             },
         }
+
+    def action_rematch_all_lines(self):
+        """Повторно запустить автосопоставление по всем строкам документа."""
+        self.ensure_one()
+        lines = self.line_ids
+        if not lines:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Пересопоставление",
+                    "message": "В документе нет строк.",
+                    "type": "info",
+                    "sticky": False,
+                },
+            }
+        stats = self._rematch_request_lines(lines, mode="all")
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Пересопоставление всех строк завершено",
+                "message": (
+                    f"Обработано {stats['processed']} строк. "
+                    f"Сопоставлено: {stats['matched']}. "
+                    f"Очищено старых совпадений: {stats['cleared']}. "
+                    f"Пропущено ручных: {stats['skipped']}."
+                ),
+                "type": "success" if stats["matched"] else "warning",
+                "sticky": False,
+            },
+        }
+
+    def action_rematch_with_stock_context(self):
+        """Rebuild matching hints with stock context and apply safe hits."""
+        self.ensure_one()
+        self._check_supply_manager_processing_action()
+        if self.state in ("closed", "cancelled"):
+            raise UserError(
+                "Переподбор доступен только для активного требования."
+            )
+        lines = self.env["object.request.line"].search(
+            [("request_id", "=", self.id)]
+        ).filtered(
+            lambda line: (
+                not line.is_cancelled
+                and not line._is_manual_match_protected()
+            )
+        )
+        if not lines:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Переподбор с остатками",
+                    "message": "Нет строк для переподбора.",
+                    "type": "info",
+                    "sticky": False,
+                },
+            }
+        stats = self._rematch_lines_with_stock_context(lines)
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Переподбор с остатками завершён",
+                "message": (
+                    f"Обработано: {stats['processed']}. "
+                    f"Применено: {stats['matched']}. "
+                    f"Оставлено на проверку: {stats['review']}."
+                ),
+                "type": "success" if stats["matched"] else "warning",
+                "sticky": False,
+                "next": {"type": "ir.actions.client", "tag": "reload"},
+            },
+        }
+
+    def _rematch_lines_with_stock_context(self, lines):
+        service = self.env["object.request.matching.candidate.service"]
+        parser = self.env["object.request.excel.parser"]
+        warehouses = self._get_issue_warehouses()
+        stats = {"processed": 0, "matched": 0, "review": 0}
+        for line in lines:
+            supplier_article, technical_designation = (
+                self._line_matching_inputs(line, parser)
+            )
+            vendor = (
+                line.preferred_vendor_id
+                or parser.match_vendor_by_name(line.supplier_raw)
+            )
+            candidate_result = service.build_candidates(
+                line.name_raw,
+                supplier_article,
+                vendor=vendor,
+                technical_designation=technical_designation,
+                request=self,
+                issue_warehouses=warehouses,
+            )
+            vals = line._ai_candidate_result_vals(candidate_result)
+            applied_vals = line._safe_stock_rematch_apply_vals(
+                candidate_result
+            )
+            if applied_vals:
+                vals.update(applied_vals)
+                stats["matched"] += 1
+            else:
+                vals["matching_state"] = (
+                    "manual_review"
+                    if vals.get("ai_suggested_product_id")
+                    else "requires_mapping"
+                )
+                stats["review"] += 1
+            line.write(vals)
+            stats["processed"] += 1
+        return stats
+
+    def action_prepare_ai_candidates(self):
+        """Заполнить AI-кандидатов из shortlist без записи товара."""
+        self.ensure_one()
+        config = self.env[
+            'object.request.llm.matching.service'
+        ]._get_ai_config()
+        all_lines = self.line_ids.filtered(
+            lambda line: (
+                not line.is_cancelled
+                and not line._is_manual_match_protected()
+                and (line.matching_required or not line.product_id)
+            )
+        )
+        total_pending = len(all_lines)
+        lines = all_lines[:config['batch_size']]
+        if not config['enabled']:
+            self._post_ai_disabled_note()
+        stats = self._process_ai_candidate_lines(lines, config)
+        self._post_ai_candidates_note(config, lines, stats, total_pending)
+        suffix = self._ai_batch_suffix(total_pending, len(lines))
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "AI-кандидаты подобраны",
+                "message": (
+                    f"Обработано строк: {stats['prepared']}. "
+                    f"С подсказкой: {stats['suggested']}.{suffix}"
+                ),
+                "type": (
+                    "success" if stats['suggested'] else "warning"
+                ),
+                "sticky": False,
+            },
+        }
+
+    def _ai_batch_suffix(self, total_pending, processed):
+        if total_pending > processed:
+            return (
+                f' (обработано {processed} из {total_pending},'
+                f' запустите ещё раз)'
+            )
+        return ''
+
+    def _post_ai_disabled_note(self):
+        self.message_post(
+            body=(
+                'AI-сопоставление отключено, '
+                'использован только детерминированный поиск.'
+            ),
+            subtype_xmlid='mail.mt_note',
+        )
+
+    def _line_matching_inputs(self, line, parser):
+        supplier_article = line.supplier_article
+        technical_designation = line.technical_designation
+        if (
+            not technical_designation
+            and parser._is_technical_designation_context(supplier_article)
+        ):
+            technical_designation = supplier_article
+            supplier_article = ""
+        return supplier_article, technical_designation
+
+    def _process_ai_candidate_lines(self, lines, config):
+        service = self.env[
+            "object.request.matching.candidate.service"
+        ]
+        parser = self.env["object.request.excel.parser"]
+        prepared = 0
+        suggested = 0
+        errors = 0
+        for line in lines:
+            vendor = (
+                line.preferred_vendor_id
+                or parser.match_vendor_by_name(line.supplier_raw)
+            )
+            supplier_article, technical_designation = (
+                self._line_matching_inputs(line, parser)
+            )
+            try:
+                candidate_result = service.build_candidates(
+                    line.name_raw,
+                    supplier_article,
+                    vendor=vendor,
+                    technical_designation=technical_designation,
+                    request=self,
+                    issue_warehouses=self._get_issue_warehouses(),
+                )
+                line.write(
+                    line._ai_candidate_result_vals(candidate_result)
+                )
+            except Exception as exc:
+                _logger.warning(
+                    "[object_request] build_candidates error"
+                    " line=%s: %s",
+                    line.id,
+                    exc,
+                )
+                line.write({'ai_match_reason': str(exc)[:250]})
+                errors += 1
+            prepared += 1
+            if line.ai_suggested_product_id:
+                suggested += 1
+        return {
+            'prepared': prepared,
+            'suggested': suggested,
+            'errors': errors,
+        }
+
+    def _post_ai_candidates_note(
+        self, config, lines, stats, total_pending
+    ):
+        auto_count = sum(
+            1 for line in lines
+            if line.ai_match_confidence >= config['auto_threshold']
+            and line.ai_suggested_product_id
+        )
+        suggest_count = sum(
+            1 for line in lines
+            if (
+                config['suggest_threshold']
+                <= line.ai_match_confidence
+                < config['auto_threshold']
+            )
+            and line.ai_suggested_product_id
+        )
+        no_match = stats['prepared'] - auto_count - suggest_count
+        error_note = (
+            f'<br/>Ошибок LLM: {stats["errors"]}'
+            if stats['errors'] else ''
+        )
+        at = config['auto_threshold']
+        st = config['suggest_threshold']
+        self.message_post(
+            body=(
+                f'<b>AI-подбор кандидатов</b><br/>'
+                f'Обработано строк: {stats["prepared"]}<br/>'
+                f'Уверенные совпадения'
+                f' (≥{at:.0%}): {auto_count}<br/>'
+                f'Подсказки ({st:.0%}–{at:.0%}): {suggest_count}<br/>'
+                f'Ручной ввод: {no_match}{error_note}'
+            ),
+            subtype_xmlid='mail.mt_note',
+        )
+
+    def action_apply_confident_ai_matches(self):
+        """Применить AI-подсказки с высокой локальной уверенностью."""
+        self.ensure_one()
+        lines = self.line_ids.filtered(
+            lambda line: (
+                not line.is_cancelled
+                and not line._is_manual_match_protected()
+                and line.ai_suggested_product_id
+                and line.ai_match_confidence >= 0.9
+            )
+        )
+        for line in lines:
+            vals = line._apply_ai_suggestion_vals()
+            vals["matching_source"] = "llm_auto"
+            line.write(vals)
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Уверенные AI-сопоставления применены",
+                "message": f"Применено строк: {len(lines)}.",
+                "type": "success" if lines else "warning",
+                "sticky": False,
+            },
+        }
+
+    def _rematch_request_lines(self, lines, mode="unmatched"):
+        parser = self.env["object.request.excel.parser"]
+        stats = {"processed": 0, "matched": 0, "cleared": 0, "skipped": 0}
+        for line in lines:
+            if mode == "all" and line._is_manual_match_protected():
+                stats["skipped"] += 1
+                continue
+            old_product = line.product_id
+            supplier_article, technical_designation = (
+                self._line_matching_inputs(line, parser)
+            )
+            result = parser.match_row(
+                supplier_article,
+                line.name_raw,
+                line.supplier_raw,
+                technical_designation=technical_designation,
+            )
+            vals = self._rematch_line_values(line, result, mode, old_product)
+            if vals:
+                line.write(vals)
+            stats["processed"] += 1
+            if result["product"]:
+                stats["matched"] += 1
+            elif mode == "all" and old_product and not vals.get("product_id"):
+                stats["cleared"] += 1
+        return stats
+
+    def _rematch_line_values(self, line, result, mode, old_product):
+        vals = {
+            "matching_required": result["matching_required"],
+            "manual_vendor_required": result["manual_vendor_required"],
+        }
+        if result["product"]:
+            vals["product_id"] = result["product"].id
+            vals["uom_id"] = result["product"].uom_id.id
+            vals["matching_source"] = (
+                "combined_auto"
+                if result.get("match_source") == "combined_auto"
+                else "rematch_auto"
+            )
+            if not line.preferred_vendor_id:
+                if result["vendor"]:
+                    vals["preferred_vendor_id"] = result["vendor"].id
+                elif result["product"].seller_ids:
+                    vals["preferred_vendor_id"] = (
+                        result["product"].seller_ids[0].partner_id.id
+                    )
+        else:
+            if mode == "all" and old_product:
+                vals["product_id"] = False
+                vals["uom_id"] = False
+                vals["matching_source"] = "unknown"
+            if result["vendor"] and not line.preferred_vendor_id:
+                vals["preferred_vendor_id"] = result["vendor"].id
+        note_parts = [
+            "Пересопоставлено all-lines action"
+            if mode == "all"
+            else "Пересопоставлено unmatched action"
+        ]
+        if old_product:
+            note_parts.append(f"old product: {old_product.display_name}")
+        if (
+            result.get("line_type")
+            and result["line_type"] != "product_candidate"
+        ):
+            note_parts.append(f"line type: {result['line_type']}")
+        if result.get("combined_query"):
+            note_parts.append(f"combined query: {result['combined_query']}")
+        vals["matching_note"] = "; ".join(note_parts)
+        return vals
 
     def _notify_if_all_lines_supplied(self):
         """Уведомить, если все активные строки полностью обеспечены."""
@@ -571,14 +1397,34 @@ class ObjectRequest(models.Model):
             )
 
     def action_check_stock(self):
-        """Проверить остатки по всем активным складам компании."""
+        """Проверить остатки по складам выдачи."""
         self.ensure_one()
-        warehouses = self.env["stock.warehouse"].search(
-            [
-                ("company_id", "=", self.company_id.id),
-                ("active", "=", True),
-            ]
-        )
+        self._check_supply_manager_processing_action()
+        if self.state not in ("draft", "in_progress"):
+            raise UserError(
+                "Рассчитать наличие можно только в черновике или в работе."
+            )
+        if not self.issue_warehouse_selection_manual:
+            default_warehouses = self._get_default_issue_warehouses()
+            if (
+                set(self.issue_warehouse_ids.ids)
+                != set(default_warehouses.ids)
+            ):
+                self.with_context(
+                    auto_issue_warehouse_selection=True
+                ).sudo().write(
+                    {
+                        "issue_warehouse_ids": [
+                            (6, 0, default_warehouses.ids)
+                        ]
+                    }
+                )
+        warehouses = self._get_issue_warehouses()
+        if not warehouses:
+            raise UserError(
+                "Не выбран ни один склад выдачи. "
+                "Укажите склады на вкладке «Размещение по складам»."
+            )
         lines = self.line_ids.filtered(
             lambda ln: ln.product_id and not ln.is_cancelled
         )
@@ -619,13 +1465,6 @@ class ObjectRequest(models.Model):
                             **vals,
                         }
                     )
-            stale_stock_ids = line.stock_ids.filtered(
-                lambda stock: stock.warehouse_id not in warehouses
-            )
-            if stale_stock_ids:
-                stale_stock_ids.with_context(
-                    auto_stock_distribution=True
-                ).unlink()
         lines_with_stock = lines.filtered(lambda ln: ln.stock_qty_on_hand > 0)
         if lines_with_stock:
             return {
@@ -721,6 +1560,11 @@ class ObjectRequest(models.Model):
     def action_auto_split(self):
         """Авто-разбивка по складам с минимизацией числа складов."""
         self.ensure_one()
+        self._check_supply_manager_processing_action()
+        if self.state not in ("draft", "in_progress"):
+            raise UserError(
+                "Авто-разбивка доступна только в черновике или в работе."
+            )
         lines = self.line_ids.filtered(
             lambda ln: ln.product_id and not ln.is_cancelled
         )
@@ -747,76 +1591,8 @@ class ObjectRequest(models.Model):
                     "default_manual_line_count": len(manual_lines),
                 },
             }
-        stock_context = {"auto_stock_distribution": True}
         for line in lines:
-            requested = max(line.qty_requested - line.qty_issued, 0.0)
-            project_warehouse = line.request_id.project_id.warehouse_id
-            project_stock = line.stock_ids.filtered(
-                lambda stock: (
-                    stock.warehouse_id == project_warehouse
-                    and stock.qty_on_hand > 0
-                )
-            )[:1]
-            other_stock_ids = (line.stock_ids - project_stock).sorted(
-                key=lambda stock: stock.qty_on_hand,
-                reverse=True,
-            )
-            stock_ids = project_stock | other_stock_ids
-            stock_ids.with_context(**stock_context).write(
-                {
-                    "qty_to_issue": 0.0,
-                }
-            )
-            remaining = requested
-            single_stock = next(
-                (
-                    stock
-                    for stock in stock_ids
-                    if (
-                        stock.qty_on_hand >= requested
-                        and stock.id not in project_stock.ids
-                    )
-                ),
-                False,
-            )
-            if single_stock and not project_stock:
-                single_stock.with_context(**stock_context).write(
-                    {
-                        "qty_to_issue": requested,
-                    }
-                )
-                remaining = 0.0
-            else:
-                for stock in stock_ids:
-                    if remaining <= 0:
-                        break
-                    qty = min(max(stock.qty_on_hand, 0.0), remaining)
-                    if qty <= 0:
-                        continue
-                    stock.with_context(**stock_context).write(
-                        {
-                            "qty_to_issue": qty,
-                        }
-                    )
-                    remaining -= qty
-            qty_to_issue = sum(line.stock_ids.mapped("qty_to_issue"))
-            qty_to_buy = requested - qty_to_issue
-            if qty_to_issue > 0 and qty_to_buy > 0:
-                mode = "mixed"
-            elif qty_to_issue > 0:
-                mode = "issue"
-            elif qty_to_buy > 0:
-                mode = "buy"
-            else:
-                mode = "manual"
-            line.write(
-                {
-                    "qty_to_issue": qty_to_issue,
-                    "qty_to_buy": qty_to_buy,
-                    "procurement_mode": mode,
-                    "manual_plan_override": False,
-                }
-            )
+            line._apply_auto_issue_distribution(reset_manual_override=True)
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
@@ -831,8 +1607,30 @@ class ObjectRequest(models.Model):
     def action_open_issue_wizard(self):
         """Открыть wizard создания выдачи со склада."""
         self.ensure_one()
+        self._check_supply_manager_processing_action()
+        self._check_processing_state()
+        allowed_warehouses = self._get_issue_warehouses()
+        already_linked = self.line_ids.mapped("stock_ids").filtered(
+            lambda stock: stock.qty_to_issue > 0
+            and stock.line_id.product_id
+            and stock.warehouse_id in allowed_warehouses
+            and (stock.picking_id or stock.move_id)
+        )
+        if already_linked:
+            raise UserError(
+                "По части строк уже создана выдача. "
+                "Сбросьте или отмените существующую выдачу перед повторным "
+                "созданием."
+            )
+        self._check_issue_plan_stock_limits()
         stock_to_issue = self.line_ids.mapped("stock_ids").filtered(
-            lambda stock: stock.qty_to_issue > 0 and stock.line_id.product_id
+            lambda stock: (
+                stock.qty_to_issue > 0
+                and stock.line_id.product_id
+                and stock.warehouse_id in allowed_warehouses
+                and not stock.picking_id
+                and not stock.move_id
+            )
         )
         if not stock_to_issue:
             raise UserError(
@@ -853,6 +1651,8 @@ class ObjectRequest(models.Model):
     def action_open_purchase_wizard(self):
         """Открыть wizard создания черновиков закупки."""
         self.ensure_one()
+        self._check_supply_manager_processing_action()
+        self._check_purchase_preparation_state()
         lines_to_buy = self.line_ids.filtered(
             lambda ln: ln.qty_to_buy > 0 and ln.product_id
         )
@@ -860,6 +1660,14 @@ class ObjectRequest(models.Model):
             raise UserError(
                 "Нет строк с товаром и количеством к закупке. "
                 "Заполните поле «К закупке» в строках документа."
+            )
+        already_linked = lines_to_buy.filtered(
+            lambda ln: ln.purchase_order_id or ln.purchase_order_line_id
+        )
+        if already_linked:
+            raise UserError(
+                "По части строк уже создана закупка. "
+                "Проверьте связанные PO перед повторной подготовкой закупки."
             )
         return {
             "type": "ir.actions.act_window",

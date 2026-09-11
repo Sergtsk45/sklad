@@ -1,0 +1,138 @@
+{
+  "status": "ok",
+  "database": "odoo19_whm_stage",
+  "targets": {
+    "O002": {
+      "project_id": 6,
+      "project_name": "Б. Хмельницкого, 112",
+      "warehouse_id": 16,
+      "warehouse_code": "O002",
+      "warehouse_name": "Б. Хмельницкого, 112 склад",
+      "warehouse_active": true,
+      "lot_stock_id": 100,
+      "in_type_id": 121,
+      "int_type_id": 127,
+      "quant_rows": 16,
+      "quantity_total": 1668.0
+    },
+    "O001": {
+      "project_id": 5,
+      "project_name": "Ломоносова 164",
+      "warehouse_id": 10,
+      "warehouse_code": "O001",
+      "warehouse_name": "Ломоносова 164 склад",
+      "warehouse_active": true,
+      "lot_stock_id": 64,
+      "in_type_id": 73,
+      "int_type_id": 79,
+      "quant_rows": 17,
+      "quantity_total": 200.0
+    }
+  },
+  "ai_assistant": {
+    "find_warehouse": {
+      "O001": [
+        {
+          "id": 10,
+          "code": "O001",
+          "name": "Ломоносова 164 склад"
+        }
+      ],
+      "O002": [
+        {
+          "id": 16,
+          "code": "O002",
+          "name": "Б. Хмельницкого, 112 склад"
+        }
+      ],
+      "O": [
+        {
+          "id": 16,
+          "code": "O002",
+          "name": "Б. Хмельницкого, 112 склад"
+        },
+        {
+          "id": 10,
+          "code": "O001",
+          "name": "Ломоносова 164 склад"
+        }
+      ],
+      "Ломоносова": [
+        {
+          "id": 10,
+          "code": "O001",
+          "name": "Ломоносова 164 склад"
+        }
+      ],
+      "Хмельницкого": [
+        {
+          "id": 16,
+          "code": "O002",
+          "name": "Б. Хмельницкого, 112 склад"
+        }
+      ],
+      "ОбМ-2": [
+        {
+          "id": 10,
+          "code": "O001",
+          "name": "Ломоносова 164 склад"
+        }
+      ],
+      "ОбМ-4": [
+        {
+          "id": 16,
+          "code": "O002",
+          "name": "Б. Хмельницкого, 112 склад"
+        }
+      ]
+    },
+    "validators": {
+      "O002": null,
+      "O001": null
+    }
+  },
+  "draft_document_smoke": {
+    "product": {
+      "id": 605,
+      "name": "[23711] ЗРК 25ч945п-25-6,3-1,6-150-УХЛ4-VTM 3N02.B3.20-S"
+    },
+    "supplier": {
+      "id": 24,
+      "name": "АО «АМУРСНАБСБЫТ»"
+    },
+    "documents": {
+      "O002": {
+        "request": {
+          "id": 11,
+          "name": "OR/2026/06/0011"
+        },
+        "purchase_order": {
+          "id": 17,
+          "picking_type_id": 121,
+          "object_request_project_id": 6
+        },
+        "picking": {
+          "id": 47,
+          "picking_type_id": 127,
+          "object_request_project_id": 6
+        }
+      },
+      "O001": {
+        "request": {
+          "id": 12,
+          "name": "OR/2026/06/0012"
+        },
+        "purchase_order": {
+          "id": 18,
+          "picking_type_id": 73,
+          "object_request_project_id": 5
+        },
+        "picking": {
+          "id": 48,
+          "picking_type_id": 79,
+          "object_request_project_id": 5
+        }
+      }
+    }
+  }
+}

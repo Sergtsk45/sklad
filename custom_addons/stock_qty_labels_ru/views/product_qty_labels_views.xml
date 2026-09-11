@@ -72,10 +72,10 @@
         <field name="model">product.product</field>
         <field name="inherit_id" ref="stock.product_view_kanban_catalog"/>
         <field name="arch" type="xml">
-            <xpath expr="//span[@class='text-muted small'][contains(., 'Available')]" position="replace">
+            <xpath expr="//span[hasclass('text-muted', 'small')][contains(., 'Available')]" position="replace">
                 <span class="text-muted small"> Свободно</span>
             </xpath>
-            <xpath expr="//span[@class='text-muted small'][contains(., 'On Hand')]" position="replace">
+            <xpath expr="//span[hasclass('text-muted', 'small')][contains(., 'On Hand')]" position="replace">
                 <span class="text-muted small"> На складе</span>
             </xpath>
         </field>
@@ -90,7 +90,7 @@
             <xpath expr="//button[@name='action_product_forecast_report']//span[@groups='!uom.group_uom']" position="replace">
                 <span groups="!uom.group_uom">На складе</span>
             </xpath>
-            <xpath expr="//button[@name='action_product_forecast_report']//span[@class='o_stat_value text-muted']" position="replace">
+            <xpath expr="//button[@name='action_product_forecast_report']//span[hasclass('o_stat_value', 'text-muted')]" position="replace">
                 <span class="o_stat_value text-muted">Доступно</span>
             </xpath>
         </field>
@@ -105,7 +105,7 @@
             <xpath expr="//button[@name='action_product_tmpl_forecast_report']//span[@groups='!uom.group_uom']" position="replace">
                 <span groups="!uom.group_uom">На складе</span>
             </xpath>
-            <xpath expr="//button[@name='action_product_tmpl_forecast_report']//span[@class='o_stat_value text-muted']" position="replace">
+            <xpath expr="//button[@name='action_product_tmpl_forecast_report']//span[hasclass('o_stat_value', 'text-muted')]" position="replace">
                 <span class="o_stat_value text-muted">Доступно</span>
             </xpath>
         </field>

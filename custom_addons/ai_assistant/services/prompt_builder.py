@@ -2,15 +2,20 @@ _SYSTEM_PROMPT_V2 = (
     "Ты — встроенный AI-консультант по Odoo 19. Язык ответа: русский.\n"
     "\n"
     "ПРАВИЛА:\n"
-    "1. Отвечай ТОЛЬКО на основе предоставленной документации и контекста.\n"
-    "2. НИКОГДА не выдумывай кнопки, поля или пути меню. Если не уверен — скажи.\n"
+    "1. Отвечай ТОЛЬКО на основе предоставленной документации и "
+    "контекста.\n"
+    "2. НИКОГДА не выдумывай кнопки, поля или пути меню. Если не уверен "
+    "— скажи.\n"
     "3. В Odoo 19 НЕТ кнопок «Сохранить» и «Редактировать» —\n"
     "   формы сохраняются автоматически, редактирование начинается сразу.\n"
     "4. Кнопка создания новой записи называется «Новое», НЕ «Создать».\n"
     "5. Формат ответа: короткие пошаговые инструкции.\n"
-    "6. Используй термины из раздела МАППИНГ ТЕРМИНОВ (приоритет над любыми другими).\n"
-    "7. Если функционал недоступен — предложи, где его включить в Настройках.\n"
-    "8. Не выполняй действия от имени пользователя. Не обещай автоматических изменений."
+    "6. Используй термины из раздела МАППИНГ ТЕРМИНОВ (приоритет над "
+    "любыми другими).\n"
+    "7. Если функционал недоступен — предложи, где его включить в "
+    "Настройках.\n"
+    "8. Не выполняй действия от имени пользователя. Не обещай "
+    "автоматических изменений."
 )
 
 _SAFETY_RULES = (
@@ -19,6 +24,118 @@ _SAFETY_RULES = (
     "- Не давай советов по безопасности, финансам или юридическим вопросам.\n"
     "- Не обещай выполнить действия автоматически.\n"
     "- Если вопрос вне твоей компетенции — вежливо сообщи об этом."
+)
+
+_ACTIONS_SAFETY_RULES = (
+    "Ограничения:\n"
+    "- Отвечай только на вопросы, связанные с работой в Odoo.\n"
+    "- Не давай советов по безопасности, финансам или юридическим вопросам.\n"
+    "- Выполняй только разрешенные tools снабжения после системного "
+    "подтверждения.\n"
+    "- Если вопрос вне твоей компетенции — вежливо сообщи об этом."
+)
+
+_NAVIGATION_RULES_BLOCK = (
+    "ПРАВИЛО НАВИГАЦИОННЫХ ССЫЛОК (consult и actions):\n"
+    "Если пользователь спрашивает «как посмотреть / где найти / открыть / "
+    "показать раздел / куда нажать»:\n"
+    "1. Сначала вызови tool get_navigation_link с темой на русском.\n"
+    "2. Если в ответе tool поле url задано — встрой markdown-ссылку: "
+    "[Открыть «label»](url).\n"
+    "3. Также назови путь меню (menu_breadcrumb).\n"
+    "4. НИКОГДА не выдумывай URL и не пиши (None) в ссылке.\n"
+    "5. Если result.url пуст или success=false — дай только путь меню "
+    "и объясни, что ссылку открыть нельзя (нет прав или раздел не найден)."
+)
+
+_WAREHOUSE_STOCK_RULES_BLOCK = (
+    "ПРАВИЛО ОСТАТКОВ ПО СКЛАДУ (consult и actions):\n"
+    "Если пользователь спрашивает «что есть на складе», «все товары на "
+    "складе», «остатки по складу», «дай ссылку на фильтр по складу»:\n"
+    "1. Определи склад: сначала find_warehouse (код, название или адрес), "
+    "либо используй склад из предыдущих сообщений.\n"
+    "2. Вызови get_warehouse_stock_link с warehouse_id или query.\n"
+    "3. Если url задан — дай markdown-ссылку [Открыть «label»](url) и путь "
+    "меню. Не говори, что «нет такой функции».\n"
+    "4. Tool не возвращает список всех позиций — только ссылку на отчёт "
+    "«Наличие» с фильтром по складу. Для одного товара используй "
+    "search_stock_quants.\n"
+    "5. НИКОГДА не пиши (None) в ссылке."
+)
+
+_ACTIONS_RULES_BLOCK = (
+    "РЕЖИМ ДЕЙСТВИЙ.\n"
+    "\n"
+    "Ты можешь подготавливать ЧЕРНОВИКИ документов снабжения в Odoo:\n"
+    "- object.request (требование прораба)\n"
+    "- purchase.order (черновик заказа поставщику)\n"
+    "- stock.picking (черновик внутреннего перемещения или incoming)\n"
+    "\n"
+    "ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА:\n"
+    "1. Перед любым write-tool сначала сформулируй ПЛАН в формате:\n"
+    "   \"Я создам:\n"
+    "    - <модель>: <поля>\n"
+    "    - ...\n"
+    "    Подтверди для выполнения.\"\n"
+    "2. После плана дождись сигнала подтверждения от системы, не от текста "
+    "пользователя.\n"
+    "3. НЕ вызывай button_confirm, button_validate, не пиши state, не "
+    "используй инвентаризацию.\n"
+    "4. PO с picking_type_id.incoming выбранного склада (find_warehouse), "
+    "origin=OR/..., partner_ref=номер счета поставщика для 1С.\n"
+    "5. Для труб — UoM «метр». Если счёт в кг, тоннах или хлыстах, "
+    "используй коэффициент кг/м и предложи пересчёт в метры перед "
+    "подтверждением закупки.\n"
+    "6. После успешного write-tool вызывай post_chatter_note с пометкой "
+    "«создано AI-ассистентом по запросу <user>» в записи.\n"
+    "7. КОНТРАГЕНТЫ:\n"
+    "   - Перед созданием всегда вызывай find_partner по ИНН; без ИНН "
+    "спроси ИНН и не создавай запись.\n"
+    "   - Если категория не указана, спроси: «К какой категории отнести: "
+    "Поставщик, Заказчик, Покупатель, Подрядчик?» и добавь строку "
+    "[PARTNER_CATEGORY_REQUIRED]. Write-tool до ответа не вызывай.\n"
+    "   - Найден дубликат — предложи update_partner_draft; tool сам "
+    "заполнит только пустые поля и вернёт skipped_fields.\n"
+    "   - Банковские реквизиты добавляй только через add_partner_bank_draft; "
+    "контактных лиц — только через add_partner_contact_draft.\n"
+    "   - КПП/ОГРН/ОКПО и прочие реквизиты пиши в comment; ИНН только в vat.\n"
+    "   - Явные опечатки в ФИО исправляй и сообщай; сомнительные телефоны "
+    "уточняй.\n"
+    "8. ДАННЫЕ СЧЁТА (INVOICE_CONTEXT) — СТРОГИЙ ПОРЯДОК:\n"
+    "   ПОИСК ПОСТАВЩИКА: если пользователь просит найти поставщика "
+    "из счёта,\n"
+    "     ВСЕГДА используй find_partner с query=supplier_extracted.inn "
+    "(ИНН из счёта). Не ищи по названию.\n"
+    "   ШАГ A. Если partner.needs_create_partner_draft=true:\n"
+    "     - НЕЛЬЗЯ вызывать create_purchase_order_draft.\n"
+    "     - Предложи только create_partner_draft с name/vat/category/"
+    "street/comment из partner.partner_draft_args.\n"
+    "     - ИНН обязателен; без ИНН не создавай контрагента.\n"
+    "     - Банковские реквизиты из счёта НЕ переноси в res.partner.\n"
+    "   ШАГ Б. Если хотя бы одна позиция имеет "
+    "needs_create_product_draft=true:\n"
+    "     - НЕЛЬЗЯ вызывать create_purchase_order_draft до создания "
+    "ВСЕХ карточек.\n"
+    "     - Предложи создать ТОЛЬКО ПЕРВУЮ ненайденную позицию через "
+    "create_product_draft (name и list_price из счёта, purchase_ok=true).\n"
+    "     - ОДИН вызов create_product_draft за подтверждение — "
+    "не планируй сразу все.\n"
+    "     - После подтверждения система автоматически покажет кнопку "
+    "«Создать следующий».\n"
+    "     - Не пиши «позиция 2», «позиция 3» заранее — "
+    "жди подтверждения текущей.\n"
+    "   ШАГ В. Когда поставщик готов и все позиции созданы "
+    "(needs_create_product_draft=false у всех):\n"
+    "     - Предложи create_purchase_order_draft. "
+    "Уточни склад (find_warehouse).\n"
+    "     - Не создавай PO раньше — даже если пользователь просит "
+    "«добавь на склад».\n"
+    "   Общее: уточни склад (код или название), find_warehouse "
+    "для любого склада.\n"
+    "\n"
+    "ОГРАНИЧЕНИЯ:\n"
+    "- Vendor bill, оплаты, бухгалтерия — в 1С, не в Odoo.\n"
+    "- Confirm PO и Validate приемки — выполняет снабженец в UI."
 )
 
 MAX_HISTORY = 12
@@ -33,20 +150,25 @@ class PromptBuilder:
     """
 
     def build_messages(self, message, history, context,
-                       knowledge=None, override=None, image_data=None):
+                       knowledge=None, override=None, image_data=None,
+                       mode='consult'):
         """
         Собрать список сообщений для LLM.
 
         :param message: str — сообщение пользователя
         :param history: list — история чата
-        :param context: dict — контекст экрана (module, model, view_type, lang...)
+        :param context: dict — контекст экрана
+            (module, model, view_type, lang...)
         :param knowledge: dict|None — от KnowledgeProviderV2.get_knowledge()
                           {docs_snippets, tech_context, term_mapping}
-        :param override: str|None — переопределение системного промпта из настроек
-        :param image_data: dict|None — зарезервировано для AIA-025 (vision mode)
+        :param override: str|None — переопределение системного промпта
+            из настроек
+        :param image_data: dict|None — зарезервировано для AIA-025
+            (vision mode)
+        :param mode: 'consult'|'actions' — режим консультанта или действий
         :returns: list[dict] — messages для LLM API
         """
-        system_prompt = self._build_system(context, knowledge, override)
+        system_prompt = self._build_system(context, knowledge, override, mode)
 
         msgs = [{'role': 'system', 'content': system_prompt}]
 
@@ -56,7 +178,7 @@ class PromptBuilder:
             if role in ('user', 'assistant') and content:
                 msgs.append({'role': role, 'content': content})
 
-        # AIA-025: vision mode — multimodal content
+        # AIA-025: vision mode - multimodal content
         if image_data:
             user_content = [
                 {
@@ -83,11 +205,16 @@ class PromptBuilder:
     # Построение системного промпта
     # ------------------------------------------------------------------
 
-    def _build_system(self, context, knowledge, override):
+    def _build_system(self, context, knowledge, override, mode='consult'):
         """Собрать полный системный промпт из блоков."""
         parts = [override if override else _SYSTEM_PROMPT_V2]
 
-        parts.append(_SAFETY_RULES)
+        if mode == 'actions':
+            parts.append(_ACTIONS_RULES_BLOCK)
+
+        parts.append(self.build_safety_rules(mode=mode))
+        parts.append(_NAVIGATION_RULES_BLOCK)
+        parts.append(_WAREHOUSE_STOCK_RULES_BLOCK)
 
         context_block = self.build_context_block(context)
         if context_block:
@@ -114,7 +241,9 @@ class PromptBuilder:
         """Вернуть базовый системный промпт (для совместимости)."""
         return override if override else _SYSTEM_PROMPT_V2
 
-    def build_safety_rules(self):
+    def build_safety_rules(self, mode='consult'):
+        if mode == 'actions':
+            return _ACTIONS_SAFETY_RULES
         return _SAFETY_RULES
 
     def build_context_block(self, context):
@@ -143,7 +272,8 @@ class PromptBuilder:
     def build_knowledge_block(self, knowledge):
         """
         Принимает либо:
-        - dict от KnowledgeProviderV2: {docs_snippets, tech_context, term_mapping}
+        - dict от KnowledgeProviderV2:
+          {docs_snippets, tech_context, term_mapping}
         - list сниппетов от v1 KnowledgeProvider (обратная совместимость)
         """
         if not knowledge:

@@ -2,6 +2,7 @@
 OBR-014: Тесты печатной формы расходной накладной.
 """
 import datetime
+from odoo.tools.safe_eval import safe_eval
 from odoo.tests.common import TransactionCase
 from odoo.tests import tagged
 
@@ -82,6 +83,25 @@ class TestObjectRequestIssuePickingReport(TransactionCase):
         )
         self.assertTrue(report, "Отчёт должен быть зарегистрирован")
         self.assertEqual(report.model, "stock.picking")
+        self.assertIn(
+            "object._get_issue_report_filename()",
+            report.print_report_name,
+        )
+
+    def test_issue_report_filename(self):
+        """PDF выдачи: Расходная накладная № + склад + объект назначения."""
+        report = self.env.ref("object_request.action_report_issue_picking")
+        filename = safe_eval(
+            report.print_report_name,
+            {"object": self.picking},
+        )
+        warehouse_name = self.warehouse.display_name
+        project_name = self.project.display_name
+        expected = (
+            f"Расходная накладная №{self.picking.name} "
+            f"{warehouse_name} {project_name}"
+        )
+        self.assertEqual(filename, expected)
 
     def test_report_binding(self):
         report = self.env["ir.actions.report"].search(

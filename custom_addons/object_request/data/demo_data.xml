@@ -6,7 +6,7 @@
 
     <record id="product_category_construction" model="product.category">
         <field name="name">Строительные материалы</field>
-        <field name="parent_id" ref="product.product_category_all"/>
+        <field name="parent_id" ref="product.product_category_goods"/>
     </record>
 
     <!-- ========== 2. Поставщики ========== -->
