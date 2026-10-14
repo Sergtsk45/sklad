@@ -41,3 +41,13 @@ __pycache__/
 # Odoo backups (создаются скриптом, хранить не в git)
 backups/
 Dockerfile.bak.*
+
+# Рабочие данные склада (репо публичный): счета, сметы, выгрузки, скрипты с доступами
+docs/invoices/
+docs/materials/
+docs/skreen/
+docs/*.xlsx
+exports/
+tmp/
+agent-tools_tmp_*.json
+*Zone.Identifier
