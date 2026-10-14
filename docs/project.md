@@ -584,3 +584,28 @@ flowchart TD
     Pending --> ConfirmCard[ConfirmationCard / ResultCard]
     Controller --> CategoryChips[chips выбора категории контрагента]
 ```
+
+## Cursor-агент: разбор PDF-счетов
+
+Встроенный `InvoiceWorkflow` в Odoo чате парсит PDF на бэкенде. Отдельный
+путь — складской агент Cursor по файлам `docs/invoices/`. Read-картинка PDF
+**не** источник истины: модель может выдумать другой номер, ИНН и сумму
+(инцидент 2026-09-15: одно переименование разобрали как три счёта).
+
+Обязательный контур агента:
+
+1. Отпечаток байт: `.cursor/skills/scanned-invoice-parsing/scripts/invoice_identity.py`
+   (`sha256`). Одинаковый хеш = тот же документ при любом имени файла.
+2. Скан → Tesseract `ocr_parse.py` / `amurstroy_parse.py`. Текстовый слой →
+   `extract_invoice()`.
+3. Запись в Odoo (контрагент, PO) только если № / ИНН / итого взяты из
+   шага 2. Спор с vision → стоп.
+
+УПТК «Амурстрой» (ИНН 2801019127) на одну заявку ТСК часто выставляет
+несколько договор-счетов (разные склады/магазин поставщика). В Odoo это
+**один** `purchase.order`: все номера в `partner_ref`, итого = сумма счетов.
+Другой поставщик — отдельный заказ. Правило:
+`.cursor/rules/purchase-from-invoice.mdc`.
+
+Правило идентичности файла: `.cursor/rules/invoice-file-identity.mdc`.
+
