@@ -14,6 +14,9 @@
 - `test_write_tools`: отказ по `origin` и `partner_ref` с номером OR/…;
   `test_e2e_supply_cycle`: отказ через executor. Сценарии с PO переведены
   на `origin` «Счёт УТ-1132». `ai_assistant`: 435 tests, 0 failed.
+- Prod deploy `fd00e54`: backup
+  `~/backups/before_ai_1.2.5_2026-10-14_2233.sql.gz`, `-u ai_assistant` →
+  `19.0.1.2.5`, restart; `/web/login` HTTP 200.
 
 ## [2026-10-15] — fix(object_request): закупка обеспечивает строку только при приходе на склад объекта (19.0.1.10.32)
 
