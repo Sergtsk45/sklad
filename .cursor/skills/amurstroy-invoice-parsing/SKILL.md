@@ -20,6 +20,7 @@ compatibility: "Tesseract rus+eng, pdfplumber, scripts/amurstroy_parse.py"
 Если формат не Амурстрой — скилл **scanned-invoice-parsing**.
 
 **Не заносить в Odoo** без явной команды (`agent-intent-odoo-mcp`).
+Сначала `invoice_identity.py` (sha256). Имя файла ≠ номер счёта. Vision PDF не источник ИНН/итого.
 
 ---
 

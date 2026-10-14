@@ -1,0 +1,46 @@
+---
+description: Prod SMTP/RFQ — DNS smtp.mail.ru, диагностика писем, SSH на VPS
+alwaysApply: true
+---
+
+# Почта RFQ на prod (skladtsk)
+
+## Симптом (2026-09-09)
+
+«Отправить запрос» в Odoo → статус закупки **RFQ Sent**, во «Входящих» ТСК пусто.
+Письмо **не ушло ни поставщику, ни на копию**. Статус `sent` у PO — только кнопка, не SMTP.
+
+## Причина
+
+Контейнер `odoo` на VPS (`195.209.210.27`) не резолвил `smtp.mail.ru`:
+`getaddrinfo` → `Temporary failure in name resolution` (EAI_AGAIN).
+Сеть `odoo_internal` с `internal: true` ломает Docker DNS (`127.0.0.11`),
+хотя `n8n_web` снаружи есть. Локальный `odoo19-local` SMTP видит, prod — нет.
+
+Проверка в Odoo: `mail.mail` `state=exception`, `failure_reason` про DNS;
+`mail.notification` у вендора и партнёра компании (`675001@mail.ru`) — `mail_smtp`.
+
+## Как чинили
+
+В `docker-compose.yml` у сервиса `odoo`: `dns: 8.8.8.8 / 1.1.1.1` и
+`extra_hosts` (`smtp.mail.ru` → `217.69.139.160`, `smtp.yandex.ru` → `77.88.21.158`).
+На VPS: `docker compose up -d odoo --force-recreate`.
+Python `create_connection(("smtp.mail.ru", 465))` должен открываться.
+
+Повтор exception-письма: `write(state=outgoing)`, затем `send()`.
+Успех: `mail.mail` исчезает (`auto_delete`), notification_status **sent** (Delivered).
+
+## Копия на 675001@mail.ru
+
+Письмо **с** этого ящика **на** него же. mail.ru часто кладёт копию в
+«Отправленные», не во «Входящие». Сначала смотреть Sent/спам.
+
+## SSH на VPS
+
+```bash
+ssh -i ~/.ssh/vps_deploy.pem ubuntu@195.209.210.27
+cd /opt/project_odoo
+```
+
+Не путать prod `skladtsk.duckdns.org` с локальным `localhost:8069`.
+Подробнее: `docs/deploy.md` § «RFQ / SMTP не уходит».

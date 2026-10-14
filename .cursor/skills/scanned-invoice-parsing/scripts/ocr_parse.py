@@ -39,11 +39,25 @@ _REPLACEMENTS = [
     (r"gamail", "gmail"),
 ]
 
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+from invoice_identity import file_identity  # noqa: E402
+
 _INN_RE = re.compile(r"(\d{10}|\d{12})")
-_KPP_AFTER_INN = re.compile(r"(\d{10,12})[/:\s]+(\d{9})")
+_KPP_AFTER_INN = re.compile(r"(\d{10,12})[/:\s]+(\d{9})(?!\d)")
 _CONTRACT_RE = re.compile(
     r"Договор[-\s]?Счет\s*№\s*([Пп]?\d+)\s+от\s+(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})",
     re.I,
+)
+_PAY_INVOICE_RE = re.compile(
+    r"Счет на оплату\s*№\s*([A-Za-zА-Яа-яЁё0-9\-]+)\s+от\s+"
+    r"(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}|\d{1,2}\s+[а-яА-ЯёЁ]+\s+\d{4})",
+    re.I,
+)
+_SUPPLIER_LINE_RE = re.compile(
+    r"Поставщик:\s*(.+?),\s*ИНН\s*(\d{10,12})",
+    re.I | re.S,
 )
 _TOTAL_RE = re.compile(r"Итого:\s*([\d\s]+[,.][\d]{2})", re.I)
 _VAT_RE = re.compile(r"НДС:\s*([\d\s]+[,.][\d]{2})", re.I)
@@ -108,6 +122,17 @@ def _extract_header(full_text: str) -> dict:
     if m:
         result["invoice_number"] = m.group(1)
         result["invoice_date"] = m.group(2)
+    else:
+        pay = _PAY_INVOICE_RE.search(full_text)
+        if pay:
+            result["document_type"] = "payment_invoice"
+            result["invoice_number"] = pay.group(1)
+            result["invoice_date"] = pay.group(2)
+
+    supplier_line = _SUPPLIER_LINE_RE.search(full_text)
+    if supplier_line:
+        result["supplier"]["name"] = re.sub(r"\s+", " ", supplier_line.group(1)).strip()
+        result["supplier"]["inn"] = supplier_line.group(2)
 
     for inn_m in _INN_RE.finditer(full_text):
         inn = inn_m.group(1)
@@ -165,6 +190,8 @@ def _extract_items(table_text: str) -> list[dict]:
 
 
 def parse_invoice_pdf(path: Path) -> dict:
+    path = Path(path)
+    identity = file_identity(path, scan_dir=path.parent)
     with pdfplumber.open(path) as pdf:
         page = pdf.pages[0]
         if page.chars:
@@ -172,6 +199,7 @@ def parse_invoice_pdf(path: Path) -> dict:
                 "source": "text_layer",
                 "message": "PDF содержит текстовый слой — используйте extract_invoice() из ai_assistant",
                 "chars": len(page.chars),
+                "identity": identity,
             }
 
         full_text, table_text = _ocr_page(page)
@@ -187,12 +215,15 @@ def parse_invoice_pdf(path: Path) -> dict:
                 sys.path.insert(0, str(_amur_path))
             from amurstroy_parse import parse_amurstroy_texts  # noqa: WPS433
 
-            return parse_amurstroy_texts(full_text, table_text, file=str(path))
+            parsed = parse_amurstroy_texts(full_text, table_text, file=str(path))
+            parsed["identity"] = identity
+            return parsed
         except Exception as exc:
             return {
                 "source": "ocr",
                 "format": "amurstroy_contract_invoice",
                 "file": str(path),
+                "identity": identity,
                 "warnings": [
                     "pdf_is_scan",
                     "ocr_tesseract",
@@ -224,6 +255,7 @@ def parse_invoice_pdf(path: Path) -> dict:
     return {
         "source": "ocr",
         "file": str(path),
+        "identity": identity,
         "warnings": warnings,
         "needs_review": needs_review,
         **header,
@@ -253,6 +285,12 @@ def main() -> int:
         return 0
 
     print(f"Источник: {result.get('source')}")
+    ident = result.get("identity") or {}
+    if ident.get("sha256"):
+        print(f"sha256: {ident['sha256']}")
+        extras = ident.get("same_bytes") or []
+        if extras:
+            print("same_bytes:", "; ".join(extras))
     if result.get("message"):
         print(result["message"])
         return 0

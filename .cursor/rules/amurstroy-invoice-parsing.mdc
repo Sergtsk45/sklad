@@ -10,6 +10,7 @@ alwaysApply: false
 
 ## Быстрый чеклист
 
+0. **sha256** — `invoice_identity.py`; переименование ≠ новый счёт.
 1. **Текстовый слой?** `pdfplumber` → `len(page.chars)`.
 2. **Амурстрой?** ИНН `2801019127`, «Договор-Счет № П…», имя `schetП*.pdf`.
 3. **Парсер** — скилл **amurstroy-invoice-parsing**:

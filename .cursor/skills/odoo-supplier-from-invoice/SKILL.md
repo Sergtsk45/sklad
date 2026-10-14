@@ -23,6 +23,9 @@ compatibility: "Odoo MCP (инструменты: odoo:search_records, odoo:crea
 
 ## Шаг 1 — Чтение файла
 
+Сначала отпечаток: `invoice_identity.py` (скилл `scanned-invoice-parsing`).
+Одинаковый sha256 = тот же документ. Реквизиты — из OCR/текста, не с Read-картинки PDF.
+
 ### PDF
 
 1. Проверь текстовый слой (`pdfplumber`, `len(page.chars)`).
