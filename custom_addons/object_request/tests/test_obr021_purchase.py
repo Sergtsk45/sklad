@@ -600,6 +600,69 @@ class TestOBR021Purchase(TransactionCase):
         self.assertEqual(line.qty_to_issue, 0.0)
         self.assertEqual(line.qty_to_buy, 0.0)
 
+    def _receive_with_picking_type(self, request, picking_type):
+        """Создать PO мастером с заданным типом приёмки и провести приход."""
+        wizard = self._open_wizard(request)
+        wizard.picking_type_id = picking_type
+        result = wizard.action_create_purchase()
+        po = self.env["purchase.order"].browse(result["res_id"])
+        po.button_confirm()
+        picking = po.picking_ids.filtered(
+            lambda item: item.picking_type_id.code == "incoming"
+        )[:1]
+        self._validate_receipt(picking)
+
+    def _create_other_warehouse(self):
+        return self.env["stock.warehouse"].create(
+            {
+                "name": "Основной склад OBR021",
+                "code": "OB21",
+            }
+        )
+
+    def test_receipt_to_other_warehouse_does_not_supply_line(self):
+        """Приход PO не на склад объекта не считается обеспечением."""
+        product = self.env["product.product"].create(
+            {
+                "name": "Продукт other warehouse OBR021",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        request = self._create_request()
+        line = self._add_line(request, product, 4.0, self.vendor1)
+        request.write({"state": "in_progress"})
+        other_warehouse = self._create_other_warehouse()
+
+        self._receive_with_picking_type(request, other_warehouse.in_type_id)
+
+        line.invalidate_recordset()
+        self.assertEqual(line.qty_received_purchase, 0.0)
+        self.assertEqual(line.qty_issued, 0.0)
+        self.assertEqual(line.qty_to_buy, 4.0)
+        self.assertNotEqual(line.line_state, "fully_supplied")
+
+    def test_receipt_to_any_warehouse_counts_without_project_warehouse(self):
+        """Без склада объекта приход на любой склад считается обеспечением."""
+        product = self.env["product.product"].create(
+            {
+                "name": "Продукт no project warehouse OBR021",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        request = self._create_request()
+        line = self._add_line(request, product, 4.0, self.vendor1)
+        request.write({"state": "in_progress"})
+        other_warehouse = self._create_other_warehouse()
+        self.project.write({"warehouse_id": False})
+
+        self._receive_with_picking_type(request, other_warehouse.in_type_id)
+
+        line.invalidate_recordset()
+        self.assertEqual(line.qty_received_purchase, 4.0)
+        self.assertEqual(line.line_state, "fully_supplied")
+
     def test_purchase_wizard_fallback_receipt_type_without_project_warehouse(
         self,
     ):

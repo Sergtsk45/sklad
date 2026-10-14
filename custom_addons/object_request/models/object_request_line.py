@@ -719,16 +719,26 @@ class ObjectRequestLine(models.Model):
         return moves
 
     def _object_request_purchase_receipt_moves(self):
+        """Done receipt moves of the linked PO line into the project warehouse.
+
+        A receipt into another warehouse (e.g. the main one) does not supply
+        the object: the goods stay there as free stock. Without a project
+        warehouse every done receipt is counted (legacy behaviour).
+        """
         self.ensure_one()
         if not self.purchase_order_line_id:
             return self.env["stock.move"]
-        return self.env["stock.move"].search(
-            [
-                ("purchase_line_id", "=", self.purchase_order_line_id.id),
-                ("picking_type_id.code", "=", "incoming"),
-                ("state", "=", "done"),
-            ]
-        )
+        domain = [
+            ("purchase_line_id", "=", self.purchase_order_line_id.id),
+            ("picking_type_id.code", "=", "incoming"),
+            ("state", "=", "done"),
+        ]
+        project_warehouse = self.request_id.project_id.warehouse_id
+        if project_warehouse:
+            domain.append(
+                ("location_dest_id.warehouse_id", "=", project_warehouse.id)
+            )
+        return self.env["stock.move"].search(domain)
 
     def _object_request_move_qty_in_line_uom(self, moves):
         self.ensure_one()
