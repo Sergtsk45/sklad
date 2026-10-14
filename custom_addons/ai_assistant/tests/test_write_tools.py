@@ -164,11 +164,31 @@ class TestActionWriteTools(TransactionCase):
         self.assertEqual(po.state, 'draft')
         self.assertEqual(po.partner_id, self.vendor)
         self.assertEqual(po.picking_type_id, self.object_warehouse.in_type_id)
-        self.assertEqual(po.origin, 'OR/2026/05/0007')
+        self.assertEqual(po.origin, 'Счёт УТ-1132')
         self.assertEqual(po.partner_ref, 'УТ-1132')
         self.assertEqual(len(po.order_line), 6)
         self.assertEqual(sum(po.order_line.mapped('product_qty')), 1098)
         self.assertEqual(result['warnings'], [])
+
+    def test_create_purchase_order_rejects_object_request_origin(self):
+        """PO по требованию OR/… создаётся только мастером закупки."""
+        tool = CreatePurchaseOrderDraftTool()
+        args = self._purchase_args()
+        args['origin'] = 'Заявка OR/2026/10/0087 (поставщик: Татаринов)'
+        po_count = self.env['purchase.order'].search_count([])
+
+        with self.assertRaisesRegex(ValidationError, 'Подготовить закупку'):
+            tool.execute(self.env(user=self.supply_user), args)
+        self.assertEqual(self.env['purchase.order'].search_count([]), po_count)
+
+    def test_create_purchase_order_rejects_object_request_partner_ref(self):
+        """Номер требования в partner_ref тоже запрещён."""
+        tool = CreatePurchaseOrderDraftTool()
+        args = self._purchase_args()
+        args['partner_ref'] = 'OR/2026/10/0088'
+
+        with self.assertRaises(ValidationError):
+            tool.execute(self.env(user=self.supply_user), args)
 
     def test_create_purchase_order_accepts_non_object_picking_type(self):
         tool = CreatePurchaseOrderDraftTool()
@@ -579,7 +599,7 @@ class TestActionWriteTools(TransactionCase):
         return {
             'partner_id': self.vendor.id,
             'picking_type_id': self.object_warehouse.in_type_id.id,
-            'origin': 'OR/2026/05/0007',
+            'origin': 'Счёт УТ-1132',
             'partner_ref': 'УТ-1132',
             'date_planned': '2026-06-11 08:00:00',
             'lines': [

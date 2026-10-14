@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 from datetime import datetime, timedelta
 
 from odoo.exceptions import AccessError, ValidationError
@@ -23,6 +24,25 @@ from .validators import (
     validate_uom_is_meter,
     validate_vat_unique,
 )
+
+
+OBJECT_REQUEST_NAME_RE = re.compile(r'OR/\d{4}/\d{2}/\d+')
+OBJECT_REQUEST_PURCHASE_ERROR = (
+    'Закупку по требованию на комплектацию (%s) AI-ассистент не создаёт. '
+    'Её создаёт снабженец кнопкой «Подготовить закупку» в требовании: '
+    'склад приёмки = склад объекта, строки требования связываются с '
+    'заказом автоматически.'
+)
+
+
+def _ensure_not_object_request_purchase(args):
+    """Запретить PO по требованию OR/… в обход мастера закупки."""
+    for key in ('origin', 'partner_ref'):
+        match = OBJECT_REQUEST_NAME_RE.search(args.get(key) or '')
+        if match:
+            raise ValidationError(
+                OBJECT_REQUEST_PURCHASE_ERROR % match.group(0)
+            )
 
 
 def _ensure_tool_required_groups(tool, env):
@@ -287,6 +307,7 @@ class CreatePurchaseOrderDraftTool(AbstractWriteTool):
         return hashlib.sha256(raw_payload.encode('utf-8')).hexdigest()
 
     def _validate_header(self, env, args):
+        _ensure_not_object_request_purchase(args)
         validate_partner_is_supplier(env, args['partner_id'])
         validate_picking_type_for_purchase(env, args['picking_type_id'])
         picking_type = env['stock.picking.type'].browse(

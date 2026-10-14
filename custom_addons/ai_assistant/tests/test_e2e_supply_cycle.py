@@ -139,18 +139,39 @@ class TestUT1132PipelineDraft(TransactionCase):
         )
         self.assertEqual(po.state, 'draft')
         self.assertEqual(po.picking_type_id.warehouse_id.code, 'O002')
-        self.assertEqual(po.origin, 'OR/2026/05/0007')
+        self.assertEqual(po.origin, 'Счёт УТ-1132')
         self.assertEqual(po.partner_ref, 'УТ-1132')
         self.assertEqual(sum(po.order_line.mapped('product_qty')), 1098)
         body = '\n'.join(po.message_ids.mapped('body'))
         self.assertIn('AI Assistant', body)
+
+    def test_request_origin_purchase_is_refused(self):
+        """Через executor PO по требованию не создаётся."""
+        executor = ToolExecutor(
+            self.env(user=self.supply_user),
+            rate_limiter=ToolRateLimiter(),
+        )
+        args = self._purchase_args(
+            self.warehouse.in_type_id.id,
+            self.vendor.id,
+        )
+        args['origin'] = self.request.name
+
+        result = executor.execute('create_purchase_order_draft', args)
+
+        self.assertFalse(result['success'])
+        self.assertFalse(
+            self.env['purchase.order'].search(
+                [('origin', '=', self.request.name)]
+            )
+        )
 
     def _purchase_args(self, picking_type_id, partner_id):
         quantities = [18.0, 180.0, 78.0, 306.0, 180.0, 336.0]
         return {
             'partner_id': partner_id,
             'picking_type_id': picking_type_id,
-            'origin': self.request.name,
+            'origin': 'Счёт УТ-1132',
             'partner_ref': 'УТ-1132',
             'date_planned': '2026-06-12 08:00:00',
             'lines': [
