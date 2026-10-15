@@ -1,7 +1,14 @@
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 
-from .fastener_mass import suggest_kg_per_piece
+from .fastener_mass import (
+    KG_PER_PIECE_DIGITS,
+    gost_fastener_name,
+    gost_fastener_specs,
+    is_zinc_coated,
+    parse_fastener,
+    suggest_kg_per_piece,
+)
 
 
 PRODUCT_FAMILY_SELECTION = [
@@ -101,7 +108,7 @@ class ProductTemplate(models.Model):
     )
     kg_per_piece = fields.Float(
         string="Масса 1 шт., кг",
-        digits=(16, 4),
+        digits=(16, KG_PER_PIECE_DIGITS),
         help=(
             "Для метизов, которые учитываются и закупаются в кг: "
             "в требовании потребность вводится в шт. и пересчитывается "
@@ -111,12 +118,12 @@ class ProductTemplate(models.Model):
 
     kg_per_piece_suggested = fields.Float(
         string="Расчётная масса 1 шт., кг",
-        digits=(16, 4),
+        digits=(16, KG_PER_PIECE_DIGITS),
         compute="_compute_kg_per_piece_suggested",
         help=(
-            "Теоретическая масса болта (ГОСТ 7798) или гайки (ГОСТ 5915) "
-            "по наименованию: размеры стандарта, сталь 7,85 г/см³, без "
-            "фасок. Проверьте по счёту или взвешиванием."
+            "Масса болта (ГОСТ 7798) или гайки (ГОСТ 5915) по "
+            "наименованию: табличная по ГОСТ, вне таблицы — расчёт по "
+            "размерам стандарта (сталь 7,85 г/см³, без фасок)."
         ),
     )
 
@@ -168,6 +175,55 @@ class ProductTemplate(models.Model):
         for template in self.filtered("kg_per_piece_suggested"):
             template.kg_per_piece = template.kg_per_piece_suggested
         return True
+
+    @api.model
+    def _create_gost_fastener_templates(self):
+        """Карточки болтов ГОСТ 7798 и гаек ГОСТ 5915 в кг (TD-016).
+
+        По каждому типоразмеру таблиц ГОСТ — чёрная и оцинкованная
+        карточка с табличной массой 1 шт. Типоразмер с тем же покрытием,
+        уже заведённый в кг, пропускается. Возвращает созданные карточки.
+        """
+        kg = self.env.ref("uom.product_uom_kgm")
+        existing = self._existing_kg_fastener_keys()
+        category = self.env["product.category"].search(
+            [("name", "=", "Расходники")], limit=1
+        )
+        vals_list = []
+        for kind, diameter, length, mass in gost_fastener_specs():
+            for zinc in (False, True):
+                if (kind, diameter, length, zinc) in existing:
+                    continue
+                vals = {
+                    "name": gost_fastener_name(kind, diameter, length, zinc),
+                    "type": "consu",
+                    "is_storable": True,
+                    "uom_id": kg.id,
+                    "kg_per_piece": mass,
+                }
+                if category:
+                    vals["categ_id"] = category.id
+                vals_list.append(vals)
+        return self.create(vals_list)
+
+    @api.model
+    def _existing_kg_fastener_keys(self):
+        """{(kind, d, length, оцинкован)} активных метизов в единицах веса."""
+        keys = set()
+        langs = {code for code, _name in self.env["res.lang"].get_installed()}
+        domain = ["|", ("name", "ilike", "болт"), ("name", "ilike", "гайк")]
+        templates = self.browse()
+        for lang in langs:
+            templates |= self.with_context(lang=lang).search(domain)
+        for template in templates:
+            if not template._is_weight_uom(template.uom_id):
+                continue
+            for lang in langs:
+                name = template.with_context(lang=lang).name
+                parsed = parse_fastener(name)
+                if parsed:
+                    keys.add((*parsed, is_zinc_coated(name)))
+        return keys
 
     @api.constrains("kg_per_piece", "uom_id")
     def _check_kg_per_piece_uom(self):

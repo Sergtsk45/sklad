@@ -1,14 +1,15 @@
 import logging
 
 from odoo import SUPERUSER_ID, api
+from odoo.addons.object_request.models.fastener_mass import gost_table_mass_kg
 
 
 _logger = logging.getLogger(__name__)
 
-# TD-016: временные коэффициенты (уточнить по ГОСТ / взвешиванию).
+# TD-016: табличная масса 1 шт. по ГОСТ 7798-70 / ГОСТ 5915-70.
 KG_PER_PIECE = {
-    1298: ("Болт М16", 0.091),
-    1299: ("Гайка М16", 0.019),
+    1298: ("Болт М16", gost_table_mass_kg("bolt", 16, 55)),
+    1299: ("Гайка М16", gost_table_mass_kg("nut", 16)),
 }
 # Строки, перенесённые на кг-карточку 1299 с количеством в шт.
 PIECE_LINES = (929, 362)
@@ -78,9 +79,14 @@ def _convert_piece_line(env, line):
 
 
 def migrate(cr, version):
-    """TD-016: масса 1 шт. метизов и пересчёт строк в шт. → кг."""
+    """TD-016: масса 1 шт. метизов, карточки ГОСТ, пересчёт шт. → кг."""
     env = api.Environment(cr, SUPERUSER_ID, {})
     templates = _set_kg_per_piece(env)
+    created = env["product.template"]._create_gost_fastener_templates()
+    _logger.info(
+        "object_request 1.12.0: created %s GOST fastener templates",
+        len(created),
+    )
     lines = env["object.request.line"].browse(PIECE_LINES).exists()
     converted = lines.filtered(lambda line: _convert_piece_line(env, line))
     _logger.info(

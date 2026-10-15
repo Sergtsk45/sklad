@@ -1,10 +1,15 @@
 """
-TD-016: расчётная масса 1 шт. болтов и гаек по размерам ГОСТ.
+TD-016: масса 1 шт. болтов и гаек по ГОСТ, карточки метизов ГОСТ.
 """
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
-from ..models.fastener_mass import parse_fastener, suggest_kg_per_piece
+from ..models.fastener_mass import (
+    gost_fastener_specs,
+    parse_fastener,
+    suggest_kg_per_piece,
+    theoretical_mass_kg,
+)
 
 
 @tagged("post_install", "-at_install")
@@ -47,15 +52,22 @@ class TestTD016FastenerParse(TransactionCase):
     def test_size_outside_table_is_unknown(self):
         self.assertIsNone(parse_fastener("Гайка М36"))
 
-    def test_nut_m16_mass(self):
-        """Гайка М16: S=24, m=13 → ≈ 33,6 г."""
+    def test_nut_m16_table_mass(self):
+        """Гайка М16 — табличная масса ГОСТ 5915: 37,61 г."""
         self.assertAlmostEqual(
-            suggest_kg_per_piece("Гайка М16 ГОСТ 5915-70"), 0.0336
+            suggest_kg_per_piece("Гайка М16 ГОСТ 5915-70"), 0.03761
         )
 
-    def test_bolt_m16x55_mass(self):
-        """Болт М16×55: головка k=10, резьба b=38 → ≈ 116,6 г."""
-        self.assertAlmostEqual(suggest_kg_per_piece("Болт М16×55"), 0.1166)
+    def test_bolt_m16x55_table_mass(self):
+        """Болт М16×55 — табличная масса ГОСТ 7798: 121,5 г."""
+        self.assertAlmostEqual(suggest_kg_per_piece("Болт М16×55"), 0.1215)
+
+    def test_bolt_outside_table_is_calculated(self):
+        """М12×100 нет в таблице — масса по размерам стандарта."""
+        self.assertAlmostEqual(
+            suggest_kg_per_piece("Болт М12х100"),
+            theoretical_mass_kg("bolt", 12, 100),
+        )
 
     def test_longer_bolt_is_heavier(self):
         self.assertGreater(
@@ -80,13 +92,13 @@ class TestTD016FastenerCard(TransactionCase):
     def test_new_kg_card_gets_suggested_mass(self):
         """Новая гайка в кг сразу получает расчётную массу."""
         card = self._template("Гайка М16 ГОСТ 5915-70", self.kg)
-        self.assertAlmostEqual(card.kg_per_piece, 0.0336)
+        self.assertAlmostEqual(card.kg_per_piece, 0.03761)
 
     def test_piece_card_not_filled(self):
         """Карточка в шт. массу 1 шт. не получает."""
         card = self._template("Гайка М16 ГОСТ 5915-70", self.unit)
         self.assertFalse(card.kg_per_piece)
-        self.assertAlmostEqual(card.kg_per_piece_suggested, 0.0336)
+        self.assertAlmostEqual(card.kg_per_piece_suggested, 0.03761)
 
     def test_explicit_mass_kept(self):
         """Указанная вручную масса не перезаписывается."""
@@ -99,14 +111,67 @@ class TestTD016FastenerCard(TransactionCase):
         """Перевод карточки в кг подставляет расчётную массу."""
         card = self._template("Болт М16×55", self.unit)
         card.uom_id = self.kg
-        self.assertAlmostEqual(card.kg_per_piece, 0.1166)
+        self.assertAlmostEqual(card.kg_per_piece, 0.1215)
 
     def test_apply_suggestion_button(self):
         """Кнопка «Подставить» заменяет временный коэффициент."""
         card = self._template("Болт М16×55", self.kg, kg_per_piece=0.091)
         card.action_apply_kg_per_piece_suggestion()
-        self.assertAlmostEqual(card.kg_per_piece, 0.1166)
+        self.assertAlmostEqual(card.kg_per_piece, 0.1215)
 
     def test_unknown_fastener_not_filled(self):
         card = self._template("Проволока вязальная", self.kg)
         self.assertFalse(card.kg_per_piece)
+
+
+@tagged("post_install", "-at_install")
+class TestTD016GostFastenerCards(TransactionCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.kg = cls.env.ref("uom.product_uom_kgm")
+        cls.Template = cls.env["product.template"]
+
+    def _card(self, name):
+        return self.Template.search([("name", "=", name)])
+
+    def test_black_and_zinc_card_per_size(self):
+        """113 типоразмеров ГОСТ → 226 карточек: чёрная и оцинкованная."""
+        created = self.Template._create_gost_fastener_templates()
+        self.assertEqual(len(created), 2 * len(gost_fastener_specs()))
+
+    def test_card_in_kg_with_table_mass(self):
+        self.Template._create_gost_fastener_templates()
+        card = self._card("Болт М20×100 ГОСТ 7798-70 оцинкованный")
+        self.assertEqual(card.uom_id, self.kg)
+        self.assertTrue(card.is_storable)
+        self.assertAlmostEqual(card.kg_per_piece, 0.3147)
+
+    def test_zinc_nut_name(self):
+        self.Template._create_gost_fastener_templates()
+        card = self._card("Гайка М24 ГОСТ 5915-70 оцинкованная")
+        self.assertAlmostEqual(card.kg_per_piece, 0.12287)
+
+    def test_existing_kg_card_not_duplicated(self):
+        """Чёрный болт М16×55 в кг уже есть — создаётся только оцинкованный."""
+        self.Template.create(
+            {"name": "Болт М16×55", "type": "consu", "uom_id": self.kg.id}
+        )
+        created = self.Template._create_gost_fastener_templates()
+        names = created.mapped("name")
+        self.assertNotIn("Болт М16×55 ГОСТ 7798-70", names)
+        self.assertIn("Болт М16×55 ГОСТ 7798-70 оцинкованный", names)
+
+    def test_piece_card_does_not_block_creation(self):
+        """Карточка в шт. не считается дублем кг-карточки."""
+        self.Template.create({
+            "name": "Гайка М16 ГОСТ 5915-70",
+            "type": "consu",
+            "uom_id": self.env.ref("uom.product_uom_unit").id,
+        })
+        created = self.Template._create_gost_fastener_templates()
+        self.assertIn("Гайка М16 ГОСТ 5915-70", created.mapped("name"))
+
+    def test_second_run_creates_nothing(self):
+        self.Template._create_gost_fastener_templates()
+        self.assertFalse(self.Template._create_gost_fastener_templates())
