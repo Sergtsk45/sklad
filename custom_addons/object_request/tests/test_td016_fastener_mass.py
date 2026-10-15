@@ -175,3 +175,18 @@ class TestTD016GostFastenerCards(TransactionCase):
     def test_second_run_creates_nothing(self):
         self.Template._create_gost_fastener_templates()
         self.assertFalse(self.Template._create_gost_fastener_templates())
+
+    def test_cards_in_fastener_category(self):
+        """«Метизы и крепёж» важнее «Расходников»."""
+        Category = self.env["product.category"]
+        Category.create({"name": "Расходники"})
+        metizy = Category.create({"name": "Метизы и крепёж"})
+        created = self.Template._create_gost_fastener_templates()
+        self.assertEqual(created.categ_id, metizy)
+
+    def test_consumables_category_fallback(self):
+        Category = self.env["product.category"]
+        Category.search([("name", "=", "Метизы и крепёж")]).name = "Другое"
+        consumables = Category.create({"name": "Расходники"})
+        created = self.Template._create_gost_fastener_templates()
+        self.assertEqual(created.categ_id, consumables)

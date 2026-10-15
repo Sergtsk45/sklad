@@ -31,6 +31,8 @@ MATERIAL_SELECTION = [
     ("polypropylene", "Полипропилен"),
 ]
 
+FASTENER_CATEGORY_NAMES = ("Метизы и крепёж", "Расходники")
+
 CONNECTION_SELECTION = [
     ("flanged", "Фланцевое"),
     ("threaded", "Резьбовое/муфтовое"),
@@ -186,9 +188,7 @@ class ProductTemplate(models.Model):
         """
         kg = self.env.ref("uom.product_uom_kgm")
         existing = self._existing_kg_fastener_keys()
-        category = self.env["product.category"].search(
-            [("name", "=", "Расходники")], limit=1
-        )
+        category = self._gost_fastener_category()
         vals_list = []
         for kind, diameter, length, mass in gost_fastener_specs():
             for zinc in (False, True):
@@ -205,6 +205,17 @@ class ProductTemplate(models.Model):
                     vals["categ_id"] = category.id
                 vals_list.append(vals)
         return self.create(vals_list)
+
+    @api.model
+    def _gost_fastener_category(self):
+        """Категория для карточек метизов: «Метизы и крепёж», иначе
+        «Расходники»; пустая, если нет ни одной."""
+        Category = self.env["product.category"]
+        for name in FASTENER_CATEGORY_NAMES:
+            category = Category.search([("name", "=", name)], limit=1)
+            if category:
+                return category
+        return Category
 
     @api.model
     def _existing_kg_fastener_keys(self):
