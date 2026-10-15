@@ -16,6 +16,25 @@
 
 ---
 
+## UPG-003 — Резерв выдачи по требованию: хуки `stock.move` (TD-017)
+
+- **Статус**: актуально на Odoo 19 (`object_request` `19.0.1.11.0`, 2026-10-15)
+- **Зачем**: резерв открытой выдачи по требованию входит в «Обеспечено»
+  строки. Пересчёт запускается после изменения резерва движения.
+- **Файл**: `custom_addons/object_request/models/stock_move_inherit.py`.
+- **Upstream 19**: `odoo/addons/stock/models/stock_move.py` —
+  `_recompute_state` (вызывают `_action_assign`, `_do_unreserve`,
+  `stock.move.line` create/unlink), `_action_cancel`; резерв движения —
+  поле `quantity` в статусах `assigned` / `partially_available`.
+- **Что проверить в 20**:
+  1. Сигнатуры и места вызова `_recompute_state` / `_action_cancel` не
+     изменились; если резерв меняется в обход `_recompute_state` — найти
+     новый хук.
+  2. Семантика `stock.move.quantity` (резерв до проведения) та же.
+  3. Прогнать `--test-tags /object_request:TestTD017AutoSplitReserve`.
+
+---
+
 ## UPG-002 — Архивирование дубля `m` при политике труб TD-002
 
 - **Статус**: актуально на Odoo 19 после решения TD-002, требует перепроверки при апгрейде на 20

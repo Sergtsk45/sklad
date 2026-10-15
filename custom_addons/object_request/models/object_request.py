@@ -454,6 +454,7 @@ class ObjectRequest(models.Model):
             stock_ids = rec.line_ids.mapped("stock_ids").filtered(
                 lambda stock: stock.line_id.product_id and stock.warehouse_id
             )
+            open_stocks = rec.line_ids._open_issue_stock_lines()
             for stock in stock_ids:
                 key = (stock.line_id.product_id.id, stock.warehouse_id.id)
                 available_by_key[key] = max(
@@ -465,6 +466,9 @@ class ObjectRequest(models.Model):
                     stock.warehouse_id.display_name,
                 )
                 if stock.line_id.is_cancelled or stock.qty_to_issue <= 0:
+                    continue
+                if stock in open_stocks:
+                    # Количество уже в резерве выдачи, не в «Доступно».
                     continue
                 planned_by_key[key] = (
                     planned_by_key.get(key, 0.0) + stock.qty_to_issue
@@ -530,7 +534,9 @@ class ObjectRequest(models.Model):
             )
             rec.line_to_buy_count = sum(1 for ln in lns if ln.qty_to_buy > 0)
             rec.line_fully_supplied_count = sum(
-                1 for ln in lns if ln.line_state == "fully_supplied"
+                1
+                for ln in lns
+                if ln.line_state in ("fully_supplied", "reserved")
             )
 
     @api.depends(
@@ -683,6 +689,14 @@ class ObjectRequest(models.Model):
             lambda ln: ln.line_state not in ("fully_supplied", "cancelled")
         )
         if unprocessed:
+            reserved_count = len(
+                unprocessed.filtered(lambda ln: ln.line_state == "reserved")
+            )
+            reserved_note = (
+                f" Из них {reserved_count} в резерве: выдачи не проведены."
+                if reserved_count
+                else ""
+            )
             return {
                 "type": "ir.actions.act_window",
                 "name": "Подтверждение закрытия",
@@ -694,7 +708,8 @@ class ObjectRequest(models.Model):
                     "default_action_type": "close",
                     "default_message": (
                         f"{len(unprocessed)} строк не полностью обработаны "
-                        "(не полностью обеспечены и не отменены). "
+                        "(не полностью обеспечены и не отменены)."
+                        f"{reserved_note} "
                         "Закрыть документ несмотря на это?"
                     ),
                 },
@@ -702,11 +717,14 @@ class ObjectRequest(models.Model):
         self.write({"state": "closed"})
 
     def action_cancel(self):
+        """Отменить требование вместе с непроведёнными выдачами."""
         for rec in self:
-            for picking in rec.issue_picking_ids.filtered(
-                lambda p: p.state in ("confirmed", "assigned", "waiting")
-            ):
-                picking.do_unreserve()
+            rec.line_ids._cancel_open_issue_moves()
+            open_pickings = rec.issue_picking_ids.filtered(
+                lambda p: p.state not in ("done", "cancel")
+            )
+            if open_pickings:
+                open_pickings.action_cancel()
             rec.line_ids.write({"qty_reserved": 0.0, "issue_reserved": False})
         self.write({"state": "cancelled"})
 
@@ -1432,39 +1450,7 @@ class ObjectRequest(models.Model):
             raise UserError(
                 "Нет строк с сопоставленным товаром для проверки наличия."
             )
-        qty_by_product_warehouse = self._get_stock_qty_by_product_warehouse(
-            lines.mapped("product_id"),
-            warehouses,
-        )
-        now = fields.Datetime.now()
-        stock_model = self.env["object.request.line.stock"].with_context(
-            auto_stock_distribution=True,
-            stock_check_only=True,
-        )
-        for line in lines:
-            existing_by_warehouse = {
-                stock.warehouse_id.id: stock for stock in line.stock_ids
-            }
-            for warehouse in warehouses:
-                qty = qty_by_product_warehouse.get(
-                    (line.product_id.id, warehouse.id),
-                    0.0,
-                )
-                stock = existing_by_warehouse.get(warehouse.id)
-                vals = {"qty_on_hand": qty, "last_check_date": now}
-                if stock:
-                    stock.with_context(
-                        auto_stock_distribution=True,
-                        stock_check_only=True,
-                    ).write(vals)
-                else:
-                    stock_model.create(
-                        {
-                            "line_id": line.id,
-                            "warehouse_id": warehouse.id,
-                            **vals,
-                        }
-                    )
+        self._refresh_line_stock_quantities(lines, warehouses)
         lines_with_stock = lines.filtered(lambda ln: ln.stock_qty_on_hand > 0)
         if lines_with_stock:
             return {
@@ -1495,6 +1481,37 @@ class ObjectRequest(models.Model):
                 "sticky": False,
             },
         }
+
+    def _refresh_line_stock_quantities(self, lines, warehouses):
+        """Записать «Доступно» (остаток минус резерв) по складам строк."""
+        qty_by_product_warehouse = self._get_stock_qty_by_product_warehouse(
+            lines.mapped("product_id"),
+            warehouses,
+        )
+        now = fields.Datetime.now()
+        stock_model = self.env["object.request.line.stock"].with_context(
+            auto_stock_distribution=True, stock_check_only=True
+        )
+        for line in lines:
+            existing_by_warehouse = {
+                stock.warehouse_id.id: stock for stock in line.stock_ids
+            }
+            for warehouse in warehouses:
+                qty = qty_by_product_warehouse.get(
+                    (line.product_id.id, warehouse.id), 0.0
+                )
+                stock = existing_by_warehouse.get(warehouse.id)
+                vals = {"qty_on_hand": qty, "last_check_date": now}
+                if stock:
+                    stock.with_context(stock_model.env.context).write(vals)
+                else:
+                    stock_model.create(
+                        {
+                            "line_id": line.id,
+                            "warehouse_id": warehouse.id,
+                            **vals,
+                        }
+                    )
 
     def _get_stock_qty_by_product_warehouse(self, products, warehouses):
         locations_by_warehouse = self._get_stock_locations_by_warehouse(
@@ -1558,8 +1575,44 @@ class ObjectRequest(models.Model):
         return locations_by_warehouse
 
     def action_auto_split(self):
-        """Авто-разбивка по складам с минимизацией числа складов."""
+        """Авто-разбивка по складам с минимизацией числа складов.
+
+        В работе по складской части сразу создаются выдачи с резервом
+        (TD-017); проводит их кладовщик.
+        """
         self.ensure_one()
+        lines = self._auto_split_lines()
+        manual_lines = lines.filtered("manual_plan_override")
+        if manual_lines and not self.env.context.get("force_auto_split"):
+            return self._auto_split_confirm_action(manual_lines)
+        self._refresh_line_stock_quantities(
+            lines, self._get_issue_warehouses()
+        )
+        for line in lines:
+            line._apply_auto_issue_distribution(reset_manual_override=True)
+        message = f"Обработано строк: {len(lines)}."
+        if self.state != "in_progress":
+            message += (
+                " Выдачи и резерв создаются, когда требование в работе."
+            )
+            return self._auto_split_notification(message, "success")
+        return self._auto_split_reserve(message)
+
+    def _auto_split_confirm_action(self, manual_lines):
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Перезаписать распределение?",
+            "res_model": "object.request.auto.split.confirm.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {
+                "default_request_id": self.id,
+                "default_manual_line_count": len(manual_lines),
+            },
+        }
+
+    def _auto_split_lines(self):
+        """Проверки авто-разбивки; строки с товаром и расчётом наличия."""
         self._check_supply_manager_processing_action()
         if self.state not in ("draft", "in_progress"):
             raise UserError(
@@ -1578,31 +1631,134 @@ class ObjectRequest(models.Model):
                 "Сначала выполните расчёт наличия "
                 "(кнопка «Рассчитать наличие»)."
             )
-        manual_lines = lines.filtered("manual_plan_override")
-        if manual_lines and not self.env.context.get("force_auto_split"):
-            return {
-                "type": "ir.actions.act_window",
-                "name": "Перезаписать распределение?",
-                "res_model": "object.request.auto.split.confirm.wizard",
-                "view_mode": "form",
-                "target": "new",
-                "context": {
-                    "default_request_id": self.id,
-                    "default_manual_line_count": len(manual_lines),
-                },
-            }
-        for line in lines:
-            line._apply_auto_issue_distribution(reset_manual_override=True)
+        return lines
+
+    def _auto_split_reserve(self, message):
+        """Создать выдачи по новому плану и сообщить итог резерва."""
+        stocks = self._unlinked_issue_plan_stocks()
+        pickings = self._create_issue_pickings_for_plan(stocks)
+        reserve_message, partial = self._auto_split_reserve_summary(
+            stocks, pickings
+        )
+        return self._auto_split_notification(
+            f"{message} {reserve_message}",
+            "warning" if partial else "success",
+        )
+
+    def _auto_split_notification(self, message, ntype):
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
             "params": {
                 "title": "Авто-разбивка выполнена",
-                "message": f"Обработано строк: {len(lines)}.",
-                "type": "success",
-                "sticky": False,
+                "message": message,
+                "type": ntype,
+                "sticky": ntype == "warning",
+                "next": {"type": "ir.actions.client", "tag": "reload"},
             },
         }
+
+    def _auto_split_reserve_summary(self, stocks, pickings):
+        """Текст «создано K выдач, полный резерв M, частичный P»."""
+        if not pickings:
+            return "Новых выдач нет.", False
+        full = partial = 0
+        partial_notes = []
+        for stock in stocks.filtered("move_id"):
+            planned = stock.qty_planned_to_issue or stock.qty_to_issue
+            if stock.qty_reserved >= planned - 0.00001:
+                full += 1
+                continue
+            partial += 1
+            partial_notes.append(
+                f"{stock.line_id.display_name} ({stock.warehouse_id.name}): "
+                f"зарезервировано {stock.qty_reserved:g} из {planned:g}"
+            )
+        message = (
+            f"Создано выдач: {len(pickings)}, полный резерв: {full}, "
+            f"частичный: {partial}."
+        )
+        if partial_notes:
+            message += " " + "; ".join(partial_notes) + "."
+        return message, bool(partial)
+
+    def _unlinked_issue_plan_stocks(self):
+        """Распределения с планом выдачи, по которым выдача ещё не создана."""
+        self.ensure_one()
+        allowed_warehouses = self._get_issue_warehouses()
+        return self.line_ids.mapped("stock_ids").filtered(
+            lambda stock: (
+                stock.qty_to_issue > 0
+                and stock.line_id.product_id
+                and not stock.line_id.is_cancelled
+                and stock.warehouse_id in allowed_warehouses
+                and not stock.picking_id
+                and not stock.move_id
+            )
+        )
+
+    def _create_issue_pickings_for_plan(self, stock_lines):
+        """Создать по выдаче на склад для распределений и зарезервировать.
+
+        Тип операции — внутренний тип склада, из ``lot_stock_id``
+        в «Клиенты». Возвращает созданные ``stock.picking``.
+        """
+        self.ensure_one()
+        customer_loc = self.env.ref(
+            "stock.stock_location_customers", raise_if_not_found=False
+        )
+        pickings = self.env["stock.picking"]
+        for warehouse in stock_lines.mapped("warehouse_id"):
+            pickings |= self._create_issue_picking(
+                stock_lines.filtered(
+                    lambda stock: stock.warehouse_id == warehouse
+                ),
+                warehouse.int_type_id,
+                warehouse.lot_stock_id,
+                customer_loc,
+                fields.Datetime.now(),
+            )
+        return pickings
+
+    def _create_issue_picking(
+        self, stock_lines, picking_type, source, destination, scheduled_date
+    ):
+        """Одна выдача по распределениям: движения, связи, резерв."""
+        self.ensure_one()
+        picking = self.env["stock.picking"].create(
+            {
+                "picking_type_id": picking_type.id,
+                "location_id": source.id,
+                "location_dest_id": destination.id,
+                "origin": self.name,
+                "scheduled_date": scheduled_date,
+                "is_object_request_issue": True,
+                "object_request_project_id": self.project_id.id,
+            }
+        )
+        for stock_line in stock_lines:
+            self._create_issue_move(picking, stock_line)
+        self.write({"issue_picking_ids": [(4, picking.id)]})
+        picking.action_assign()
+        stock_lines.mapped("line_id")._sync_issue_reserve_from_moves()
+        return picking
+
+    def _create_issue_move(self, picking, stock_line):
+        """Движение выдачи по распределению и связь со строкой."""
+        line = stock_line.line_id
+        move = self.env["stock.move"].create(
+            {
+                "picking_id": picking.id,
+                "product_id": line.product_id.id,
+                "product_uom_qty": stock_line.qty_to_issue,
+                "product_uom": (line.uom_id or line.product_id.uom_id).id,
+                "location_id": picking.location_id.id,
+                "location_dest_id": picking.location_dest_id.id,
+            }
+        )
+        stock_line.write({"picking_id": picking.id, "move_id": move.id})
+        line.write({"issue_picking_id": picking.id, "issue_move_id": move.id})
+        return move
 
     def action_open_issue_wizard(self):
         """Открыть wizard создания выдачи со склада."""
@@ -1623,16 +1779,7 @@ class ObjectRequest(models.Model):
                 "созданием."
             )
         self._check_issue_plan_stock_limits()
-        stock_to_issue = self.line_ids.mapped("stock_ids").filtered(
-            lambda stock: (
-                stock.qty_to_issue > 0
-                and stock.line_id.product_id
-                and stock.warehouse_id in allowed_warehouses
-                and not stock.picking_id
-                and not stock.move_id
-            )
-        )
-        if not stock_to_issue:
+        if not self._unlinked_issue_plan_stocks():
             raise UserError(
                 "Нет строк с заполненным количеством к выдаче. "
                 "Заполните распределение по складам."

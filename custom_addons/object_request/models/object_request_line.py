@@ -216,7 +216,14 @@ class ObjectRequestLine(models.Model):
         index=True,
     )
     qty_issued = fields.Float(
-        string="Обеспечено", digits="Product Unit of Measure"
+        string="Обеспечено (факт)", digits="Product Unit of Measure"
+    )
+    qty_supplied = fields.Float(
+        string="Обеспечено",
+        digits="Product Unit of Measure",
+        compute="_compute_qty_supplied",
+        store=True,
+        help="Проведённые выдачи и приход закупки плюс резерв открытых выдач.",
     )
     qty_issued_from_stock = fields.Float(
         string="Со склада",
@@ -268,6 +275,7 @@ class ObjectRequestLine(models.Model):
             ("requires_mapping", "Требует сопоставления"),
             ("ready", "Готово к обработке"),
             ("partially_issued", "Частично обеспечено"),
+            ("reserved", "Обеспечено (резерв)"),
             ("fully_supplied", "Полностью обеспечено"),
             ("awaiting_supplier_invoice", "Ожидает счёт от поставщика"),
             ("cancelled", "Отменено"),
@@ -369,10 +377,17 @@ class ObjectRequestLine(models.Model):
                 else f"Строка требования #{line.id}"
             )
 
+    @api.depends("qty_issued", "qty_reserved")
+    def _compute_qty_supplied(self):
+        """Обеспечено = факт (выдачи, приход закупки) + резерв выдач."""
+        for line in self:
+            line.qty_supplied = line.qty_issued + line.qty_reserved
+
     @api.depends(
         "product_id",
         "matching_required",
         "qty_issued",
+        "qty_supplied",
         "qty_requested",
         "is_cancelled",
         "supplier_invoice_requested",
@@ -388,9 +403,11 @@ class ObjectRequestLine(models.Model):
                 line.line_state = "requires_mapping"
             elif line.qty_issued >= line.qty_requested:
                 line.line_state = "fully_supplied"
+            elif line.qty_supplied >= line.qty_requested:
+                line.line_state = "reserved"
             elif line.supplier_invoice_requested:
                 line.line_state = "awaiting_supplier_invoice"
-            elif line.qty_issued > 0:
+            elif line.qty_supplied > 0:
                 line.line_state = "partially_issued"
             elif line.product_id:
                 line.line_state = "ready"
@@ -853,7 +870,73 @@ class ObjectRequestLine(models.Model):
         for line in self:
             line.write(line._get_object_request_supply_recompute_vals())
             line._sync_object_request_remaining_stock_plan()
+        self._sync_issue_reserve_from_moves()
         return True
+
+    def _open_issue_stock_lines(self):
+        """Распределения строк с непроведённой и неотменённой выдачей."""
+        return self.mapped("stock_ids").filtered(
+            lambda stock: stock.move_id
+            and stock.move_id.state not in ("done", "cancel")
+        )
+
+    def _sync_issue_reserve_from_moves(self):
+        """«Зарезервировано» = резерв открытых движений выдачи (TD-017)."""
+        sync_context = {
+            "auto_stock_distribution": True,
+            "skip_qty_to_issue_limit": True,
+            "skip_stock_total_sync": True,
+        }
+        self._unlink_cancelled_issue_moves()
+        for line in self.exists():
+            total = 0.0
+            for stock in line.stock_ids:
+                move = stock.move_id
+                reserved = 0.0
+                if move and move.state in ("assigned", "partially_available"):
+                    reserved = line._object_request_move_qty_in_line_uom(move)
+                if abs(stock.qty_reserved - reserved) > 0.00001:
+                    stock.with_context(**sync_context).write(
+                        {"qty_reserved": reserved}
+                    )
+                total += reserved
+            if (
+                abs(line.qty_reserved - total) > 0.00001
+                or line.issue_reserved != (total > 0)
+            ):
+                line.write(
+                    {"qty_reserved": total, "issue_reserved": total > 0}
+                )
+        return True
+
+    def _unlink_cancelled_issue_moves(self):
+        """Отвязать отменённые выдачи, чтобы план можно было выдать снова."""
+        stocks = self.mapped("stock_ids").filtered(
+            lambda stock: stock.move_id and stock.move_id.state == "cancel"
+        )
+        if not stocks:
+            return
+        moves = stocks.mapped("move_id")
+        stocks.with_context(
+            auto_stock_distribution=True,
+            skip_qty_to_issue_limit=True,
+            skip_stock_total_sync=True,
+        ).write({"picking_id": False, "move_id": False, "qty_reserved": 0.0})
+        self.filtered(lambda line: line.issue_move_id in moves).write(
+            {"issue_picking_id": False, "issue_move_id": False}
+        )
+
+    def _cancel_open_issue_moves(self):
+        """Отменить непроведённые движения выдачи и отвязать их от строк."""
+        stocks = self._open_issue_stock_lines()
+        if not stocks:
+            return self.env["stock.picking"]
+        moves = stocks.mapped("move_id")
+        pickings = moves.mapped("picking_id")
+        # Хук stock.move._action_cancel отвязывает движения и снимает резерв.
+        moves._action_cancel()
+        self._sync_issue_reserve_from_moves()
+        return pickings
 
     def _sync_object_request_remaining_stock_plan(self):
         self.ensure_one()
@@ -1816,7 +1899,9 @@ class ObjectRequestLine(models.Model):
     def action_buy_all(self):
         self._check_supply_manager_mass_action()
         stock_context = {"auto_stock_distribution": True}
-        for line in self.filtered(lambda ln: not ln.is_cancelled):
+        lines = self.filtered(lambda ln: not ln.is_cancelled)
+        lines -= lines._open_issue_stock_lines().mapped("line_id")
+        for line in lines:
             line.stock_ids.with_context(**stock_context).write(
                 {"qty_to_issue": 0.0}
             )
@@ -1866,7 +1951,14 @@ class ObjectRequestLine(models.Model):
         allowed_warehouse_ids = set(request._get_issue_warehouses().ids)
         selected_lines = self.filtered(
             lambda line: line.product_id and not line.is_cancelled
-        ).sorted(key=lambda line: (line.sequence, line.id))
+        )
+        # Строки с открытой выдачей уже обеспечены резервом — не трогаем.
+        selected_lines -= selected_lines._open_issue_stock_lines().mapped(
+            "line_id"
+        )
+        selected_lines = selected_lines.sorted(
+            key=lambda line: (line.sequence, line.id)
+        )
         if not selected_lines:
             return
 
@@ -1883,8 +1975,12 @@ class ObjectRequestLine(models.Model):
                     max(stock.qty_on_hand, 0.0),
                 )
 
+        open_stocks = request.line_ids._open_issue_stock_lines()
         for stock in (request.line_ids - selected_lines).mapped("stock_ids"):
             if stock.qty_to_issue <= 0 or not stock.line_id.product_id:
+                continue
+            if stock in open_stocks:
+                # Резерв уже вычтен из «Доступно» при расчёте наличия.
                 continue
             key = (stock.line_id.product_id.id, stock.warehouse_id.id)
             availability[key] = max(
@@ -1986,7 +2082,9 @@ class ObjectRequestLine(models.Model):
         )
 
     def action_reset_split(self):
+        """Сбросить план; непроведённые выдачи отменяются, резерв снимается."""
         self._check_supply_manager_mass_action()
+        self._cancel_open_issue_moves()
         stock_context = {"auto_stock_distribution": True}
         for line in self:
             line.stock_ids.with_context(**stock_context).write(

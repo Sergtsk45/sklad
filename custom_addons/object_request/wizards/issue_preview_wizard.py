@@ -131,11 +131,6 @@ class ObjectRequestIssuePreviewWizard(models.TransientModel):
         pickings = self.env["stock.picking"]
         for group in groups:
             pickings |= group._create_picking()
-        self.request_id.write(
-            {
-                "issue_picking_ids": [(4, picking.id) for picking in pickings],
-            }
-        )
         return {
             "type": "ir.actions.act_window",
             "name": "Выдачи",
@@ -238,55 +233,10 @@ class ObjectRequestIssuePreviewGroup(models.TransientModel):
                 else "неизвестен"
             )
             raise UserError(f"Нет строк к выдаче по складу {wh_label}.")
-        picking = self.env["stock.picking"].create(
-            {
-                "picking_type_id": self.picking_type_id.id,
-                "location_id": self.source_location_id.id,
-                "location_dest_id": self.destination_location_id.id,
-                "origin": self.wizard_id.request_id.name,
-                "scheduled_date": self.scheduled_date,
-                "is_object_request_issue": True,
-                "object_request_project_id": (
-                    self.wizard_id.request_id.project_id.id
-                ),
-            }
+        return self.wizard_id.request_id._create_issue_picking(
+            stock_lines,
+            self.picking_type_id,
+            self.source_location_id,
+            self.destination_location_id,
+            self.scheduled_date,
         )
-        move_vals = []
-        for stock_line in stock_lines:
-            line = stock_line.line_id
-            uom = line.uom_id or line.product_id.uom_id
-            move_vals.append(
-                {
-                    "picking_id": picking.id,
-                    "product_id": line.product_id.id,
-                    "product_uom_qty": stock_line.qty_to_issue,
-                    "product_uom": uom.id,
-                    "location_id": self.source_location_id.id,
-                    "location_dest_id": self.destination_location_id.id,
-                }
-            )
-        moves = self.env["stock.move"].create(move_vals)
-        for stock_line, move in zip(stock_lines, moves):
-            stock_line.write(
-                {
-                    "picking_id": picking.id,
-                    "move_id": move.id,
-                }
-            )
-            stock_line.line_id.write(
-                {
-                    "issue_picking_id": picking.id,
-                    "issue_move_id": move.id,
-                }
-            )
-        picking.action_assign()
-        for stock_line, move in zip(stock_lines, moves):
-            qty_reserved = sum(ml.quantity for ml in move.move_line_ids)
-            stock_line.write({"qty_reserved": qty_reserved})
-            stock_line.line_id.write(
-                {
-                    "qty_reserved": qty_reserved,
-                    "issue_reserved": qty_reserved > 0,
-                }
-            )
-        return picking

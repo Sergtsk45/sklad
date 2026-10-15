@@ -39,3 +39,4 @@ from . import test_purchase_order_list_columns  # noqa: F401
 from . import test_purchase_rfq_copy_recipient  # noqa: F401
 from . import test_td014_product_tag_search  # noqa: F401
 from . import test_td015_request_comment_list  # noqa: F401
+from . import test_td017_auto_split_reserve  # noqa: F401

@@ -45,6 +45,11 @@
                     domain="[('line_state', '=', 'partially_issued')]"
                 />
                 <filter
+                    name="filter_reserved"
+                    string="Обеспечено (резерв)"
+                    domain="[('line_state', '=', 'reserved')]"
+                />
+                <filter
                     name="filter_fully_supplied"
                     string="Полностью обеспечено"
                     domain="[('line_state', '=', 'fully_supplied')]"
@@ -85,7 +90,7 @@
                 string="Строки требования"
                 decoration-danger="matching_required == True and line_state != 'awaiting_supplier_invoice'"
                 decoration-warning="(stock_match_warning == True or (manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued') and line_state != 'awaiting_supplier_invoice'"
-                decoration-success="line_state == 'fully_supplied'"
+                decoration-success="line_state in ('fully_supplied', 'reserved')"
                 decoration-info="line_state == 'awaiting_supplier_invoice'"
                 create="0"
                 delete="0"
@@ -145,7 +150,8 @@
                 />
                 <field name="qty_to_issue" string="К выдаче (план)" optional="show"/>
                 <field name="qty_to_buy" string="К закупке (план)" optional="show"/>
-                <field name="qty_issued" string="Обеспечено" optional="show"/>
+                <field name="qty_supplied" string="Обеспечено" optional="show"/>
+                <field name="qty_issued" string="Обеспечено (факт)" optional="hide"/>
                 <field name="qty_issued_from_stock" string="Со склада" optional="hide"/>
                 <field name="qty_received_purchase" string="Поступило по закупке" optional="hide"/>
                 <field name="qty_reserved" string="Зарезервировано" optional="show"/>
@@ -213,7 +219,7 @@
                     widget="badge"
                     decoration-danger="line_state == 'requires_mapping'"
                     decoration-warning="line_state == 'partially_issued'"
-                    decoration-success="line_state == 'fully_supplied'"
+                    decoration-success="line_state in ('fully_supplied', 'reserved')"
                     decoration-info="line_state == 'awaiting_supplier_invoice'"
                 />
                 <field name="matching_required" column_invisible="1"/>

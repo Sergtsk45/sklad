@@ -349,7 +349,7 @@
                             <field name="line_to_buy_count" string="К закупке" readonly="1"/>
                             <field
                                 name="line_fully_supplied_count"
-                                string="Полностью обеспечено"
+                                string="Обеспечено (вкл. резерв)"
                                 readonly="1"
                             />
                             <field
@@ -431,7 +431,7 @@
                                 <list
                                     decoration-danger="matching_required == True and line_state != 'awaiting_supplier_invoice'"
                                     decoration-warning="((manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued') and line_state != 'awaiting_supplier_invoice'"
-                                    decoration-success="line_state == 'fully_supplied'"
+                                    decoration-success="line_state in ('fully_supplied', 'reserved')"
                                     decoration-info="line_state == 'awaiting_supplier_invoice'"
                                     create="0"
                                     delete="0"
@@ -451,7 +451,8 @@
                                     <field name="qty_requested" string="Запрошено"/>
                                     <field name="qty_to_issue" string="К выдаче (план)"/>
                                     <field name="qty_to_buy" string="К закупке (план)"/>
-                                    <field name="qty_issued" string="Обеспечено"/>
+                                    <field name="qty_supplied" string="Обеспечено"/>
+                                    <field name="qty_issued" string="Обеспечено (факт)" optional="hide"/>
                                     <field name="qty_issued_from_stock" string="Со склада" optional="hide"/>
                                     <field name="qty_received_purchase" string="Поступило по закупке" optional="hide"/>
                                     <field name="stock_qty_on_hand" string="Остаток" optional="show"/>
@@ -461,7 +462,7 @@
                                         widget="badge"
                                         decoration-danger="line_state == 'requires_mapping'"
                                         decoration-warning="line_state == 'partially_issued'"
-                                        decoration-success="line_state == 'fully_supplied'"
+                                        decoration-success="line_state in ('fully_supplied', 'reserved')"
                                         decoration-info="line_state == 'awaiting_supplier_invoice'"
                                     />
                                     <field name="matching_required" column_invisible="1"/>
@@ -483,7 +484,7 @@
                                     editable="bottom"
                                     decoration-danger="matching_required == True and line_state != 'awaiting_supplier_invoice'"
                                     decoration-warning="(stock_match_warning == True or (manual_vendor_required == True and matching_required == False) or line_state == 'partially_issued') and line_state != 'awaiting_supplier_invoice'"
-                                    decoration-success="line_state == 'fully_supplied'"
+                                    decoration-success="line_state in ('fully_supplied', 'reserved')"
                                     decoration-info="line_state == 'awaiting_supplier_invoice'"
                                 >
                                     <field name="sequence" widget="handle"/>
@@ -562,10 +563,12 @@
                                         optional="show"
                                         readonly="parent.state != 'in_progress'"
                                     />
-                                    <field name="qty_issued" string="Обеспечено" optional="show" readonly="1"/>
+                                    <field name="qty_supplied" string="Обеспечено" optional="show" readonly="1"/>
+                                    <field name="qty_issued" string="Обеспечено (факт)" optional="hide" readonly="1"/>
                                     <field name="qty_issued_from_stock" string="Со склада" optional="hide" readonly="1"/>
                                     <field name="qty_received_purchase" string="Поступило по закупке" optional="hide" readonly="1"/>
                                     <field name="qty_reserved" string="Зарезервировано" optional="show" readonly="1"/>
+                                    <field name="issue_picking_id" string="Выдача" optional="show" readonly="1"/>
                                     <!-- Физический остаток (Этап 2) -->
                                     <field
                                         name="stock_qty_on_hand"
@@ -651,7 +654,7 @@
                                         widget="badge"
                                         decoration-danger="line_state == 'requires_mapping'"
                                         decoration-warning="line_state == 'partially_issued'"
-                                        decoration-success="line_state == 'fully_supplied'"
+                                        decoration-success="line_state in ('fully_supplied', 'reserved')"
                                         decoration-info="line_state == 'awaiting_supplier_invoice'"
                                         optional="show"
                                     />
