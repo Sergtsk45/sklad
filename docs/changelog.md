@@ -27,6 +27,10 @@
 ### Тесты
 - `test_td017_auto_split_reserve.py` (19). `object_request` + `ai_assistant`:
   1029 tests, 0 failed.
+- Prod deploy `c0d3940`: backup
+  `~/backups/before_1.11.0_2026-10-15_0444.sql.gz`, `-u object_request` →
+  `19.0.1.11.0` (post-migrate: резерв пересчитан у 60 строк), restart;
+  `/web/login` HTTP 200.
 
 ## [2026-10-15] — fix(ai_assistant): закупку по требованию OR/… создаёт только мастер (19.0.1.2.5)
 
