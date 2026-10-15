@@ -32,8 +32,8 @@ class ObjectRequestIssuePreviewWizard(models.TransientModel):
         if not request_id:
             return res
         request = self.env["object.request"].browse(request_id)
-        stock_ids = request.line_ids.mapped("stock_ids").filtered(
-            lambda stock: stock.qty_to_issue > 0 and stock.line_id.product_id
+        stock_ids = request._unlinked_issue_plan_stocks(
+            any_warehouse=True
         )
         groups_by_warehouse = {}
         for stock in stock_ids:
@@ -81,8 +81,8 @@ class ObjectRequestIssuePreviewWizard(models.TransientModel):
     def _relink_issue_preview_stock_lines(self):
         """Подставляет строки требования, если веб-клиент обнулил M2m."""
         request = self.request_id
-        stock_ids = request.line_ids.mapped("stock_ids").filtered(
-            lambda stock: stock.qty_to_issue > 0 and stock.line_id.product_id
+        stock_ids = request._unlinked_issue_plan_stocks(
+            any_warehouse=True
         )
         by_wh = {}
         Stock = request.env["object.request.line.stock"]
@@ -121,7 +121,7 @@ class ObjectRequestIssuePreviewWizard(models.TransientModel):
         if not groups:
             raise UserError("Нет выбранных складов для создания выдач.")
         linked = groups.mapped("stock_line_ids").filtered(
-            lambda stock: stock.picking_id or stock.move_id
+            lambda stock: stock._open_issue_moves()
         )
         if linked:
             raise UserError(

@@ -49,6 +49,12 @@ class ObjectRequestLineStock(models.Model):
     move_id = fields.Many2one(
         "stock.move", string="Движение выдачи", index=True
     )
+    issue_move_ids = fields.One2many(
+        "stock.move",
+        "object_request_stock_id",
+        string="Движения выдачи",
+        help="Все движения выдачи по распределению, включая backorder.",
+    )
 
     _object_request_line_stock_unique = models.Constraint(
         "UNIQUE(line_id, warehouse_id)",
@@ -75,6 +81,8 @@ class ObjectRequestLineStock(models.Model):
             and "qty_planned_to_issue" not in vals
             and not self.env.context.get("supply_state_recompute")
         ):
+            if any(stock._done_issue_qty() for stock in self):
+                return self._write_plan_with_done_qty(vals)
             vals = dict(vals, qty_planned_to_issue=vals["qty_to_issue"])
         result = super().write(vals)
         if manual_qty_change:
@@ -100,3 +108,53 @@ class ObjectRequestLineStock(models.Model):
                     "Сумма к выдаче по складам не может превышать "
                     "остаток к обеспечению."
                 )
+
+    def _issue_moves(self):
+        """Движения выдачи распределений: исходное, backorder, повторные."""
+        moves = self.mapped("issue_move_ids") | self.mapped("move_id")
+        return moves.filtered(
+            lambda move: move.picking_id.is_object_request_issue
+        )
+
+    def _write_plan_with_done_qty(self, vals):
+        """Исходный план = остаток к выдаче + уже проведённое."""
+        for stock in self:
+            stock.write(
+                dict(
+                    vals,
+                    qty_planned_to_issue=vals["qty_to_issue"]
+                    + stock._done_issue_qty(),
+                )
+            )
+        return True
+
+    def _done_issue_qty(self):
+        """Проведено по распределению в единицах строки."""
+        self.ensure_one()
+        return self.line_id._object_request_move_qty_in_line_uom(
+            self._issue_moves().filtered(lambda move: move.state == "done")
+        )
+
+    def _open_issue_moves(self):
+        return self._issue_moves().filtered(
+            lambda move: move.state not in ("done", "cancel")
+        )
+
+    def _point_to_issue_move(self, move):
+        """Перевести ссылку «Выдача» распределения и строки на ``move``."""
+        self.ensure_one()
+        old_move = self.move_id
+        picking = move.picking_id
+        vals = {"move_id": move.id, "picking_id": picking.id}
+        self.with_context(
+            auto_stock_distribution=True,
+            skip_qty_to_issue_limit=True,
+            skip_stock_total_sync=True,
+        ).write(vals)
+        line = self.line_id
+        if not line.issue_move_id or line.issue_move_id in old_move | move:
+            line.write(
+                {"issue_move_id": move.id, "issue_picking_id": picking.id}
+            )
+        if picking:
+            line.request_id.write({"issue_picking_ids": [(4, picking.id)]})

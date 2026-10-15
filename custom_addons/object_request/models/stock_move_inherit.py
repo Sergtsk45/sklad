@@ -1,8 +1,23 @@
-from odoo import models
+from odoo import fields, models
 
 
 class StockMoveInherit(models.Model):
     _inherit = "stock.move"
+
+    object_request_stock_id = fields.Many2one(
+        "object.request.line.stock",
+        string="Распределение требования",
+        index=True,
+        copy=False,
+        ondelete="set null",
+    )
+
+    def _prepare_move_split_vals(self, qty):
+        """Остаток в backorder остаётся привязан к распределению заявки."""
+        vals = super()._prepare_move_split_vals(qty)
+        if self.object_request_stock_id:
+            vals["object_request_stock_id"] = self.object_request_stock_id.id
+        return vals
 
     # --- TD-017: резерв выдачи по требованию входит в «Обеспечено» ---
 
@@ -26,7 +41,8 @@ class StockMoveInherit(models.Model):
             return
         # Служебная синхронизация: кладовщик и складской пользователь
         # не имеют права записи в распределения требования.
-        stocks = self.env["object.request.line.stock"].sudo().search(
+        stocks = issue_moves.sudo().object_request_stock_id
+        stocks |= self.env["object.request.line.stock"].sudo().search(
             [("move_id", "in", issue_moves.ids)]
         )
         stocks.mapped("line_id")._sync_issue_reserve_from_moves()

@@ -722,10 +722,8 @@ class ObjectRequestLine(models.Model):
 
     def _object_request_issue_moves(self):
         self.ensure_one()
-        moves = self.stock_ids.mapped("move_id").filtered(
-            lambda move: move.exists()
-            and move.picking_id.is_object_request_issue
-            and move.state == "done"
+        moves = self.stock_ids._issue_moves().filtered(
+            lambda move: move.state == "done"
         )
         if (
             not moves
@@ -876,8 +874,7 @@ class ObjectRequestLine(models.Model):
     def _open_issue_stock_lines(self):
         """Распределения строк с непроведённой и неотменённой выдачей."""
         return self.mapped("stock_ids").filtered(
-            lambda stock: stock.move_id
-            and stock.move_id.state not in ("done", "cancel")
+            lambda stock: stock._open_issue_moves()
         )
 
     def _sync_issue_reserve_from_moves(self):
@@ -887,14 +884,16 @@ class ObjectRequestLine(models.Model):
             "skip_qty_to_issue_limit": True,
             "skip_stock_total_sync": True,
         }
-        self._unlink_cancelled_issue_moves()
+        self._refresh_issue_move_pointers()
         for line in self.exists():
             total = 0.0
             for stock in line.stock_ids:
-                move = stock.move_id
-                reserved = 0.0
-                if move and move.state in ("assigned", "partially_available"):
-                    reserved = line._object_request_move_qty_in_line_uom(move)
+                reserved = line._object_request_move_qty_in_line_uom(
+                    stock._open_issue_moves().filtered(
+                        lambda move: move.state
+                        in ("assigned", "partially_available")
+                    )
+                )
                 if abs(stock.qty_reserved - reserved) > 0.00001:
                     stock.with_context(**sync_context).write(
                         {"qty_reserved": reserved}
@@ -909,29 +908,30 @@ class ObjectRequestLine(models.Model):
                 )
         return True
 
-    def _unlink_cancelled_issue_moves(self):
-        """Отвязать отменённые выдачи, чтобы план можно было выдать снова."""
-        stocks = self.mapped("stock_ids").filtered(
-            lambda stock: stock.move_id and stock.move_id.state == "cancel"
-        )
-        if not stocks:
-            return
-        moves = stocks.mapped("move_id")
-        stocks.with_context(
-            auto_stock_distribution=True,
-            skip_qty_to_issue_limit=True,
-            skip_stock_total_sync=True,
-        ).write({"picking_id": False, "move_id": False, "qty_reserved": 0.0})
-        self.filtered(lambda line: line.issue_move_id in moves).write(
-            {"issue_picking_id": False, "issue_move_id": False}
-        )
+    def _refresh_issue_move_pointers(self):
+        """«Выдача» распределения — открытое движение (backorder).
+
+        Нет открытого, а текущее отменено — связь снимается, чтобы
+        остаток плана можно было выдать снова.
+        """
+        for stock in self.mapped("stock_ids"):
+            open_moves = stock._open_issue_moves()
+            target = open_moves.sorted("id")[-1:]
+            if not target and stock.move_id.state != "cancel":
+                continue
+            if target and (
+                stock.move_id == target
+                and stock.picking_id == target.picking_id
+            ):
+                continue
+            stock._point_to_issue_move(target)
 
     def _cancel_open_issue_moves(self):
         """Отменить непроведённые движения выдачи и отвязать их от строк."""
         stocks = self._open_issue_stock_lines()
         if not stocks:
             return self.env["stock.picking"]
-        moves = stocks.mapped("move_id")
+        moves = stocks._open_issue_moves()
         pickings = moves.mapped("picking_id")
         # Хук stock.move._action_cancel отвязывает движения и снимает резерв.
         moves._action_cancel()
@@ -945,7 +945,7 @@ class ObjectRequestLine(models.Model):
         unlinked_plan_qty = {
             stock.id: stock.qty_to_issue
             for stock in self.stock_ids
-            if not stock.move_id
+            if not stock._issue_moves()
         }
         sync_context = {
             "auto_stock_distribution": True,
@@ -957,24 +957,17 @@ class ObjectRequestLine(models.Model):
             {"qty_to_issue": 0.0}
         )
         for stock in self.stock_ids:
-            if stock.move_id:
-                move = stock.move_id
-                if stock.qty_planned_to_issue:
-                    planned_qty = stock.qty_planned_to_issue
-                else:
-                    source_uom = (
-                        move.product_uom
-                        if "product_uom" in move._fields
-                        else move.product_uom_id
-                    ) or move.product_id.uom_id
-                    planned_qty = source_uom._compute_quantity(
-                        move.product_uom_qty,
-                        target_uom,
+            moves = stock._issue_moves()
+            if moves:
+                planned_qty = stock.qty_planned_to_issue or sum(
+                    move.product_uom._compute_quantity(
+                        move.product_uom_qty, target_uom
                     )
-                done_qty = (
-                    self._object_request_move_qty_in_line_uom(move)
-                    if move.state == "done"
-                    else 0.0
+                    for move in moves
+                    if move.state != "cancel"
+                )
+                done_qty = self._object_request_move_qty_in_line_uom(
+                    moves.filtered(lambda move: move.state == "done")
                 )
                 desired_qty = max(planned_qty - done_qty, 0.0)
             else:

@@ -26,12 +26,17 @@
   `_recompute_state` (вызывают `_action_assign`, `_do_unreserve`,
   `stock.move.line` create/unlink), `_action_cancel`; резерв движения —
   поле `quantity` в статусах `assigned` / `partially_available`.
+  `_prepare_move_split_vals` (19.0.1.11.1) — перенос
+  `object_request_stock_id` в движение backorder; `_split` / `_create_backorder`
+  создают остаток новым движением без ссылки на исходное.
 - **Что проверить в 20**:
   1. Сигнатуры и места вызова `_recompute_state` / `_action_cancel` не
      изменились; если резерв меняется в обход `_recompute_state` — найти
      новый хук.
   2. Семантика `stock.move.quantity` (резерв до проведения) та же.
-  3. Прогнать `--test-tags /object_request:TestTD017AutoSplitReserve`.
+  3. Частичное проведение всё ещё делит движение через
+     `_prepare_move_split_vals` (иначе backorder потеряет связь со строкой).
+  4. Прогнать `--test-tags /object_request:TestTD017AutoSplitReserve,/object_request:TestTD017IssueBackorder`.
 
 ---
 

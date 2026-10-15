@@ -104,6 +104,7 @@ class StockPickingInherit(models.Model):
                 ]
             )
             lines |= stock_lines.mapped("line_id")
+            lines |= picking.move_ids.object_request_stock_id.line_id
             lines |= self.env["object.request.line"].search(
                 [
                     ("issue_picking_id", "=", picking.id),

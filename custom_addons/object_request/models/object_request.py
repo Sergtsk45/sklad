@@ -1682,8 +1682,12 @@ class ObjectRequest(models.Model):
             message += " " + "; ".join(partial_notes) + "."
         return message, bool(partial)
 
-    def _unlinked_issue_plan_stocks(self):
-        """Распределения с планом выдачи, по которым выдача ещё не создана."""
+    def _unlinked_issue_plan_stocks(self, any_warehouse=False):
+        """Распределения с планом выдачи без открытой выдачи.
+
+        ``any_warehouse`` — без фильтра по складам выдачи требования
+        (мастер «Создать выдачу» показывает все распределения).
+        """
         self.ensure_one()
         allowed_warehouses = self._get_issue_warehouses()
         return self.line_ids.mapped("stock_ids").filtered(
@@ -1691,9 +1695,8 @@ class ObjectRequest(models.Model):
                 stock.qty_to_issue > 0
                 and stock.line_id.product_id
                 and not stock.line_id.is_cancelled
-                and stock.warehouse_id in allowed_warehouses
-                and not stock.picking_id
-                and not stock.move_id
+                and (any_warehouse or stock.warehouse_id in allowed_warehouses)
+                and not stock._open_issue_moves()
             )
         )
 
@@ -1749,6 +1752,7 @@ class ObjectRequest(models.Model):
         move = self.env["stock.move"].create(
             {
                 "picking_id": picking.id,
+                "object_request_stock_id": stock_line.id,
                 "product_id": line.product_id.id,
                 "product_uom_qty": stock_line.qty_to_issue,
                 "product_uom": (line.uom_id or line.product_id.uom_id).id,
@@ -1765,21 +1769,14 @@ class ObjectRequest(models.Model):
         self.ensure_one()
         self._check_supply_manager_processing_action()
         self._check_processing_state()
-        allowed_warehouses = self._get_issue_warehouses()
-        already_linked = self.line_ids.mapped("stock_ids").filtered(
-            lambda stock: stock.qty_to_issue > 0
-            and stock.line_id.product_id
-            and stock.warehouse_id in allowed_warehouses
-            and (stock.picking_id or stock.move_id)
-        )
-        if already_linked:
-            raise UserError(
-                "По части строк уже создана выдача. "
-                "Сбросьте или отмените существующую выдачу перед повторным "
-                "созданием."
-            )
         self._check_issue_plan_stock_limits()
         if not self._unlinked_issue_plan_stocks():
+            if self.line_ids._open_issue_stock_lines():
+                raise UserError(
+                    "По всем строкам с планом выдачи уже создана выдача. "
+                    "Сбросьте или отмените существующую выдачу перед "
+                    "повторным созданием."
+                )
             raise UserError(
                 "Нет строк с заполненным количеством к выдаче. "
                 "Заполните распределение по складам."
