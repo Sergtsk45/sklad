@@ -38,6 +38,19 @@ class ObjectRequestLine(models.Model):
         required=True,
         digits="Product Unit of Measure",
     )
+    qty_requested_pcs = fields.Float(
+        string="Запрошено, шт.",
+        digits="Product Unit of Measure",
+        copy=True,
+        help=(
+            "Потребность в штуках для метизов, которые учитываются в кг. "
+            "«Запрошено» = шт. × «Масса 1 шт., кг» карточки (TD-016)."
+        ),
+    )
+    product_kg_per_piece = fields.Float(
+        related="product_id.kg_per_piece",
+        string="Масса 1 шт., кг",
+    )
     price_raw = fields.Float(string="Цена (из файла)", digits="Product Price")
     comment = fields.Text(string="Комментарий")
     supplier_raw = fields.Char(string="Поставщик (из файла)", index=True)
@@ -461,10 +474,123 @@ class ObjectRequestLine(models.Model):
         if any(line.name_raw != new_name for line in locked):
             raise UserError(_NAME_RAW_LOCK_MSG)
 
+    # --- TD-016: метизы в шт. при учёте в кг ---
+
+    @api.model
+    def _is_piece_uom_input(self, uom_raw, uom):
+        """Количество введено в штуках (файл «шт.» или единица «шт»)."""
+        if uom_raw and self.env["object.request.excel.parser"].normalize_uom(
+            uom_raw
+        ) == "шт.":
+            return True
+        unit = self.env.ref("uom.product_uom_unit", raise_if_not_found=False)
+        return bool(uom and unit and uom._has_common_reference(unit))
+
+    @api.model
+    def _qty_from_pieces(self, product, pieces):
+        """Штуки → количество в единице карточки (кг) по массе 1 шт."""
+        kg = self.env.ref("uom.product_uom_kgm")
+        return kg._compute_quantity(
+            pieces * product.kg_per_piece, product.uom_id, round=False
+        )
+
+    @api.model
+    def _piece_vals(self, product, pieces):
+        return {
+            "qty_requested_pcs": pieces,
+            "qty_requested": self._qty_from_pieces(product, pieces),
+            "uom_id": product.uom_id.id,
+        }
+
+    @api.model
+    def _piece_create_vals(self, vals):
+        product = self.env["product.product"].browse(vals.get("product_id"))
+        if not product.kg_per_piece:
+            return {}
+        pieces = vals.get("qty_requested_pcs")
+        uom = self.env["uom.uom"].browse(vals.get("uom_id"))
+        if not pieces and self._is_piece_uom_input(vals.get("uom_raw"), uom):
+            pieces = vals.get("qty_requested")
+        return self._piece_vals(product, pieces) if pieces else {}
+
+    def _piece_write_vals(self, vals):
+        """Пересчёт шт. → кг при смене товара или «Запрошено, шт.»."""
+        self.ensure_one()
+        product = (
+            self.env["product.product"].browse(vals["product_id"])
+            if "product_id" in vals
+            else self.product_id
+        )
+        pieces = vals.get("qty_requested_pcs", self.qty_requested_pcs)
+        if product.kg_per_piece:
+            if not pieces and "product_id" in vals and (
+                self._is_piece_uom_input(
+                    vals.get("uom_raw", self.uom_raw), self.uom_id
+                )
+            ):
+                pieces = vals.get("qty_requested", self.qty_requested)
+            return self._piece_vals(product, pieces) if pieces else {}
+        if pieces and "product_id" in vals:
+            # Товар без массы 1 шт.: потребность снова в штуках.
+            return {"qty_requested": pieces, "qty_requested_pcs": 0.0}
+        return {}
+
+    def _write_with_piece_conversion(self, vals):
+        """Записать строку с пересчётом шт. → кг.
+
+        Смена единицы (товар, сопоставление) — не изменение потребности:
+        блокировка состава не мешает. Изменение штук — мешает.
+        """
+        for line in self:
+            line_vals = dict(vals, **line._piece_write_vals(vals))
+            pieces_changed = "qty_requested_pcs" in vals and float_compare(
+                vals["qty_requested_pcs"],
+                line.qty_requested_pcs,
+                precision_digits=4,
+            )
+            forced_skip = self.env.context.get("or_skip_qty_lock")
+            if pieces_changed and not forced_skip:
+                line._check_qty_requested_change(line_vals["qty_requested"])
+            skip_lock = forced_skip or (
+                "qty_requested" in line_vals
+                and "qty_requested" not in vals
+                and not pieces_changed
+            )
+            line.with_context(
+                or_piece_conversion_done=True,
+                or_skip_qty_lock=skip_lock,
+            ).write(line_vals)
+        return True
+
+    def _onchange_product_pieces(self):
+        """Строка в шт. на товаре с массой 1 шт. — перевести в кг."""
+        product = self.product_id
+        if not product.kg_per_piece:
+            return
+        if not self.qty_requested_pcs and self._is_piece_uom_input(
+            self.uom_raw, self.uom_id
+        ):
+            self.qty_requested_pcs = self.qty_requested
+        if self.qty_requested_pcs:
+            self.qty_requested = self._qty_from_pieces(
+                product, self.qty_requested_pcs
+            )
+
+    @api.onchange("qty_requested_pcs")
+    def _onchange_qty_requested_pcs(self):
+        """В форме сразу показать «Запрошено» в кг."""
+        product = self.product_id
+        if product.kg_per_piece and self.qty_requested_pcs:
+            self.qty_requested = self._qty_from_pieces(
+                product, self.qty_requested_pcs
+            )
+            self.uom_id = product.uom_id
+
     @api.model_create_multi
     def create(self, vals_list):
         self.check_access("create")
         for vals in vals_list:
+            vals.update(self._piece_create_vals(vals))
             if vals.get("allowed_substitute_ids"):
                 self._check_supply_manager_substitution_action()
             request_id = vals.get("request_id")
@@ -477,11 +603,18 @@ class ObjectRequestLine(models.Model):
         return super().create(vals_list)
 
     def write(self, vals):
+        if (
+            {"product_id", "qty_requested_pcs"} & set(vals)
+            and not self.env.context.get("or_piece_conversion_done")
+        ):
+            return self._write_with_piece_conversion(vals)
         if "allowed_substitute_ids" in vals:
             self._check_supply_manager_substitution_action()
         if "name_raw" in vals:
             self._check_name_raw_change(vals["name_raw"])
-        if "qty_requested" in vals:
+        if "qty_requested" in vals and not self.env.context.get(
+            "or_skip_qty_lock"
+        ):
             self._check_qty_requested_change(vals["qty_requested"])
         self._check_explicit_invoice_request_write(vals)
         return self._write_with_invoice_request_reset(vals)
@@ -640,6 +773,7 @@ class ObjectRequestLine(models.Model):
         self._onchange_reset_invoice_request_on_replace("product_id")
         if not self.product_id:
             return
+        self._onchange_product_pieces()
         self.uom_id = self.product_id.uom_id
         company = self.company_id or self.env.company
         sellers = self.product_id.with_company(company)._prepare_sellers()

@@ -448,6 +448,7 @@
                                         optional="hide"
                                     />
                                     <field name="uom_id" string="Ед. изм." optional="show"/>
+                                    <field name="qty_requested_pcs" string="Запрошено, шт." optional="show" invisible="not qty_requested_pcs"/>
                                     <field name="qty_requested" string="Запрошено"/>
                                     <field name="qty_to_issue" string="К выдаче (план)"/>
                                     <field name="qty_to_buy" string="К закупке (план)"/>
@@ -545,6 +546,14 @@
                                     <field name="floor" string="Этаж (старое)" optional="hide"/>
                                     <field name="section" string="Участок (старое)" optional="hide"/>
                                     <!-- Количества -->
+                                    <field name="product_kg_per_piece" column_invisible="1"/>
+                                    <field
+                                        name="qty_requested_pcs"
+                                        string="Запрошено, шт."
+                                        optional="show"
+                                        readonly="parent.state != 'draft' or not product_kg_per_piece"
+                                        invisible="not qty_requested_pcs and not product_kg_per_piece"
+                                    />
                                     <field
                                         name="qty_requested"
                                         string="Запрошено"

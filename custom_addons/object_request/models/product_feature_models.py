@@ -1,4 +1,5 @@
 from odoo import api, fields, models
+from odoo.exceptions import ValidationError
 
 
 PRODUCT_FAMILY_SELECTION = [
@@ -96,6 +97,35 @@ class ProductTemplate(models.Model):
             "Используется для пересчёта кг/т в метры."
         ),
     )
+    kg_per_piece = fields.Float(
+        string="Масса 1 шт., кг",
+        digits=(16, 4),
+        help=(
+            "Для метизов, которые учитываются и закупаются в кг: "
+            "в требовании потребность вводится в шт. и пересчитывается "
+            "в кг по этому коэффициенту (TD-016)."
+        ),
+    )
+
+    @api.constrains("kg_per_piece", "uom_id")
+    def _check_kg_per_piece_uom(self):
+        """Масса 1 шт. имеет смысл только для товара в единицах веса."""
+        kg = self.env.ref("uom.product_uom_kgm", raise_if_not_found=False)
+        for template in self:
+            if template.kg_per_piece < 0:
+                raise ValidationError(
+                    "Масса 1 шт. не может быть отрицательной."
+                )
+            if (
+                template.kg_per_piece
+                and kg
+                and not template.uom_id._has_common_reference(kg)
+            ):
+                raise ValidationError(
+                    f"«Масса 1 шт.» задаётся только для товара в единицах "
+                    f"веса: у «{template.display_name}» единица "
+                    f"«{template.uom_id.name}»."
+                )
 
     @api.depends("name")
     def _compute_object_request_product_features(self):
@@ -167,5 +197,9 @@ class ProductProduct(models.Model):
     kg_per_meter = fields.Float(
         related="product_tmpl_id.kg_per_meter",
         store=True,
+        readonly=False,
+    )
+    kg_per_piece = fields.Float(
+        related="product_tmpl_id.kg_per_piece",
         readonly=False,
     )

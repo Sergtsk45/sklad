@@ -143,6 +143,14 @@
                 <field name="zone" string="Захватка (старое)" optional="hide"/>
                 <field name="floor" string="Этаж (старое)" optional="hide"/>
                 <field name="section" string="Участок (старое)" optional="hide"/>
+                <field name="product_kg_per_piece" column_invisible="1"/>
+                <field
+                    name="qty_requested_pcs"
+                    string="Запрошено, шт."
+                    optional="show"
+                    readonly="request_id.state != 'draft' or not product_kg_per_piece"
+                    invisible="not qty_requested_pcs and not product_kg_per_piece"
+                />
                 <field
                     name="qty_requested"
                     string="Запрошено"

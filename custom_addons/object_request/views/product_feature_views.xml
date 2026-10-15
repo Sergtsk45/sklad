@@ -15,6 +15,7 @@
                     <field name="or_standard"/>
                     <field name="or_connection_type"/>
                     <field name="kg_per_meter"/>
+                    <field name="kg_per_piece"/>
                     <field name="or_feature_key" readonly="1"/>
                     <field name="or_feature_parse_warning" readonly="1"/>
                 </group>
