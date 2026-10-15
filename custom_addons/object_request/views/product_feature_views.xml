@@ -16,6 +16,17 @@
                     <field name="or_connection_type"/>
                     <field name="kg_per_meter"/>
                     <field name="kg_per_piece"/>
+                    <label for="kg_per_piece_suggested" invisible="not kg_per_piece_suggested"/>
+                    <div class="o_row" invisible="not kg_per_piece_suggested">
+                        <field name="kg_per_piece_suggested" nolabel="1"/>
+                        <button
+                            name="action_apply_kg_per_piece_suggestion"
+                            type="object"
+                            string="Подставить"
+                            class="btn-link"
+                            invisible="kg_per_piece == kg_per_piece_suggested"
+                        />
+                    </div>
                     <field name="or_feature_key" readonly="1"/>
                     <field name="or_feature_parse_warning" readonly="1"/>
                 </group>

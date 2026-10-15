@@ -1,6 +1,8 @@
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 
+from .fastener_mass import suggest_kg_per_piece
+
 
 PRODUCT_FAMILY_SELECTION = [
     ("flange", "Фланец"),
@@ -107,6 +109,66 @@ class ProductTemplate(models.Model):
         ),
     )
 
+    kg_per_piece_suggested = fields.Float(
+        string="Расчётная масса 1 шт., кг",
+        digits=(16, 4),
+        compute="_compute_kg_per_piece_suggested",
+        help=(
+            "Теоретическая масса болта (ГОСТ 7798) или гайки (ГОСТ 5915) "
+            "по наименованию: размеры стандарта, сталь 7,85 г/см³, без "
+            "фасок. Проверьте по счёту или взвешиванием."
+        ),
+    )
+
+    @api.depends("name")
+    def _compute_kg_per_piece_suggested(self):
+        for template in self:
+            template.kg_per_piece_suggested = suggest_kg_per_piece(
+                template.name
+            )
+
+    def _is_weight_uom(self, uom):
+        kg = self.env.ref("uom.product_uom_kgm", raise_if_not_found=False)
+        return bool(uom and kg and uom._has_common_reference(kg))
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Новый метиз в кг сразу получает расчётную массу 1 шт."""
+        templates = super().create(vals_list)
+        templates._fill_kg_per_piece_from_suggestion()
+        return templates
+
+    def write(self, vals):
+        result = super().write(vals)
+        if {"uom_id", "name"} & set(vals) and "kg_per_piece" not in vals:
+            self._fill_kg_per_piece_from_suggestion()
+        return result
+
+    def _fill_kg_per_piece_from_suggestion(self):
+        for template in self:
+            if (
+                not template.kg_per_piece
+                and template.kg_per_piece_suggested
+                and template._is_weight_uom(template.uom_id)
+            ):
+                template.kg_per_piece = template.kg_per_piece_suggested
+
+    @api.onchange("name", "uom_id")
+    def _onchange_kg_per_piece_suggestion(self):
+        """В форме подставить расчётную массу, если поле пустое."""
+        if (
+            not self.kg_per_piece
+            and self.kg_per_piece_suggested
+            and self._is_weight_uom(self.uom_id)
+        ):
+            self.kg_per_piece = self.kg_per_piece_suggested
+
+    def action_apply_kg_per_piece_suggestion(self):
+        """Заменить массу 1 шт. расчётной по ГОСТ."""
+        for template in self.filtered("kg_per_piece_suggested"):
+            template.kg_per_piece = template.kg_per_piece_suggested
+        return True
+
     @api.constrains("kg_per_piece", "uom_id")
     def _check_kg_per_piece_uom(self):
         """Масса 1 шт. имеет смысл только для товара в единицах веса."""
@@ -203,3 +265,10 @@ class ProductProduct(models.Model):
         related="product_tmpl_id.kg_per_piece",
         readonly=False,
     )
+    kg_per_piece_suggested = fields.Float(
+        related="product_tmpl_id.kg_per_piece_suggested",
+    )
+
+    def action_apply_kg_per_piece_suggestion(self):
+        """Заменить массу 1 шт. расчётной по ГОСТ."""
+        return self.product_tmpl_id.action_apply_kg_per_piece_suggestion()
