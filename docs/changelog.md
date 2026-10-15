@@ -21,6 +21,10 @@
 - `test_td017_issue_backorder.py` (10). `object_request` + `ai_assistant`:
   1039 tests, 0 failed. Миграция проверена на смоделированном старом
   backorder (`odoo shell`, откат).
+- Prod deploy `28d5bb2`: backup
+  `~/backups/before_1.11.1_2026-10-15_0717.sql.gz`, `-u object_request` →
+  `19.0.1.11.1` (post-migrate: привязано 63 движения выдачи, backorder —
+  0 строк), restart; `/web/login` HTTP 200.
 
 ## [2026-10-15] — feat(object_request): авто-разбивка резервирует остаток, резерв = «Обеспечено» (TD-017, 19.0.1.11.0)
 
