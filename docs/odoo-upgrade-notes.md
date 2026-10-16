@@ -16,6 +16,37 @@
 
 ---
 
+## UPG-004 — Поиск товаров v2: `name_search` и поле «Товар» в поиске списков
+
+- **Статус**: актуально на Odoo 19 (`custom_product_search` `19.0.2.0.0`, 2026-10-17)
+- **Зачем**: автокомплит и список товаров ищут по токенам с синонимами и
+  ранжированием (план `docs/plans/2026-10-17-product-search-v2.md`).
+- **Файлы**: `custom_addons/custom_product_search/models/product_product.py`,
+  `product_template.py`, `product_search_mixin.py`,
+  `views/product_search_views.xml`.
+- **Upstream 19**:
+  - `product.product.name_search` / `product.template.name_search`
+    (`odoo/addons/product/models/product_product.py`, `product_template.py`) —
+    вызываются как добор после ранжированных id; `web_name_search`
+    (`odoo/addons/web/models/models.py`) идёт через `name_search`;
+  - `orm.Query` (`add_where`, `order`, `limit`, `select`) и `_search` —
+    кандидаты с `@@ tsquery` по выражению
+    `array_to_tsvector(string_to_array(x_search_tokens, ' '))`;
+  - search views `product.product_template_search_view` и
+    `product.product_search_form_view`: у поля `name` целиком переписан
+    `filter_domain` (стандартные условия + `x_smart_search`).
+- **Что проверить в 20**:
+  1. Upstream `filter_domain` поля `name` в обоих search view не изменился —
+     иначе перенести новые условия в `views/product_search_views.xml`.
+  2. Сигнатура `name_search(name, domain, operator, limit)` и то, что
+     `web_name_search` по-прежнему вызывает её.
+  3. API `Query` / `create_index` (`odoo/tools/query.py`, `odoo/tools/sql.py`)
+     и `models.Constraint`.
+  4. Прогнать `--test-tags /custom_product_search,/object_request:TestObr038VendorProductSearch`
+     и бенчмарк `custom_product_search/tests/bench/bench_odoo_shell.py`.
+
+---
+
 ## UPG-003 — Резерв выдачи по требованию: хуки `stock.move` (TD-017)
 
 - **Статус**: актуально на Odoo 19 (`object_request` `19.0.1.11.0`, 2026-10-15)

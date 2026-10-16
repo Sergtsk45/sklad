@@ -423,6 +423,7 @@ OWL-наследование перестали применяться.
 | Подпись в UI | Модуль | Файл проекта | Upstream (Odoo 19) |
 |--------------|--------|--------------|---------------------|
 | На складе / Доступно | `stock_qty_labels_ru` | `views/product_qty_labels_views.xml` | `stock/views/*`, kanban, forecast |
+| Товар (поиск в списке товаров) | `custom_product_search` | `views/product_search_views.xml` | `product/views/product_views.xml` — `product_template_search_view`, `product_search_form_view`: `filter_domain` поля `name` (+ `x_smart_search`), см. UPG-004 |
 | Отправить запрос | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_rfq_send`, `invisible="state != 'draft'"` / `state != 'sent'` |
 | Получатели заявки (RFQ) | `object_request` | `data/purchase_mail_template.xml`, `models/purchase_order_ext.py` | `purchase.email_template_edi_purchase`: поставщик + партнёр компании (`675001@mail.ru`); одна notify-группа и один язык обёртки; подпись «С уважением, …» в `mail.mail_notification_layout` (композер вырезает её из тела); без кнопки портала / P00xxx / срока в шапке |
 | Отправить заказ | `object_request` | `views/purchase_order_inherit_views.xml` | `purchase/views/purchase_views.xml` — `action_rfq_send`, `invisible="state != 'purchase'"` |
