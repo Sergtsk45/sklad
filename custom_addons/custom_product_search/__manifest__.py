@@ -1,13 +1,13 @@
 {
     'name': 'Custom Product Search',
-    'version': '19.0.1.1.0',
+    'version': '19.0.2.0.0',
     'category': 'Inventory/Inventory',
     'summary': 'Improved normalized product search for Odoo products',
     'description': """
 Normalized product search for Odoo 19.
 
-Adds stored normalized search fields on products and product templates,
-extends backend product lookup, and provides a safe service method for
+Product search v2: search tokens with editable synonyms, ranked
+autocomplete, token filter in product lists and a safe service method for
 AI-assisted product search.
     """,
     'author': 'Custom',
@@ -16,7 +16,12 @@ AI-assisted product search.
         'product',
         'stock',
     ],
-    'data': [],
+    'data': [
+        'security/ir.model.access.csv',
+        'views/product_search_synonym_views.xml',
+        'views/product_search_views.xml',
+        'data/product_search_data.xml',
+    ],
     'post_init_hook': 'post_init_hook',
     'installable': True,
     'application': False,

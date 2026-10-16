@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_search_synonym_view_list" model="ir.ui.view">
+        <field name="name">product.search.synonym.list</field>
+        <field name="model">product.search.synonym</field>
+        <field name="arch" type="xml">
+            <list string="Синонимы поиска" editable="bottom">
+                <field name="term" string="Слово"/>
+                <field name="canonical" string="Заменяется на"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="product_search_synonym_view_search" model="ir.ui.view">
+        <field name="name">product.search.synonym.search</field>
+        <field name="model">product.search.synonym</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="term" string="Слово"/>
+                <field name="canonical" string="Заменяется на"/>
+                <filter name="inactive" string="Архив" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="product_search_synonym_action" model="ir.actions.act_window">
+        <field name="name">Синонимы поиска товаров</field>
+        <field name="res_model">product.search.synonym</field>
+        <field name="view_mode">list</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Добавьте синоним</p>
+            <p>Слово из заявки заменяется на каноническую форму и в названиях
+                товаров, и в запросе: «оцинк» → «оцинкованный», «dn» → «ду».
+                После изменения поисковый индекс пересчитывается.</p>
+        </field>
+    </record>
+
+    <menuitem id="product_search_synonym_menu"
+              name="Синонимы поиска"
+              parent="stock.menu_stock_inventory_control"
+              action="product_search_synonym_action"
+              groups="stock.group_stock_user"
+              sequence="90"/>
+</odoo>

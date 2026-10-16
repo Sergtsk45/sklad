@@ -1,113 +1,105 @@
 # custom_product_search
 
-`custom_product_search` улучшает поиск товаров в Odoo 19 без изменения core Odoo.
+Поиск товаров v2 для Odoo 19, без изменения ядра Odoo. Дизайн и замеры —
+[`docs/plans/2026-10-17-product-search-v2.md`](../../docs/plans/2026-10-17-product-search-v2.md).
 
-Модуль добавляет stored computed поле `x_search_name` на `product.template` и `product.product`, нормализует названия товаров и расширяет backend-поиск вариантов товаров через актуальный для Odoo 19 метод `name_search()`.
+## Как работает
 
-## Что нормализуется
+1. **Токены.** У `product.template` и `product.product` есть stored-поле
+   `x_search_tokens` (`models/product_search_tokens.py`). Его считают из
+   названия, значений варианта и `default_code`:
+   - нормализация: регистр, `ё`, NBSP, `ду 50 → ду50`, `х/×/* → x`,
+     `3,5 → 3.5`;
+   - составные токены: `М16×70` даёт `m16x70`, `m16`, `16x70`, `16`, `70`;
+     `Ду25мм` даёт `ду25`;
+   - похожие кириллические и латинские буквы в кодах приводятся к одной
+     форме: `М16` = `M16`, `1р` = `1P`;
+   - наружный диаметр стальной трубы даёт условный проход:
+     `76×3,5` → `ду65`;
+   - слова обрезаются до 5 букв (`шаровой` = `шаровый`); единицы
+     `мм/шт/см/кг` и предлоги отбрасываются.
+2. **Синоним** (`product.search.synonym`) заменяет слово на каноническую
+   форму и в названиях, и в запросах. Меню: «Склад → Товары → Синонимы
+   поиска», доступно кладовщикам и снабженцам. После любой правки весь
+   каталог переиндексируется. Стартовый набор лежит в
+   `models/product_search_synonyms_data.py` и загружается один раз.
+3. **Поиск** (`product.search.mixin._smart_search_ids`):
+   - кандидаты — GIN-индекс `array_to_tsvector(...) @@ tsquery` (OR по
+     токенам), через обычный `_search`, поэтому ACL и record rules
+     соблюдаются;
+   - каждое слово запроса раскрывается по словарю каталога: точное
+     совпадение, префикс слова, опечатка (`болд` → `болт`, коэффициент 0.7);
+     числа совпадают только целиком (`16` не находит `160`);
+   - вес токена — IDF: чем реже токен в каталоге, тем он важнее. Слова,
+     которых нет в каталоге (`(кор)`, `4м`), не мешают.
 
-- пробелы в начале и конце строки;
-- регистр символов;
-- `ё` -> `е`;
-- NBSP -> обычный пробел;
-- повторные пробелы -> один пробел;
-- `ду 50` -> `ду50`;
-- `dn 50` -> `dn50`.
+## Где работает
 
-Пример:
-
-```text
-кран  шаровый  Ду50 -> кран шаровый ду50
-```
-
-## Где работает поиск
-
-- backend UI для товаров;
-- Many2one-поля на `product.product`, включая складские документы;
-- сервисный метод для AI-ассистента:
+| Место | Поведение |
+|-------|-----------|
+| Many2one-автокомплит (`name_search`) | Сначала точный код, штрихкод или артикул поставщика, затем ранжированные совпадения, затем добор стандартным поиском Odoo |
+| Поиск «Товар» в списках товаров | Стандартные условия **или** `x_smart_search`: найдены все известные слова либо ≥ 80% веса запроса |
+| `ai_search_products` (AI, сопоставление в заявках) | Обязательны все слова запроса, включая неизвестные. `exact` — без нечёткости; `morphology` — с опечатками, требует явного выбора |
+| `object_request` | Прайс поставщика (OBR-038) и теги (TD-014) работают поверх `name_search` |
 
 ```python
 env['product.product'].ai_search_products(
-    query='кран ду50',
-    limit=20,
-    warehouse_id=None,
-    only_available=False,
+    query='кран ду50', limit=20, warehouse_id=None, only_available=False,
 )
 ```
 
-Метод не использует `sudo()` для поиска и чтения данных, поэтому сохраняет стандартные ACL и record rules Odoo.
+## Пересчёт индекса
 
-## PostgreSQL индексы
+- Если меняются правила токенизации, нужно поднять `TOKENIZER_VERSION`
+  в `product_search_tokens.py`. При `-u custom_product_search` функция
+  `_refresh_search_tokens_if_outdated` пересчитает весь каталог; версия
+  хранится в `ir.config_parameter` `custom_product_search.tokenizer_version.*`.
+- После правки синонимов каталог пересчитывается сразу (~0,2 с на 1,5 тыс.
+  карточек).
 
-При установке addon выполняется `post_init_hook`:
+## Бенчмарк
 
-```sql
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
-CREATE INDEX IF NOT EXISTS product_template_x_search_name_trgm_idx
-ON product_template
-USING gin (x_search_name gin_trgm_ops);
-
-CREATE INDEX IF NOT EXISTS product_product_x_search_name_trgm_idx
-ON product_product
-USING gin (x_search_name gin_trgm_ops);
-```
-
-Если в базе нет прав на `CREATE EXTENSION`, установку нужно выполнить пользователем PostgreSQL с соответствующими правами или заранее включить `pg_trgm`.
-
-## Совместимость с OCA base_search_fuzzy
-
-Модуль не зависит от `base_search_fuzzy` и работает самостоятельно. Если `base_search_fuzzy` установлен, `custom_product_search` не конфликтует с ним: нормализованное поле и GIN trigram-индексы остаются отдельным совместимым слоем для поиска товаров.
-
-## Установка и обновление
+Набор из 376 пар «текст прораба → выбранный товар» и названия каталога
+(без поставщиков, цен и id) лежит в `tests/bench/data/`.
 
 ```bash
-docker compose -f docker-compose.local.yml up -d
-docker exec odoo19-local odoo -u custom_product_search -d odoo19_local --stop-after-init
-docker compose -f docker-compose.local.yml restart odoo
+# офлайн, тот же алгоритм на CSV
+python3 custom_addons/custom_product_search/tests/bench/bench_search.py [-v]
+# через ORM на базе (только чтение, откат)
+docker exec -i odoo19-local odoo shell -d <db> --no-http \
+    < custom_addons/custom_product_search/tests/bench/bench_odoo_shell.py
 ```
+
+Результаты на копии prod от 2026-10-17 (1 394 товара):
+
+| Режим | Полная строка: в топ-8 | на 1-м месте | Первые 2 слова: в топ-8 |
+|-------|------------------------|--------------|-------------------------|
+| Автокомплит до v2 | 9% | 5% | 40% |
+| Автокомплит v2 | 92% | 53% | 75% |
+| Фильтр списка до v2 (2 слова) | — | — | 19% |
+| Фильтр списка v2 (2 слова) | — | — | 73% |
+
+Скорость: ~6 мс на запрос автокомплита; на 50 тыс. синтетических товаров
+100–200 мс.
 
 ## Тесты
 
 ```bash
-docker exec odoo19-local odoo --test-enable -u custom_product_search -d odoo19_local --stop-after-init
+docker exec odoo19-local odoo --test-enable --test-tags /custom_product_search \
+    -u custom_product_search -d odoo19_local --stop-after-init --http-port=8099
 ```
 
-## Ручные тестовые сценарии
+## PostgreSQL
 
-Создайте товар:
+- `pg_trgm` и trigram-индексы на `x_search_name` (`post_init_hook`).
+- GIN-индексы `product_*_x_search_tokens_gin_idx` создаются в `_auto_init`.
+- Словарь каталога кэшируется в процессе. Ключ кэша — число записей и
+  `max(write_date)` товаров и синонимов, поэтому все воркеры видят изменения
+  после коммита.
 
-```text
-кран  шаровый  Ду50
-```
+## Ограничения
 
-Проверьте поиск в товарах, складских документах и заказах продаж:
-
-```text
-кран шаровый Ду50
-кран шаровый ду50
-кран  шаровый  Ду50
-кран ду50
-шаровый ду 50
-ДУ50
-ду 50
-```
-
-Ожидаемый результат: товар `кран  шаровый  Ду50` находится во всех сценариях.
-
-Дополнительно проверьте поиск по:
-
-```text
-default_code
-barcode
-артикул поставщика (product.supplierinfo.product_code)
-```
-
-Пример: товар с каноническим именем «Отвод ПП…» и vendor code `00-00036296`
-должен находиться по запросу `00-00036296`.
-
-## Ограничения MVP
-
-- Синонимы вида `ду50 -> dn50` пока не добавлены как отдельная модель.
-- Website search будет расширяться отдельным этапом при подключении `website_sale`.
-- Trigram-индексы ускоряют `ilike`, но явный fuzzy-порог похожести не включен в MVP.
+- Модуль не разбирает атрибуты (тип, Ø, длина, ГОСТ) — это TD-018. Внешний
+  движок — TD-019.
+- Сортировка в списке товаров стандартная; ранжирование есть только в
+  автокомплите.

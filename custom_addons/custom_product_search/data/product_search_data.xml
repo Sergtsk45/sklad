@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Runs on every install/upgrade: seed synonyms once, then recompute
+         search tokens when TOKENIZER_VERSION changed. -->
+    <function model="product.search.synonym" name="_seed_default_synonyms"/>
+    <function model="product.template" name="_refresh_search_tokens_if_outdated"/>
+    <function model="product.product" name="_refresh_search_tokens_if_outdated"/>
+</odoo>

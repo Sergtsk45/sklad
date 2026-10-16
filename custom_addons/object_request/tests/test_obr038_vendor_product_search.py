@@ -352,11 +352,13 @@ class TestObr038VendorProductSearch(TransactionCase):
         self.assertIn(self.product_a.id, ids)
 
     def test_supplier_code_from_another_vendor_does_not_leak(self):
+        # No token shared with product names («OR038»): search v2 ranks
+        # products by any common token, the test checks supplierinfo only.
         self.env["product.supplierinfo"].create(
             {
                 "product_tmpl_id": self.product_a.product_tmpl_id.id,
                 "partner_id": self.vendor_b.id,
-                "product_code": "ONLY-VENDOR-B-OR038",
+                "product_code": "ONLY-VENDOR-B-QX7",
                 "price": 900.0,
             }
         )
@@ -366,7 +368,7 @@ class TestObr038VendorProductSearch(TransactionCase):
         ids = [
             product_id
             for product_id, _label in Product.name_search(
-                "ONLY-VENDOR-B-OR038", limit=20
+                "ONLY-VENDOR-B-QX7", limit=20
             )
         ]
         self.assertNotIn(self.product_a.id, ids)
