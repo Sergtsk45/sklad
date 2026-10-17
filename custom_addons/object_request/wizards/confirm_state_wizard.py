@@ -25,6 +25,7 @@ class ObjectRequestConfirmWizard(models.TransientModel):
         self.ensure_one()
         if self.action_type == "in_progress":
             self.request_id.write({"state": "in_progress"})
+            self.request_id._auto_plan_supply()
         elif self.action_type == "close":
             self.request_id.write({"state": "closed"})
         return {"type": "ir.actions.act_window_close"}

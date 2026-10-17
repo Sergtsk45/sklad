@@ -405,7 +405,9 @@ class TestPilotScenarios(TransactionCase):
         self.assertEqual(request.state, "in_progress")
 
         # Полный факт обеспечения нужен для fully_supplied.
-        line.write({"qty_to_issue": 10.0, "qty_issued": 10.0})
+        line.write(
+            {"qty_to_issue": 10.0, "qty_to_buy": 0.0, "qty_issued": 10.0}
+        )
         line.invalidate_recordset()
         self.assertEqual(line.line_state, "fully_supplied")
 

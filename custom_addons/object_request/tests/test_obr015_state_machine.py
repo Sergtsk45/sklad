@@ -98,7 +98,9 @@ class TestStateMachine(TransactionCase):
         req = self._make_request()
         line = self._add_matched_line(req)
         req.action_in_progress()
-        line.write({"qty_to_issue": 10.0, "qty_issued": 10.0})
+        line.write(
+            {"qty_to_issue": 10.0, "qty_to_buy": 0.0, "qty_issued": 10.0}
+        )
         req.action_close()
         self.assertEqual(req.state, "closed")
 
@@ -241,7 +243,9 @@ class TestStateMachine(TransactionCase):
         req = self._make_request()
         line = self._add_matched_line(req)
         req.action_in_progress()
-        line.write({"qty_requested": 10.0, "qty_to_issue": 4.0})
+        line.write(
+            {"qty_requested": 10.0, "qty_to_issue": 4.0, "qty_to_buy": 6.0}
+        )
         self.assertAlmostEqual(line.qty_to_issue, 4.0)
 
     def test_in_progress_forbids_name_raw_change(self):
@@ -259,7 +263,11 @@ class TestStateMachine(TransactionCase):
         req = self._make_request()
         line = self._add_matched_line(req)
         req.action_in_progress()
-        line.write({"name_raw": line.name_raw, "qty_to_issue": 4.0})
+        line.write({
+            "name_raw": line.name_raw,
+            "qty_to_issue": 4.0,
+            "qty_to_buy": 6.0,
+        })
         self.assertAlmostEqual(line.qty_to_issue, 4.0)
 
     def test_cancelled_forbids_name_raw_change(self):
@@ -274,14 +282,16 @@ class TestStateMachine(TransactionCase):
         req = self._make_request()
         line = self._add_matched_line(req)
         req.action_in_progress()
-        line.write({"qty_to_issue": 3.0})
+        line.write({"qty_to_issue": 3.0, "qty_to_buy": 7.0})
         self.assertAlmostEqual(line.qty_to_issue, 3.0)
 
     def test_closed_forbids_line_create(self):
         req = self._make_request()
         line = self._add_matched_line(req)
         req.action_in_progress()
-        line.write({"qty_to_issue": 10.0, "qty_issued": 10.0})
+        line.write(
+            {"qty_to_issue": 10.0, "qty_to_buy": 0.0, "qty_issued": 10.0}
+        )
         req.action_close()
         with self.assertRaises(UserError):
             self._add_unmatched_line(req)

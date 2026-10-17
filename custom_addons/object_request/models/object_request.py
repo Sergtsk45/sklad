@@ -322,6 +322,38 @@ class ObjectRequest(models.Model):
             self.invalidate_recordset(["line_stock_ids"])
         return res
 
+    def _auto_plan_supply(self):
+        """Проверить остатки и распределить «выдать / закупить».
+
+        Вызывается кнопкой «В работу» (и её подтверждением). Что есть на
+        складах выдачи —
+        «Выдать», остальное — «Закупить». Трогает только строки без плана
+        (ничего не распределено, не закупается и не выдаётся); складские
+        документы не создаются. Расчёт — от суперпользователя: в работу
+        переводит и прораб без складских прав.
+        """
+        for request in self.sudo():
+            warehouses = request._get_issue_warehouses()
+            lines = request.line_ids.filtered(
+                lambda line: line.product_id
+                and not line.is_cancelled
+                and line._has_no_supply_plan()
+            )
+            if not warehouses or not lines:
+                continue
+            request._refresh_line_stock_quantities(lines, warehouses)
+            lines._apply_auto_issue_distribution_for_lines()
+            issue = lines.filtered(lambda line: line.qty_to_issue > 0)
+            request.message_post(
+                body=(
+                    "Остатки проверены при переводе в работу: со склада — "
+                    f"{len(issue)} строк, к закупке — "
+                    f"{len(lines.filtered(lambda line: line.qty_to_buy > 0))}."
+                ),
+                message_type="notification",
+                subtype_xmlid="mail.mt_note",
+            )
+
     def unlink(self):
         self.mapped("line_ids")._unlink_from_parent_request()
         return super().unlink()
@@ -708,6 +740,7 @@ class ObjectRequest(models.Model):
                 },
             }
         self.write({"state": "in_progress"})
+        self._auto_plan_supply()
 
     def action_close(self):
         self.ensure_one()

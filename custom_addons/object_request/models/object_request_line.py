@@ -653,6 +653,18 @@ class ObjectRequestLine(models.Model):
             self._auto_suggest_products()
         return result
 
+    def _has_no_supply_plan(self):
+        """Строка ещё не планировалась: автоплан может её распределить."""
+        self.ensure_one()
+        return not (
+            self.manual_plan_override
+            or self.qty_to_issue
+            or self.qty_to_buy
+            or self.qty_issued
+            or self.purchase_order_id
+            or any(stock.qty_to_issue for stock in self.stock_ids)
+        )
+
     def _auto_suggest_products(self):
         """Предложить товар строкам без товара: подсказка, без подстановки.
 

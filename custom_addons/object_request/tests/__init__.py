@@ -48,3 +48,4 @@ from . import test_or_kit_templates  # noqa: F401
 from . import test_or_auto_suggest  # noqa: F401
 from . import test_or_default_vendor  # noqa: F401
 from . import test_or_merged_purchase  # noqa: F401
+from . import test_or_auto_plan  # noqa: F401
