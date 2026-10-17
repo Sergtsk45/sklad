@@ -1,6 +1,6 @@
 {
     'name': 'Custom Product Search',
-    'version': '19.0.2.0.0',
+    'version': '19.0.2.0.1',
     'category': 'Inventory/Inventory',
     'summary': 'Improved normalized product search for Odoo products',
     'description': """

@@ -45,3 +45,4 @@ from . import test_td016_piece_to_kg  # noqa: F401
 from . import test_td016_fastener_mass  # noqa: F401
 from . import test_or_copy_resets_supply  # noqa: F401
 from . import test_or_kit_templates  # noqa: F401
+from . import test_or_auto_suggest  # noqa: F401

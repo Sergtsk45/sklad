@@ -85,6 +85,7 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
         self._add_supplierinfo_candidates(result, supplier_article, vendor)
         self._add_default_code_candidate(result, supplier_article)
         self._add_feature_candidates(result)
+        self._add_smart_search_candidates(result, name_raw)
         self._add_name_score_candidates(result, name_raw, designation_context)
         self._add_combined_search_candidates(
             result,
@@ -99,6 +100,52 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
         self._sort_candidates(result)
         result["candidates"] = result["candidates"][:INTERNAL_CANDIDATE_LIMIT]
         result["can_call_llm"] = bool(result["candidates"])
+        if not result["candidates"]:
+            result["note"] = "Кандидаты не найдены."
+        return result
+
+    @api.model
+    def build_suggestions(
+        self,
+        name_raw,
+        supplier_article,
+        vendor=None,
+        technical_designation=None,
+    ):
+        """Кандидаты для подсказки при ручном вводе строки.
+
+        Порядок источников сохраняется: память сопоставлений, артикул
+        поставщика, внутренний код, поиск по каталогу. Структурные признаки
+        и токены наименования не участвуют: на строках прораба они чаще
+        выводят неверный товар наверх.
+        """
+        parser = self.env["object.request.excel.parser"]
+        designation_context = self._designation_context(
+            supplier_article,
+            technical_designation,
+        )
+        result = {
+            "line_type": "product_candidate",
+            "combined_query": parser._combined_match_query(
+                name_raw, designation_context,
+            ),
+            "candidates": [],
+            "can_call_llm": False,
+            "note": "",
+            "substitution_source_text": " ".join(
+                value for value in [name_raw, designation_context] if value
+            ),
+        }
+        memory = self._find_in_memory(name_raw, designation_context)
+        if memory:
+            self._add_candidate(
+                result, memory.product_id, "memory", memory.confidence,
+                "Из памяти сопоставлений.",
+            )
+        self._add_supplierinfo_candidates(result, supplier_article, vendor)
+        self._add_default_code_candidate(result, supplier_article)
+        self._add_smart_search_candidates(result, name_raw)
+        result["candidates"] = result["candidates"][:INTERNAL_CANDIDATE_LIMIT]
         if not result["candidates"]:
             result["note"] = "Кандидаты не найдены."
         return result
@@ -260,6 +307,7 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
             "default_code": 3,
             "feature": 2,
             "name_score": 2,
+            "smart_search": 2,
             "combined_search": 1,
         }
         for index, candidate in enumerate(result["candidates"]):
@@ -470,6 +518,23 @@ class ObjectRequestMatchingCandidateService(models.AbstractModel):
                 "default_code",
                 1.0,
                 "Совпадает внутренний артикул товара.",
+            )
+
+    @api.model
+    def _add_smart_search_candidates(self, result, name_raw):
+        """Кандидаты поиска v2: ранжирование по токенам и синонимам."""
+        Product = self.env["product.product"]
+        ranked = Product._smart_search_scored(
+            name_raw, limit=INTERNAL_CANDIDATE_LIMIT,
+        )
+        for product_id, score in ranked:
+            self._add_candidate(
+                result,
+                Product.browse(product_id),
+                "smart_search",
+                score,
+                "Найден поиском по каталогу: совпало %d%% запроса."
+                % round(score * 100),
             )
 
     @api.model

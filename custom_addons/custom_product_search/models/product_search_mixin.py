@@ -12,6 +12,7 @@ from .product_search_tokens import (
     passes_filter,
     plan_lexemes,
     rank_candidates,
+    score_tokens,
     tokenize_product_text,
 )
 
@@ -195,10 +196,7 @@ class ProductSearchMixin(models.AbstractModel):
         in ``passes_filter`` (list view, AI). ``keep_unknown`` makes words
         unknown to the catalog count as unmatched (see ``build_search_plan``).
         """
-        # Vocabulary and candidates are read with raw SQL.
-        self.env['product.template'].flush_model()
-        self.env['product.product'].flush_model()
-        self.env['product.search.synonym'].flush_model()
+        self._flush_search_sources()
         plan = self._get_search_plan(query, keep_unknown)
         # Filters must see every match; ranking alone may cut the tail.
         candidate_limit = None if strict or min_score else CANDIDATE_LIMIT
@@ -211,6 +209,31 @@ class ProductSearchMixin(models.AbstractModel):
                 if passes_filter(plan, candidate[1], strict, min_score)
             ]
         return rank_candidates(plan, candidates, limit)
+
+    @api.model
+    def _flush_search_sources(self):
+        # Vocabulary and candidates are read with raw SQL.
+        self.env['product.template'].flush_model()
+        self.env['product.product'].flush_model()
+        self.env['product.search.synonym'].flush_model()
+
+    @api.model
+    def _smart_search_scored(self, query, domain=None, limit=None):
+        """Return ``[(id, score)]`` ranked like autocomplete.
+
+        ``score`` is the share of the query weight the record matched
+        (0..1), for callers that merge search hits with other sources.
+        """
+        self._flush_search_sources()
+        plan = self._get_search_plan(query)
+        candidates = self._fetch_search_candidates(plan, domain)
+        tokens_by_id = {
+            record_id: tokens for record_id, tokens, _label in candidates
+        }
+        return [
+            (record_id, score_tokens(plan, tokens_by_id[record_id])[0])
+            for record_id in rank_candidates(plan, candidates, limit)
+        ]
 
     @api.model
     def _smart_name_search(

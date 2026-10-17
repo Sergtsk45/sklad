@@ -977,7 +977,9 @@ class ObjectRequestImportWizard(models.TransientModel):
             line_vals.append(self._build_line_vals(request, preview))
 
         if line_vals:
-            self.env["object.request.line"].create(line_vals)
+            self.env["object.request.line"].with_context(
+                object_request_skip_auto_suggest=True,
+            ).create(line_vals)
 
         return {
             "type": "ir.actions.act_window",

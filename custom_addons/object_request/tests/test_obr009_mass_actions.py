@@ -53,7 +53,11 @@ class TestObr009MassActions(TransactionCase):
             }
         )
         # Несопоставленная строка
-        self.line_unmatched = self.env["object.request.line"].create(
+        # Тесты счётчиков и пересопоставления: без автоподсказки товара.
+        Line = self.env["object.request.line"].with_context(
+            object_request_skip_auto_suggest=True,
+        )
+        self.line_unmatched = Line.create(
             {
                 "request_id": self.request.id,
                 "name_raw": "Цемент М500",
@@ -65,7 +69,7 @@ class TestObr009MassActions(TransactionCase):
             }
         )
         # Строка с поставщиком, но без товара
-        self.line_no_vendor = self.env["object.request.line"].create(
+        self.line_no_vendor = Line.create(
             {
                 "request_id": self.request.id,
                 "name_raw": "Краска белая",

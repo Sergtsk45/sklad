@@ -9,6 +9,7 @@ _COMPOSITION_LOCK_MSG = (
     "только в черновике."
 )
 _NAME_RAW_LOCK_MSG = "Наименование строки можно менять только в черновике."
+CTX_SKIP_AUTO_SUGGEST = "object_request_skip_auto_suggest"
 
 
 class ObjectRequestLine(models.Model):
@@ -628,7 +629,9 @@ class ObjectRequestLine(models.Model):
             if vals.get("supplier_invoice_requested"):
                 self._check_supply_manager_invoice_request_action()
                 self.new(vals)._validate_supplier_invoice_request({})
-        return super().create(vals_list)
+        records = super().create(vals_list)
+        records._auto_suggest_products()
+        return records
 
     def write(self, vals):
         if (
@@ -645,7 +648,45 @@ class ObjectRequestLine(models.Model):
         ):
             self._check_qty_requested_change(vals["qty_requested"])
         self._check_explicit_invoice_request_write(vals)
-        return self._write_with_invoice_request_reset(vals)
+        result = self._write_with_invoice_request_reset(vals)
+        if "name_raw" in vals:
+            self._auto_suggest_products()
+        return result
+
+    def _auto_suggest_products(self):
+        """Предложить товар строкам без товара: подсказка, без подстановки.
+
+        Лучший кандидат попадает в «AI-кандидат», снабженец принимает или
+        отклоняет его кнопками строки. Импорт подбирает товар сам и
+        передаёт контекст ``object_request_skip_auto_suggest``.
+        """
+        if self.env.context.get(CTX_SKIP_AUTO_SUGGEST):
+            return
+        lines = self.filtered(
+            lambda line: (
+                line.name_raw and not line.product_id and not line.is_cancelled
+            )
+        )
+        # Подсказка — системное действие: остатки и каталог читаются
+        # без ограничений прав прораба.
+        service = self.env[
+            "object.request.matching.candidate.service"
+        ].sudo()
+        for line in lines.sudo():
+            result = service.build_suggestions(
+                line.name_raw,
+                line.supplier_article,
+                vendor=line.preferred_vendor_id,
+                technical_designation=line.technical_designation,
+            )
+            vals = line._ai_candidate_result_vals(result)
+            vals["matching_required"] = True
+            vals["matching_state"] = (
+                "manual_review"
+                if vals.get("ai_suggested_product_id")
+                else "requires_mapping"
+            )
+            line.with_context(**{CTX_SKIP_AUTO_SUGGEST: True}).write(vals)
 
     def unlink(self):
         self.check_access("unlink")
