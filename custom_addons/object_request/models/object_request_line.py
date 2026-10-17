@@ -1721,14 +1721,7 @@ class ObjectRequestLine(models.Model):
         designation_norm = parser.normalize_str(
             self.technical_designation or self.supplier_article or ''
         )
-        Memory = self.env['object.request.matching.memory']
-        existing = Memory.search([
-            ('name_normalized', '=', name_norm),
-            ('product_id', '=', self.product_id.id),
-        ], limit=1)
-        if existing:
-            return False
-        Memory.create({
+        return self.env['object.request.matching.memory']._remember_pair({
             'name_normalized': name_norm,
             'designation_normalized': designation_norm or False,
             'product_id': self.product_id.id,
@@ -1736,7 +1729,6 @@ class ObjectRequestLine(models.Model):
             'source_request_id': self.request_id.id,
             'confidence': confidence or 1.0,
         })
-        return True
 
     @staticmethod
     def _should_save_to_memory_str(name_norm):

@@ -55,13 +55,30 @@ class ObjectRequestMatchingMemory(models.Model):
         index=True,
     )
 
-    _sql_constraints = [
-        (
-            'unique_name_product',
-            'UNIQUE(name_normalized, product_id)',
-            'Такая пара имя+товар уже сохранена в памяти.',
-        )
-    ]
+    _unique_name_product = models.Constraint(
+        'UNIQUE(name_normalized, product_id)',
+        'Такая пара имя+товар уже сохранена в памяти.',
+    )
+
+    @api.model
+    def _remember_pair(self, vals):
+        """Save a confirmed name+product pair; return True if it was saved.
+
+        An active pair is left as is (False). An archived pair is reactivated
+        with the new confirmation: the pair is unique, a second create would
+        violate ``_unique_name_product``.
+        """
+        existing = self.with_context(active_test=False).search([
+            ('name_normalized', '=', vals['name_normalized']),
+            ('product_id', '=', vals['product_id']),
+        ], limit=1)
+        if existing.active:
+            return False
+        if existing:
+            existing.write(dict(vals, active=True))
+            return True
+        self.create(vals)
+        return True
 
     @api.model
     def backfill_flange_pn16_memory(self):
@@ -94,6 +111,7 @@ class ObjectRequestMatchingMemory(models.Model):
             'ambiguous': 0,
             'blocked': 0,
             'no_candidate': 0,
+            'archived': 0,
         }
         for source in source_products:
             source_features = policy._extract_features(source.display_name)
@@ -125,6 +143,13 @@ class ObjectRequestMatchingMemory(models.Model):
                 continue
             if len(allowed) != 1:
                 stats['ambiguous'] += 1
+                continue
+            # Пара в архиве отключена вручную — не восстанавливаем.
+            if self.with_context(active_test=False).search_count([
+                ('name_normalized', '=', name_norm),
+                ('product_id', '=', allowed.id),
+            ]):
+                stats['archived'] += 1
                 continue
             self.create({
                 'name_normalized': name_norm,

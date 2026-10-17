@@ -1,6 +1,9 @@
 """OBR-032: Память сопоставлений."""
+from psycopg2 import IntegrityError
+
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
+from odoo.tools import mute_logger
 
 
 @tagged('post_install', '-at_install')
@@ -99,6 +102,42 @@ class TestObr032Memory(TransactionCase):
         self.assertIn('Supplierinfo: создано 0', action['params']['message'])
         self.assertIn('пропущено 1', action['params']['message'])
 
+    def test_name_product_pair_is_unique(self):
+        """Пара имя+товар уникальна на уровне БД (models.Constraint)."""
+        Memory = self.env['object.request.matching.memory']
+        vals = {'name_normalized': 'кран obr032 уникальный',
+                'product_id': self.product.id}
+        Memory.create(vals)
+        with self.assertRaises(IntegrityError), mute_logger('odoo.sql_db'):
+            Memory.create(vals)
+            self.env.flush_all()
+
+    def test_remember_reactivates_archived_pair(self):
+        """Повторное подтверждение возвращает архивную пару, без дубля."""
+        _, line = self._create_request_with_line()
+        line.with_user(
+            self.supply_manager
+        ).action_accept_and_remember_ai_candidate()
+        Memory = self.env['object.request.matching.memory'].with_context(
+            active_test=False,
+        )
+        name_norm = self.env['object.request.excel.parser'].normalize_str(
+            'Кран шаровой Ду15'
+        )
+        domain = [('name_normalized', '=', name_norm),
+                  ('product_id', '=', self.product.id)]
+        Memory.search(domain).active = False
+
+        saved = line.with_user(
+            self.supply_manager
+        )._save_matching_memory_for_product(confidence=0.9)
+
+        record = Memory.search(domain)
+        self.assertTrue(saved)
+        self.assertEqual(len(record), 1)
+        self.assertTrue(record.active)
+        self.assertEqual(record.confidence, 0.9)
+
     def test_memory_stores_technical_designation_first(self):
         """Память сохраняет technical_designation перед supplier_article."""
         _, line = self._create_request_with_line()
@@ -160,6 +199,33 @@ class TestObr032Memory(TransactionCase):
         ].build_candidates(source.display_name, '')
         self.assertEqual(result['candidates'][0]['source'], 'memory')
         self.assertEqual(result['candidates'][0]['product_id'], target.id)
+
+    def test_flange_pn16_backfill_keeps_archived_pair(self):
+        """Backfill не восстанавливает пару, отключённую вручную."""
+        source = self.env['product.product'].create({
+            'name': 'Фланец ст. Ду779 1.0МПа OBR032-BF',
+            'type': 'consu',
+            'is_storable': True,
+        })
+        target = self.env['product.product'].create({
+            'name': 'Фланец DN779 PN16 OBR032-BF',
+            'type': 'consu',
+            'is_storable': True,
+        })
+        Memory = self.env['object.request.matching.memory']
+        name_norm = self.env['object.request.excel.parser'].normalize_str(
+            source.display_name
+        )
+        Memory.create({
+            'name_normalized': name_norm,
+            'product_id': target.id,
+            'active': False,
+        })
+
+        stats = Memory.backfill_flange_pn16_memory()
+
+        self.assertGreaterEqual(stats['archived'], 1)
+        self.assertFalse(Memory.search([('name_normalized', '=', name_norm)]))
 
     def test_flange_pn16_backfill_skips_ambiguous_candidates(self):
         """Backfill не создаёт память, если есть несколько PN16-кандидатов."""
