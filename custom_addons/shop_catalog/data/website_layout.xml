@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Витрина как у santech.ru: товары строками, категории слева. -->
+    <record id="website_sale.products_list_view" model="ir.ui.view">
+        <field name="active" eval="True"/>
+    </record>
+    <record id="website_sale.products_categories" model="ir.ui.view">
+        <field name="active" eval="True"/>
+    </record>
+    <record id="website_sale.products_categories_top" model="ir.ui.view">
+        <field name="active" eval="False"/>
+    </record>
+    <function model="website" name="_shop_apply_list_layout"/>
+</odoo>

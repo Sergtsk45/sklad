@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_shop_sync_catalog" model="ir.actions.server">
+        <field name="name">Магазин: разложить по категориям</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list</field>
+        <field name="group_ids" eval="[(4, ref('sales_team.group_sale_manager'))]"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_shop_sync_catalog()</field>
+    </record>
+
+    <record id="action_shop_publish" model="ir.actions.server">
+        <field name="name">Магазин: опубликовать на сайте</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list</field>
+        <field name="group_ids" eval="[(4, ref('sales_team.group_sale_manager'))]"/>
+        <field name="state">code</field>
+        <field name="code">action = records.action_shop_publish()</field>
+    </record>
+
+    <record id="action_shop_unpublish" model="ir.actions.server">
+        <field name="name">Магазин: снять с сайта</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list</field>
+        <field name="group_ids" eval="[(4, ref('sales_team.group_sale_manager'))]"/>
+        <field name="state">code</field>
+        <field name="code">action = records.action_shop_unpublish()</field>
+    </record>
+</odoo>
