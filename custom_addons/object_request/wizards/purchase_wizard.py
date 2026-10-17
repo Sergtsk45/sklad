@@ -133,6 +133,9 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
         )
         res["request_id"] = requests[0].id
         res["request_ids"] = [(6, 0, requests.ids)]
+        if len(requests) > 1:
+            # Порядок движения: закупка приходит на склад объекта.
+            res["receipt_mode"] = "object"
         lines = lines.filtered(
             lambda ln: not ln.purchase_order_id
             and not ln.purchase_order_line_id

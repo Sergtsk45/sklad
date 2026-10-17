@@ -73,13 +73,13 @@ class TestMergedPurchase(TransactionCase):
         self.assertEqual(len(wizard.line_ids), 4)
 
     def test_one_order_per_vendor_across_requests(self):
-        orders = self._orders(self.req_a | self.req_b)
+        orders = self._orders(self.req_a | self.req_b, receipt_mode='common')
         alpha = orders.filtered(lambda o: o.partner_id == self.alpha)
         self.assertEqual(len(orders), 2)
         self.assertEqual(len(alpha.order_line), 3)
 
     def test_each_request_line_keeps_own_order_line(self):
-        orders = self._orders(self.req_a | self.req_b)
+        orders = self._orders(self.req_a | self.req_b, receipt_mode='common')
         lines = (self.req_a | self.req_b).line_ids
         self.assertEqual(len(lines.purchase_order_line_id), 4)
         self.assertTrue(
@@ -87,7 +87,7 @@ class TestMergedPurchase(TransactionCase):
         )
 
     def test_origin_and_line_names_reference_requests(self):
-        orders = self._orders(self.req_a | self.req_b)
+        orders = self._orders(self.req_a | self.req_b, receipt_mode='common')
         alpha = orders.filtered(lambda o: o.partner_id == self.alpha)
         self.assertIn(self.req_a.name, alpha.origin)
         self.assertIn(self.req_b.name, alpha.origin)
@@ -97,7 +97,7 @@ class TestMergedPurchase(TransactionCase):
         self.assertFalse(alpha.object_request_project_id)
 
     def test_both_requests_see_shared_order(self):
-        orders = self._orders(self.req_a | self.req_b)
+        orders = self._orders(self.req_a | self.req_b, receipt_mode='common')
         alpha = orders.filtered(lambda o: o.partner_id == self.alpha)
         self.assertIn(alpha, self.req_a.purchase_order_ids)
         self.assertIn(alpha, self.req_b.purchase_order_ids)
@@ -124,8 +124,12 @@ class TestMergedPurchase(TransactionCase):
             set((self.req_a | self.req_b).project_id.warehouse_id.ids),
         )
 
-    def test_common_receipt_warns_about_other_objects(self):
+    def test_multi_request_default_is_object_receipt(self):
         wizard = self._wizard(self.req_a | self.req_b)
+        self.assertEqual(wizard.receipt_mode, 'object')
+
+    def test_common_receipt_warns_about_other_objects(self):
+        wizard = self._wizard(self.req_a | self.req_b, receipt_mode='common')
         wizard.picking_type_id = (
             self.req_a.project_id.warehouse_id.in_type_id
         )
