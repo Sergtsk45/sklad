@@ -212,24 +212,33 @@ class ObjectRequestLine(models.Model):
         string="Способ обеспечения",
         default="manual",
         index=True,
+        copy=False,
     )
     qty_to_issue = fields.Float(
-        string="К выдаче (план)", digits="Product Unit of Measure"
+        string="К выдаче (план)",
+        digits="Product Unit of Measure",
+        copy=False,
     )
     qty_to_buy = fields.Float(
-        string="К закупке (план)", digits="Product Unit of Measure"
+        string="К закупке (план)",
+        digits="Product Unit of Measure",
+        copy=False,
     )
     qty_reserved = fields.Float(
         string="Зарезервировано",
         digits="Product Unit of Measure",
+        copy=False,
     )
     issue_reserved = fields.Boolean(
         string="Резерв создан",
         default=False,
         index=True,
+        copy=False,
     )
     qty_issued = fields.Float(
-        string="Обеспечено (факт)", digits="Product Unit of Measure"
+        string="Обеспечено (факт)",
+        digits="Product Unit of Measure",
+        copy=False,
     )
     qty_supplied = fields.Float(
         string="Обеспечено",
@@ -242,11 +251,13 @@ class ObjectRequestLine(models.Model):
         string="Со склада",
         digits="Product Unit of Measure",
         readonly=True,
+        copy=False,
     )
     qty_received_purchase = fields.Float(
         string="Поступило по закупке",
         digits="Product Unit of Measure",
         readonly=True,
+        copy=False,
     )
 
     # --- Технические поля склада ---
@@ -258,12 +269,17 @@ class ObjectRequestLine(models.Model):
     stock_qty_on_hand = fields.Float(
         string="Остаток на складе",
         digits="Product Unit of Measure",
+        copy=False,
     )
-    stock_check_date = fields.Datetime(string="Дата проверки остатка")
+    stock_check_date = fields.Datetime(
+        string="Дата проверки остатка",
+        copy=False,
+    )
     manual_plan_override = fields.Boolean(
         string="План изменён вручную",
         default=False,
         index=True,
+        copy=False,
     )
 
     # --- Статус строки (computed + writeable для ручной отмены) ---
@@ -271,6 +287,7 @@ class ObjectRequestLine(models.Model):
         string="Отменена",
         default=False,
         index=True,
+        copy=False,
     )
     supplier_invoice_requested = fields.Boolean(
         string="Счёт запрошен",
@@ -301,18 +318,28 @@ class ObjectRequestLine(models.Model):
 
     # --- Связи со стандартными документами ---
     issue_picking_id = fields.Many2one(
-        "stock.picking", string="Выдача", index=True
+        "stock.picking",
+        string="Выдача",
+        index=True,
+        copy=False,
     )
     issue_move_id = fields.Many2one(
-        "stock.move", string="Движение", index=True
+        "stock.move",
+        string="Движение",
+        index=True,
+        copy=False,
     )
     purchase_order_id = fields.Many2one(
-        "purchase.order", string="Закупка", index=True
+        "purchase.order",
+        string="Закупка",
+        index=True,
+        copy=False,
     )
     purchase_order_line_id = fields.Many2one(
         "purchase.order.line",
         string="Строка закупки",
         index=True,
+        copy=False,
     )
 
     # --- Служебные поля ---

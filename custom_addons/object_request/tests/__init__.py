@@ -43,3 +43,4 @@ from . import test_td017_auto_split_reserve  # noqa: F401
 from . import test_td017_issue_backorder  # noqa: F401
 from . import test_td016_piece_to_kg  # noqa: F401
 from . import test_td016_fastener_mass  # noqa: F401
+from . import test_or_copy_resets_supply  # noqa: F401

@@ -126,7 +126,10 @@ class ObjectRequest(models.Model):
     )
 
     # --- Поля импорта ---
-    source_file_name = fields.Char(string="Имя файла")
+    source_file_name = fields.Char(
+        string="Имя файла",
+        copy=False,
+    )
     source_file_checksum = fields.Char(string="Контрольная сумма", index=True)
     imported_at = fields.Datetime(string="Дата импорта", readonly=True)
     imported_by_user_id = fields.Many2one(
@@ -157,6 +160,7 @@ class ObjectRequest(models.Model):
         string="Согласование",
         default="not_required",
         tracking=True,
+        copy=False,
     )
 
     # --- Ролевые поля ---
@@ -179,6 +183,7 @@ class ObjectRequest(models.Model):
         "request_id",
         "picking_id",
         string="Выдачи",
+        copy=False,
     )
     issue_picking_count = fields.Integer(
         compute="_compute_issue_picking_count"
@@ -190,6 +195,7 @@ class ObjectRequest(models.Model):
         "request_id",
         "purchase_id",
         string="Закупки",
+        copy=False,
     )
     purchase_order_count = fields.Integer(
         compute="_compute_purchase_order_count"
