@@ -1,6 +1,6 @@
 {
     "name": "Object Request — Требование на комплектацию объекта",
-    "version": "19.0.1.14.0",
+    "version": "19.0.1.15.0",
     "category": "Inventory/Inventory",
     "summary": "Управление требованиями на комплектацию строительных объектов",
     "description": """
@@ -54,6 +54,7 @@
         "views/object_request_line_views.xml",
         "wizards/stock_check_wizard_views.xml",
         "views/object_request_kit_views.xml",
+        "views/product_category_views.xml",
         "views/object_request_views.xml",
         "views/object_request_analytics_views.xml",
         "views/object_request_menu.xml",

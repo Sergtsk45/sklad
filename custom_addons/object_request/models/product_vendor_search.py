@@ -117,12 +117,12 @@ class ProductProduct(models.Model):
         products_by_id = {product.id: product for product in products}
         for row in rows:
             product = products_by_id[row["id"]]
-            sellers = product.with_company(company)._prepare_sellers()
-            if not sellers:
+            vendor = product._or_default_vendor(company)
+            if not vendor:
                 continue
             row["__formatted_display_name"] = (
                 f"{formatted_names[product.id]} — "
-                f"{sellers[0].partner_id.display_name}"
+                f"{vendor.display_name}"
             )
         return rows
 

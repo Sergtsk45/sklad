@@ -1396,10 +1396,12 @@ class ObjectRequest(models.Model):
             if not line.preferred_vendor_id:
                 if result["vendor"]:
                     vals["preferred_vendor_id"] = result["vendor"].id
-                elif result["product"].seller_ids:
-                    vals["preferred_vendor_id"] = (
-                        result["product"].seller_ids[0].partner_id.id
+                else:
+                    vendor = result["product"]._or_default_vendor(
+                        line.company_id or self.env.company
                     )
+                    if vendor:
+                        vals["preferred_vendor_id"] = vendor.id
         else:
             if mode == "all" and old_product:
                 vals["product_id"] = False

@@ -845,9 +845,10 @@ class ObjectRequestLine(models.Model):
         self._onchange_product_pieces()
         self.uom_id = self.product_id.uom_id
         company = self.company_id or self.env.company
-        sellers = self.product_id.with_company(company)._prepare_sellers()
-        if not self.preferred_vendor_id and sellers:
-            self.preferred_vendor_id = sellers[0].partner_id
+        if not self.preferred_vendor_id:
+            self.preferred_vendor_id = self.product_id._or_default_vendor(
+                company
+            )
         if self.matching_required:
             self.matching_required = False
         self.matching_source = "manual"
@@ -1388,7 +1389,7 @@ class ObjectRequestLine(models.Model):
         product = self.ai_suggested_product_id
         if not product:
             raise UserError("Нет AI-кандидата для применения.")
-        return {
+        vals = {
             "product_id": product.id,
             "uom_id": product.uom_id.id,
             "matching_required": False,
@@ -1396,6 +1397,12 @@ class ObjectRequestLine(models.Model):
             "matching_source": "llm_confirmed",
             "matching_note": self.ai_match_reason or "AI-кандидат принят.",
         }
+        if not self.preferred_vendor_id:
+            vendor = product._or_default_vendor(
+                self.company_id or self.env.company
+            )
+            vals["preferred_vendor_id"] = vendor.id or False
+        return vals
 
     def action_accept_ai_candidate(self):
         self._check_supply_manager_matching_action()

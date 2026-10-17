@@ -55,4 +55,12 @@ class ObjectRequestLineAssignWizard(models.TransientModel):
                     "matching_source": "manual",
                 }
             )
+            for line in lines.filtered(
+                lambda line: not line.preferred_vendor_id
+            ):
+                vendor = self.product_id._or_default_vendor(
+                    line.company_id or self.env.company
+                )
+                if vendor:
+                    line.preferred_vendor_id = vendor
         return {"type": "ir.actions.act_window_close"}

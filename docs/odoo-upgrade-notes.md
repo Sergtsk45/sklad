@@ -16,6 +16,21 @@
 
 ---
 
+## UPG-005 — Основной поставщик категории в форме категории товара
+
+- **Статус**: актуально на Odoo 19 (`object_request` `19.0.1.15.0`, 2026-10-17)
+- **Зачем**: поставщик по умолчанию в строке требования — основной
+  поставщик категории (`product.category.or_main_vendor_id`).
+- **Файлы**: `custom_addons/object_request/views/product_category_views.xml`,
+  `models/product_default_vendor.py`.
+- **Upstream 19**: `product.product_category_form_view` — xpath
+  `field[@name='parent_id']` (поле `or_main_vendor_id` после него);
+  `product.product._prepare_sellers()`, `purchase.order.line.date_order`.
+- **Что проверить в 20**: поле `parent_id` в форме категории и сигнатура
+  `_prepare_sellers()`; прогнать `--test-tags /object_request:TestRequestDefaultVendor,/object_request:TestObr038VendorProductSearch`.
+
+---
+
 ## UPG-004 — Поиск товаров v2: `name_search` и поле «Товар» в поиске списков
 
 - **Статус**: актуально на Odoo 19 (`custom_product_search` `19.0.2.0.0`, 2026-10-17)
