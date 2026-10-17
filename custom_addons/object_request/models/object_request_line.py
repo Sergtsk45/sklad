@@ -131,6 +131,7 @@ class ObjectRequestLine(models.Model):
             ("manual", "Ручной выбор"),
             ("llm_auto", "AI авто"),
             ("llm_confirmed", "AI подтверждено"),
+            ("kit", "Из шаблона узла"),
         ],
         string="Источник сопоставления",
         default="unknown",

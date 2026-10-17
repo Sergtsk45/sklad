@@ -17,6 +17,24 @@
         groups="object_request.group_foreman,object_request.group_supply_manager"
     />
 
+    <!-- Подменю: Шаблоны типовых узлов -->
+    <menuitem
+        id="menu_object_request_kit_create"
+        name="Требование из шаблона"
+        parent="menu_object_request_root"
+        action="action_object_request_kit_create_wizard"
+        sequence="16"
+        groups="object_request.group_foreman,object_request.group_supply_manager"
+    />
+    <menuitem
+        id="menu_object_request_kit"
+        name="Шаблоны узлов"
+        parent="menu_object_request_root"
+        action="action_object_request_kit"
+        sequence="22"
+        groups="object_request.group_foreman,object_request.group_supply_manager"
+    />
+
     <!-- Подменю: Объекты (справочник) -->
     <menuitem id="menu_object_request_project" name="Объекты" parent="menu_object_request_root" action="action_object_request_project" sequence="20" groups="object_request.group_supply_manager"/>
     <menuitem

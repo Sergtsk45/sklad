@@ -409,7 +409,8 @@ class ObjectRequest(models.Model):
                 ("code", "in", DEFAULT_ISSUE_WAREHOUSE_CODES),
             ]
         )
-        project_warehouse = self.project_id.warehouse_id
+        # Прораб без складских прав тоже создаёт требования.
+        project_warehouse = self.project_id.sudo().warehouse_id
         if project_warehouse and project_warehouse.active:
             warehouses |= project_warehouse
         return warehouses
@@ -570,6 +571,25 @@ class ObjectRequest(models.Model):
             rec.purchase_order_count = len(rec.purchase_order_ids)
 
     # --- Методы согласования ---
+    def _kit_source_lines(self):
+        """Строки требования для шаблона узла: без отменённых, по порядку."""
+        self.ensure_one()
+        return self.line_ids.filtered(
+            lambda line: not line.is_cancelled
+        ).sorted(lambda line: (line.sequence, line.id))
+
+    def action_open_kit_save_wizard(self):
+        """Открыть мастер «Сохранить в шаблон узла»."""
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Сохранить в шаблон узла",
+            "res_model": "object.request.kit.save.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {"default_request_id": self.id},
+        }
+
     def action_submit_for_approval(self):
         """Отправить документ на согласование."""
         self.ensure_one()

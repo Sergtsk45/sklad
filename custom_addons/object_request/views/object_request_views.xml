@@ -140,6 +140,14 @@
                 <!-- HEADER: кнопки действий + statusbar -->
                 <header>
                     <button
+                        name="action_open_kit_save_wizard"
+                        string="Сохранить в шаблон"
+                        type="object"
+                        class="btn-secondary"
+                        groups="object_request.group_supply_manager"
+                        title="Сохранить строки как шаблон типового узла или как вариант Ду существующего шаблона"
+                    />
+                    <button
                         name="action_submit_for_approval"
                         string="На согласование"
                         type="object"

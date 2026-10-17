@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Шаблоны типовых узлов -->
+    <record id="view_object_request_kit_list" model="ir.ui.view">
+        <field name="name">object.request.kit.list</field>
+        <field name="model">object.request.kit</field>
+        <field name="arch" type="xml">
+            <list string="Шаблоны узлов">
+                <field name="name"/>
+                <field name="base_size"/>
+                <field name="known_sizes"/>
+                <field name="line_count"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_object_request_kit_form" model="ir.ui.view">
+        <field name="name">object.request.kit.form</field>
+        <field name="model">object.request.kit</field>
+        <field name="arch" type="xml">
+            <form string="Шаблон узла">
+                <header>
+                    <button name="%(action_object_request_kit_create_wizard)d"
+                            string="Создать требование"
+                            type="action"
+                            class="btn-primary"
+                            context="{'default_kit_id': id}"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="Архив" bg_color="text-bg-danger" invisible="active"/>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="Например: Водомерный узел Капфонд"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="base_size"/>
+                            <field name="known_sizes"/>
+                        </group>
+                        <group>
+                            <field name="source_request_ids" widget="many2many_tags"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Строки" name="lines">
+                            <field name="line_ids">
+                                <list string="Строки">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="name_raw"/>
+                                    <field name="product_id"/>
+                                    <field name="qty_requested"/>
+                                    <field name="uom_id"/>
+                                    <field name="preferred_vendor_id"/>
+                                    <field name="size_dependent" string="По Ду"/>
+                                    <field name="base_skip" optional="hide"/>
+                                </list>
+                                <form string="Строка шаблона">
+                                    <group>
+                                        <group>
+                                            <field name="name_raw"/>
+                                            <field name="product_id"/>
+                                            <field name="preferred_vendor_id"/>
+                                        </group>
+                                        <group>
+                                            <field name="qty_requested"/>
+                                            <field name="qty_requested_pcs"/>
+                                            <field name="uom_id"/>
+                                            <field name="base_skip"/>
+                                        </group>
+                                    </group>
+                                    <separator string="Варианты по Ду"/>
+                                    <field name="variant_ids">
+                                        <list editable="bottom">
+                                            <field name="size"/>
+                                            <field name="skip"/>
+                                            <field name="name_raw"/>
+                                            <field name="product_id"/>
+                                            <field name="qty_requested"/>
+                                            <field name="qty_requested_pcs" optional="hide"/>
+                                            <field name="uom_id"/>
+                                            <field name="preferred_vendor_id"/>
+                                        </list>
+                                    </field>
+                                </form>
+                            </field>
+                        </page>
+                        <page string="Примечание" name="note">
+                            <field name="note"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_object_request_kit_search" model="ir.ui.view">
+        <field name="name">object.request.kit.search</field>
+        <field name="model">object.request.kit</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <filter name="archived" string="Архив" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_object_request_kit" model="ir.actions.act_window">
+        <field name="name">Шаблоны узлов</field>
+        <field name="res_model">object.request.kit</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Шаблонов узлов пока нет</p>
+            <p>Откройте выполненное требование на типовой узел и нажмите
+                «Сохранить в шаблон». Варианты другого Ду добавляются из
+                требований на узлы этого Ду.</p>
+        </field>
+    </record>
+
+</odoo>

@@ -7,3 +7,4 @@ from . import auto_split_confirm_wizard  # noqa: F401
 from . import purchase_wizard  # noqa: F401
 from . import stock_check_wizard  # noqa: F401
 from . import remember_matching_wizard  # noqa: F401
+from . import kit_wizards  # noqa: F401
