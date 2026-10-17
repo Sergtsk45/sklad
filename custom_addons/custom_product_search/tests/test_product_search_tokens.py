@@ -22,6 +22,10 @@ CATALOG = [
     'Кран шаровой латунный ВР/ВР Ду15',
     'Труба PPR, армированная алюминием, Ду63, PN25',
     'Выключатель автоматический 1P, 6 А',
+    'Муфта стальная Ду15, ГОСТ 8966-75',
+    'Муфта стальная Ду20, ГОСТ 8966-75',
+    'Муфта стальная Ду25, ГОСТ 8966-75',
+    'Муфта стальная Ду50',
 ]
 
 
@@ -104,6 +108,12 @@ class TestProductSearchTokens(BaseCase):
         self.assertEqual(
             self._search('тройник ст. Ду 65', 1),
             ['Тройник стальной 76×3,5 мм'],
+        )
+
+    def test_conflicting_size_ranks_below_matching_size(self):
+        self.assertEqual(
+            self._search('Муфта стальная Ду50 ГОСТ 8966-75', 1),
+            ['Муфта стальная Ду50'],
         )
 
     def test_strict_filter(self):

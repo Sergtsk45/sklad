@@ -13,12 +13,15 @@ from .product_search_utils import normalize_product_search_text
 
 
 # Bump when tokenization rules change: the module upgrade recomputes tokens.
-TOKENIZER_VERSION = '1'
+TOKENIZER_VERSION = '1'  # ranking-only changes do not need a bump
 
 STEM_LENGTH = 5
 FUZZY_MIN_LENGTH = 4
 FUZZY_CUTOFF = 0.75
 FUZZY_FACTOR = 0.7
+# A product with the same kind of size but another value («Ду15» for «Ду50»)
+# keeps this share of its score.
+SIZE_CONFLICT_FACTOR = 0.5
 PREFIX_MIN_LENGTH = 2
 MAX_EXPANSIONS = 60
 
@@ -36,6 +39,9 @@ STEEL_PIPE_OUTER_DIAMETERS = {
     '377': '350', '426': '400',
 }
 MAX_PIPE_WALL = 12
+
+# Size codes: letter prefix + number («дy50», «m16», «m16x70», «py16»).
+_SIZE_CODE_RE = re.compile(r'^([a-zа-я]+)\d')
 
 _CHUNK_RE = re.compile(r'[a-zа-я0-9]+(?:[./]\d+)*')
 # Cyrillic letters that look like Latin ones, unified in codes and sizes:
@@ -196,14 +202,36 @@ def plan_lexemes(plan):
     return sorted({word for _token, _weight, exp in plan for word in exp})
 
 
+def _size_prefix(token):
+    match = _SIZE_CODE_RE.match(token)
+    return match.group(1) if match else None
+
+
+def _is_size_conflict(token, doc_set, doc_prefixes):
+    prefix = _size_prefix(token)
+    if prefix not in doc_prefixes:
+        return False
+    numbers = re.split('[x/]', token[len(prefix):])
+    return not all(number in doc_set for number in numbers)
+
+
 def score_tokens(plan, doc_tokens):
-    """Return (score, matched_all) for a product token list."""
+    """Return (score, matched_all) for a product token list.
+
+    A missed size code of the query is a conflict when the product has a
+    size code with the same prefix and lacks the query numbers: the score is
+    then multiplied by ``SIZE_CONFLICT_FACTOR`` («Ду15» for «Ду50», but not
+    «Ду40×32» for «Ду32/40»).
+    """
     if not plan:
         return 0.0, False
     doc_set = set(doc_tokens)
+    doc_prefixes = {_size_prefix(token) for token in doc_set}
+    doc_prefixes.discard(None)
     total = matched = 0.0
     matched_all = True
-    for _token, weight, expansions in plan:
+    conflict = False
+    for token, weight, expansions in plan:
         factor = max(
             (expansions[word] for word in doc_set if word in expansions),
             default=0.0,
@@ -212,7 +240,11 @@ def score_tokens(plan, doc_tokens):
         matched += weight * factor
         if not factor:
             matched_all = False
-    return matched / total, matched_all
+            conflict = conflict or _is_size_conflict(
+                token, doc_set, doc_prefixes,
+            )
+    score = matched / total
+    return score * SIZE_CONFLICT_FACTOR if conflict else score, matched_all
 
 
 def passes_filter(plan, doc_tokens, strict=False, min_score=0.0):
