@@ -1821,10 +1821,18 @@ class ObjectRequest(models.Model):
         }
 
     def action_open_purchase_wizard(self):
-        """Открыть wizard создания черновиков закупки."""
-        self.ensure_one()
-        self._check_supply_manager_processing_action()
-        self._check_purchase_preparation_state()
+        """Открыть мастер закупки по одному или нескольким требованиям.
+
+        Для нескольких требований строки к закупке объединяются: одна
+        закупка на поставщика.
+        """
+        if not self:
+            raise UserError("Выберите требования.")
+        if len(self.company_id) > 1:
+            raise UserError("Объединять можно требования одной компании.")
+        for request in self:
+            request._check_supply_manager_processing_action()
+            request._check_purchase_preparation_state()
         lines_to_buy = self.line_ids.filtered(
             lambda ln: ln.qty_to_buy > 0 and ln.product_id
         )
@@ -1836,19 +1844,23 @@ class ObjectRequest(models.Model):
         already_linked = lines_to_buy.filtered(
             lambda ln: ln.purchase_order_id or ln.purchase_order_line_id
         )
-        if already_linked:
+        if already_linked and len(self) == 1:
             raise UserError(
                 "По части строк уже создана закупка. "
                 "Проверьте связанные PO перед повторной подготовкой закупки."
             )
         return {
             "type": "ir.actions.act_window",
-            "name": "Создать закупки",
+            "name": (
+                "Создать закупки" if len(self) == 1
+                else "Объединённая закупка"
+            ),
             "res_model": "object.request.purchase.wizard",
             "view_mode": "form",
             "target": "new",
             "context": {
-                "default_request_id": self.id,
+                "default_request_id": self[0].id,
+                "default_request_ids": self.ids,
             },
         }
 

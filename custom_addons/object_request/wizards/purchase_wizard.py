@@ -11,9 +11,43 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
     request_id = fields.Many2one(
         "object.request",
         string="Требование",
-        required=True,
         ondelete="cascade",
         readonly=True,
+    )
+    request_ids = fields.Many2many(
+        "object.request",
+        "object_request_purchase_wizard_request_rel",
+        "wizard_id",
+        "request_id",
+        string="Требования",
+        readonly=True,
+        help="Строки к закупке собираются из всех требований.",
+    )
+    receipt_mode = fields.Selection(
+        [
+            ("common", "На один склад приёмки"),
+            ("object", "На склады объектов"),
+        ],
+        string="Приход",
+        default="common",
+        required=True,
+        help=(
+            "«На склады объектов» — отдельная закупка на каждый склад "
+            "объекта, приход сразу засчитывается требованию. «На один "
+            "склад» — одна "
+            "закупка на поставщика; требованиям других объектов приход "
+            "засчитается после выдачи или перемещения на объект."
+        ),
+    )
+    receipt_warning = fields.Char(
+        string="Внимание", compute="_compute_receipt_warning"
+    )
+    append_to_drafts = fields.Boolean(
+        string="Добавлять в открытые черновики поставщика",
+        help=(
+            "Если у поставщика уже есть черновик закупки по требованиям на "
+            "этот склад приёмки, строки добавляются в него."
+        ),
     )
     line_ids = fields.Many2many(
         "object.request.line",
@@ -86,23 +120,77 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
     @api.model
     def default_get(self, fields_list):
         res = super().default_get(fields_list)
-        request_id = self.env.context.get("default_request_id")
-        if not request_id:
+        context = self.env.context
+        request_ids = context.get("default_request_ids") or (
+            [context["default_request_id"]]
+            if context.get("default_request_id") else []
+        )
+        if not request_ids:
             return res
-        request = self.env["object.request"].browse(request_id)
-        lines = request.line_ids.filtered(
+        requests = self.env["object.request"].browse(request_ids)
+        lines = requests.line_ids.filtered(
             lambda ln: ln.qty_to_buy > 0 and ln.product_id
         )
+        res["request_id"] = requests[0].id
+        res["request_ids"] = [(6, 0, requests.ids)]
+        lines = lines.filtered(
+            lambda ln: not ln.purchase_order_id
+            and not ln.purchase_order_line_id
+        ) if len(requests) > 1 else lines
         res["line_ids"] = [(6, 0, lines.ids)]
-        picking_type = self._get_default_picking_type(request)
+        picking_type = self._get_default_picking_type(requests[0])
         if picking_type:
             res["picking_type_id"] = picking_type.id
         return res
 
+    @api.depends("receipt_mode", "picking_type_id", "request_ids")
+    def _compute_receipt_warning(self):
+        for wizard in self:
+            wizard.receipt_warning = False
+            if wizard.receipt_mode != "common" or not wizard.picking_type_id:
+                continue
+            target = wizard.picking_type_id.warehouse_id
+            others = wizard.request_ids.filtered(
+                lambda req: req.project_id.warehouse_id
+                and req.project_id.warehouse_id != target
+            )
+            if others:
+                wizard.receipt_warning = (
+                    "Приход на «%s»: требованиям %s он засчитается после "
+                    "выдачи или перемещения на объект."
+                    % (target.name, ", ".join(others.mapped("name")))
+                )
+
+    def _line_picking_type(self, line):
+        if self.receipt_mode == "object":
+            return (
+                self._get_default_picking_type(line.request_id)
+                or self.picking_type_id
+            )
+        return self.picking_type_id
+
+    def _requests(self):
+        """Требования мастера: список или одно требование."""
+        self.ensure_one()
+        return self.request_ids or self.request_id
+
+    def _check_requests(self):
+        for request in self._requests():
+            request._check_supply_manager_processing_action()
+            request._check_purchase_preparation_state()
+
+    def _post_to_line_requests(self, lines, body):
+        """Записать сообщение в историю требований этих строк."""
+        for request in lines.request_id:
+            request.message_post(
+                body=body,
+                message_type="notification",
+                subtype_xmlid="mail.mt_note",
+            )
+
     def action_create_purchase(self):
         self.ensure_one()
-        self.request_id._check_supply_manager_processing_action()
-        self.request_id._check_purchase_preparation_state()
+        self._check_requests()
         lines = self.line_ids.filtered(
             lambda ln: ln.qty_to_buy > 0 and ln.product_id
         )
@@ -163,13 +251,10 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
 
         if lines_no_vendor:
             lines_no_vendor.write({"manual_vendor_required": True})
-            self.request_id.message_post(
-                body=(
-                    f"{len(lines_no_vendor)} строк не имеют поставщика "
-                    "и остались с флагом «Требует поставщика»."
-                ),
-                message_type="notification",
-                subtype_xmlid="mail.mt_note",
+            self._post_to_line_requests(
+                lines_no_vendor,
+                f"{len(lines_no_vendor)} строк не имеют поставщика "
+                "и остались с флагом «Требует поставщика».",
             )
 
         if len(created_orders) == 1:
@@ -209,8 +294,7 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
     def action_replace_with_stock_candidate(self):
         """Replace guarded lines and recalculate issue."""
         self.ensure_one()
-        self.request_id._check_supply_manager_processing_action()
-        self.request_id._check_purchase_preparation_state()
+        self._check_requests()
         lines = self.line_ids.filtered(
             lambda ln: ln.qty_to_buy > 0 and ln.product_id
         )
@@ -266,7 +350,8 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
             updated_lines |= line
 
         if updated_lines:
-            self.request_id.action_check_stock()
+            for request in updated_lines.request_id:
+                request.action_check_stock()
             updated_lines.action_issue_max()
             self.line_ids = [(6, 0, self.line_ids.ids)]
             self.write(
@@ -276,14 +361,11 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                     "stock_guard_warning_text": False,
                 }
             )
-            self.request_id.message_post(
-                body=(
-                    "Перед созданием закупки выбран складской кандидат "
-                    "для строк: %s."
-                )
+            self._post_to_line_requests(
+                updated_lines,
+                "Перед созданием закупки выбран складской кандидат "
+                "для строк: %s."
                 % ", ".join(updated_lines.mapped("display_name")),
-                message_type="notification",
-                subtype_xmlid="mail.mt_note",
             )
 
         return self._purchase_guard_warning_action()
@@ -306,26 +388,50 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
         }
 
     def _create_orders_by_vendor(self, lines):
-        """Создать purchase.order сгруппировано по поставщику."""
-        vendor_lines = {}
+        """Одна закупка на поставщика (и склад приёмки) по всем требованиям."""
+        groups = {}
         for line in lines:
-            vendor_lines.setdefault(line.preferred_vendor_id, []).append(line)
+            key = (line.preferred_vendor_id, self._line_picking_type(line))
+            groups.setdefault(key, []).append(line)
 
         created = self.env["purchase.order"]
-        for vendor, req_lines in vendor_lines.items():
-            po = self._create_single_po(vendor, req_lines)
+        for (vendor, picking_type), req_lines in groups.items():
+            draft = self._find_vendor_draft(vendor, picking_type)
+            po = self._create_single_po(
+                vendor, req_lines, order=draft, picking_type=picking_type,
+            )
             created |= po
-
-        self.request_id.write(
-            {
-                "purchase_order_ids": [(4, po.id) for po in created],
-            }
-        )
+            for request in self.env["object.request.line"].concat(
+                *req_lines
+            ).request_id:
+                request.write({"purchase_order_ids": [(4, po.id)]})
         return created
+
+    def _find_vendor_draft(self, vendor, picking_type):
+        """Открытый черновик закупки поставщика по требованиям, если нужен."""
+        if not self.append_to_drafts:
+            return self.env["purchase.order"]
+        return self.env["purchase.order"].search(
+            [
+                ("partner_id", "=", vendor.id),
+                ("state", "=", "draft"),
+                ("is_object_request_purchase", "=", True),
+                ("picking_type_id", "=", picking_type.id),
+            ],
+            order="id desc",
+            limit=1,
+        )
 
     def _find_similar_stock_purchase_warnings(self, lines):
         self.ensure_one()
-        request = self.request_id
+        warnings = []
+        for request in lines.request_id:
+            warnings += self._find_request_stock_warnings(
+                request, lines.filtered(lambda ln: ln.request_id == request)
+            )
+        return warnings
+
+    def _find_request_stock_warnings(self, request, lines):
         warehouses = request._get_issue_warehouses()
         if not warehouses:
             return []
@@ -424,44 +530,31 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                     candidate.get("substitution_reason") or "",
                 )
             )
-        self.request_id.message_post(
-            body="<br/>".join(body_lines),
-            message_type="notification",
-            subtype_xmlid="mail.mt_note",
+        self._post_to_line_requests(
+            self.env["object.request.line"].concat(
+                *[item["line"] for item in warnings]
+            ),
+            "<br/>".join(body_lines),
         )
 
-    def _create_single_po(self, vendor, req_lines):
-        """Создать один draft purchase.order для поставщика."""
-        po_vals = {
-            "partner_id": vendor.id,
-            "origin": self.request_id.name,
-            "is_object_request_purchase": True,
-            "object_request_project_id": self.request_id.project_id.id,
-        }
-        if self.picking_type_id:
-            po_vals["picking_type_id"] = self.picking_type_id.id
-        po = self.env["purchase.order"].create(po_vals)
-        date_planned = (
-            datetime.combine(self.request_id.need_date, dt_time.min)
-            if self.request_id.need_date
-            else fields.Datetime.now()
+    def _create_single_po(
+        self, vendor, req_lines, order=None, picking_type=None,
+    ):
+        """Создать черновик закупки поставщика или дописать в ``order``."""
+        lines = self.env["object.request.line"].concat(*req_lines)
+        requests = lines.request_id
+        picking_type = picking_type or self.picking_type_id
+        po = order or self.env["purchase.order"].create(
+            self._po_vals(vendor, requests, picking_type)
         )
-        for line in req_lines:
-            uom = line.uom_id or line.product_id.uom_id
+        if order:
+            names = [name for name in (order.origin or "").split(", ") if name]
+            names += [name for name in requests.mapped("name")
+                      if name not in names]
+            order.origin = ", ".join(names)
+        for line in lines:
             pol = self.env["purchase.order.line"].create(
-                {
-                    "order_id": po.id,
-                    "product_id": line.product_id.id,
-                    "product_qty": line.qty_to_buy,
-                    "product_uom_id": uom.id,
-                    "name": (
-                        line.product_id.display_name
-                        if line.product_id
-                        else (line.name_raw or "")
-                    ),
-                    "price_unit": line.price_raw or 0.0,
-                    "date_planned": date_planned,
-                }
+                self._po_line_vals(po, line, multi=len(requests) > 1)
             )
             line.write(
                 {
@@ -470,6 +563,44 @@ class ObjectRequestPurchaseWizard(models.TransientModel):
                 }
             )
         return po
+
+    def _po_vals(self, vendor, requests, picking_type):
+        projects = requests.project_id
+        vals = {
+            "partner_id": vendor.id,
+            "origin": ", ".join(requests.mapped("name")),
+            "is_object_request_purchase": True,
+            "object_request_project_id": (
+                projects.id if len(projects) == 1 else False
+            ),
+        }
+        if picking_type:
+            vals["picking_type_id"] = picking_type.id
+        return vals
+
+    def _po_line_vals(self, po, line, multi=False):
+        uom = line.uom_id or line.product_id.uom_id
+        need_date = line.request_id.need_date
+        name = (
+            line.product_id.display_name
+            if line.product_id
+            else (line.name_raw or "")
+        )
+        if multi:
+            name = "%s (%s)" % (name, line.request_id.name)
+        return {
+            "order_id": po.id,
+            "product_id": line.product_id.id,
+            "product_qty": line.qty_to_buy,
+            "product_uom_id": uom.id,
+            "name": name,
+            "price_unit": line.price_raw or 0.0,
+            "date_planned": (
+                datetime.combine(need_date, dt_time.min)
+                if need_date
+                else fields.Datetime.now()
+            ),
+        }
 
     def _get_default_picking_type(self, request):
         """Return project receipt type or company incoming fallback."""
